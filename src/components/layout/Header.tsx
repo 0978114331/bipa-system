@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Home, Info, Building2, Megaphone, Phone, LogIn, UserPlus,
   LogOut, LayoutDashboard, User, Menu, Sun, Moon, Languages,
-  GraduationCap, ChevronDown, Shield, Camera
+  GraduationCap, ChevronDown, Shield, Camera, QrCode, Eye
 } from 'lucide-react';
 import { TranslationKey } from '@/types';
 import { cn } from '@/lib/utils';
@@ -34,6 +34,7 @@ export function Header() {
 
   const isActive = (path: string) => location.pathname === path;
   const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
+  const isAdminRoute = location.pathname.startsWith('/admin');
 
   const handleSignOut = async () => {
     await signOut();
@@ -44,7 +45,7 @@ export function Header() {
     <header className="sticky top-0 z-50 bg-navy-gradient text-white shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
+          
           <button onClick={() => navigate('/')} className="flex items-center gap-2 shrink-0">
             <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gold-gradient">
               <GraduationCap className="h-6 w-6 text-navy" />
@@ -55,7 +56,6 @@ export function Header() {
             </div>
           </button>
 
-          {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-1">
             {navItems.map((item) => (
               <button
@@ -72,21 +72,16 @@ export function Header() {
             ))}
           </nav>
 
-          {/* Right Actions */}
           <div className="flex items-center gap-2">
             
-            {/* 🔴 Dashboard & Camera Scanner (Visible to ALL logged-in users) */}
             {user && (
-              <div className="hidden sm:flex items-center gap-2 mr-2 border-r border-white/20 pr-4">
-                {isAdmin && (
-                  <Button variant="outline" size="sm" onClick={() => navigate('/admin')} className="text-white border-white/30 bg-white/5 hover:bg-white/10 gap-1.5">
-                    <Shield className="h-4 w-4" />
-                    <span className="hidden lg:inline">{t('dashboard.adminDashboard')}</span>
-                  </Button>
-                )}
-                <Button size="sm" onClick={() => navigate(isAdmin ? '/admin/attendance' : '/dashboard/scan')} className="bg-gold-gradient text-navy hover:opacity-90 font-semibold gap-1.5">
-                  <Camera className="h-4 w-4" />
-                  <span className="hidden lg:inline">{t('qr.scan')}</span>
+              <div className="hidden sm:flex items-center mr-2 border-r border-white/20 pr-4">
+                <Button 
+                  size="icon" 
+                  onClick={() => navigate(isAdmin ? '/admin/attendance' : '/dashboard/scan')} 
+                  className="bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-xl shadow-lg shadow-blue-500/30 w-9 h-9 sm:w-10 sm:h-10 border-0"
+                >
+                  <QrCode className="h-5 w-5" />
                 </Button>
               </div>
             )}
@@ -126,7 +121,13 @@ export function Header() {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate('/dashboard')}><LayoutDashboard className="h-4 w-4 mr-2" />{t('nav.dashboard')}</DropdownMenuItem>
-                  {isAdmin && <DropdownMenuItem onClick={() => navigate('/admin')}><Shield className="h-4 w-4 mr-2" />{t('dashboard.adminDashboard')}</DropdownMenuItem>}
+                  
+                  {isAdminRoute ? (
+                    <DropdownMenuItem onClick={() => navigate('/')}><Eye className="h-4 w-4 mr-2" />View Site</DropdownMenuItem>
+                  ) : (
+                    isAdmin && <DropdownMenuItem onClick={() => navigate('/admin')}><Shield className="h-4 w-4 mr-2" />{t('dashboard.adminDashboard')}</DropdownMenuItem>
+                  )}
+
                   <DropdownMenuItem onClick={() => navigate('/profile')}><User className="h-4 w-4 mr-2" />{t('nav.profile')}</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut} className="text-destructive"><LogOut className="h-4 w-4 mr-2" />{t('nav.signOut')}</DropdownMenuItem>
@@ -139,7 +140,6 @@ export function Header() {
               </div>
             )}
 
-            {/* Mobile Menu */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="lg:hidden text-white hover:bg-white/10"><Menu className="h-5 w-5" /></Button>
@@ -148,8 +148,10 @@ export function Header() {
                 <nav className="flex flex-col gap-2 mt-8">
                   {user && (
                     <>
-                      {isAdmin && (
-                        <Button onClick={() => { navigate('/admin'); setMobileOpen(false); }} className="w-full bg-navy-gradient text-white justify-start"><Shield className="h-4 w-4 mr-2" /> {t('dashboard.adminDashboard')}</Button>
+                      {isAdminRoute ? (
+                        <Button onClick={() => { navigate('/'); setMobileOpen(false); }} className="w-full bg-navy-gradient text-white justify-start"><Eye className="h-4 w-4 mr-2" /> View Site</Button>
+                      ) : (
+                        isAdmin && <Button onClick={() => { navigate('/admin'); setMobileOpen(false); }} className="w-full bg-navy-gradient text-white justify-start"><Shield className="h-4 w-4 mr-2" /> {t('dashboard.adminDashboard')}</Button>
                       )}
                       <Button onClick={() => { navigate(isAdmin ? '/admin/attendance' : '/dashboard/scan'); setMobileOpen(false); }} className="w-full bg-gold-gradient text-navy font-bold justify-start"><Camera className="h-4 w-4 mr-2" /> {t('qr.scan')}</Button>
                       <div className="h-px bg-border my-2" />

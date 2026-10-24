@@ -54,10 +54,10 @@ export function Footer() {
             <h3 className="text-sm font-semibold mb-3 text-gold">Contact</h3>
             <ul className="space-y-2 text-sm text-white/60">
               <li className="flex items-center gap-2">
-                <Mail className="h-4 w-4" /> residence@example.edu
+                <Mail className="h-4 w-4" /> Khouvchvea123@gmail.com
               </li>
               <li className="flex items-center gap-2">
-                <Phone className="h-4 w-4" /> +855 00 000 000
+                <Phone className="h-4 w-4" /> +855 978114331
               </li>
               <li className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" /> Phnom Penh, Cambodia

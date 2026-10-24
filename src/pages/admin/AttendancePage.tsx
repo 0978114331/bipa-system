@@ -21,7 +21,7 @@ export function AttendancePage() {
   // Load today's attendance records
   const fetchRecentRecords = async () => {
     const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabase
+    const { data,} = await supabase
       .from('attendance_records')
       .select('id, action, recorded_at, students(student_id, english_name, khmer_name, residence_type)')
       .gte('recorded_at', `${today}T00:00:00Z`)
@@ -83,7 +83,7 @@ export function AttendancePage() {
 
       // Resume scanning after 2 seconds
       setTimeout(() => { isProcessing = false; }, 2000);
-    }, (error) => { /* ignore */ });
+    }, (_error) => { /* ignore */ });
 
     return () => {
       scanner.clear().catch(console.error);
