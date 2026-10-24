@@ -116,11 +116,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }, []);
 
+  // 🔴 មុខងារដែលបានកែសម្រួលសម្រាប់ Google Sign In
   const signInWithGoogle = useCallback(async () => {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin },
+      options: { 
+        redirectTo: `${window.location.origin}/dashboard` 
+      },
     });
+    if (error) {
+      console.error('Error signing in with Google:', error.message);
+    }
   }, []);
 
   const signOut = useCallback(async () => {
