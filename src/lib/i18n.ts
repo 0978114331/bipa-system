@@ -625,7 +625,7 @@ export const translations = {
     'error.generic': 'មានបញ្ហាបានកើតឡើង។ សូមព្យាយាមម្តងទៀត។',
     'error.unauthorized': 'អ្នកមិនមានសិទ្ធិធ្វើសកម្មភាពនេះទេ។',
     'error.network': 'កំហុសបណ្តាញ។ សូមពិនិត្យការតភ្ជាប់របស់អ្នក។',
-    'error.notFound': 'រកមិនឃើញទិន្នន័យ។',
+   'error.notFound': 'រកមិនឃើញទិន្នន័យ។',
   },
 } as const;
 
