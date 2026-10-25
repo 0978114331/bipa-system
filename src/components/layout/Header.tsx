@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -54,6 +55,70 @@ export function Header() {
     navigate('/');
   };
 
+  const recordScannedAttendance = async (decodedText: string) => {
+    const cleanCode = decodedText.trim();
+    const nowTime = new Date().toLocaleTimeString('en-US', { hour12: false });
+    const todayStr = new Date().toDateString();
+
+    const savedDir = localStorage.getItem('bipa_students_directory_v2') || localStorage.getItem('bipa_students_directory');
+    const localDir: any[] = savedDir ? JSON.parse(savedDir) : [];
+    let matchedStudent = localDir.find(
+      (s) => s.student_code && s.student_code.toLowerCase() === cleanCode.toLowerCase()
+    );
+
+    if (!matchedStudent) {
+      try {
+        const { data } = await supabase
+          .from('bipa_students')
+          .select('*')
+          .ilike('student_code', cleanCode)
+          .maybeSingle();
+        if (data) matchedStudent = data;
+      } catch {}
+    }
+
+    const studentCode = matchedStudent?.student_code || cleanCode;
+    const studentName = matchedStudent
+      ? matchedStudent.full_name_km || matchedStudent.full_name || matchedStudent.full_name_en
+      : profile?.display_name || cleanCode;
+    const studentGender = matchedStudent?.gender_km || matchedStudent?.gender || 'ប្រុស';
+
+    const saved = localStorage.getItem('bipa_attendance_records');
+    const list: any[] = saved ? JSON.parse(saved) : [];
+
+    const existingIdx = list.findIndex(
+      (r) =>
+        r.date === todayStr &&
+        ((r.student_code && r.student_code.toLowerCase() === studentCode.toLowerCase()) ||
+          r.name === studentName)
+    );
+
+    if (existingIdx >= 0) {
+      list[existingIdx] = {
+        ...list[existingIdx],
+        student_code: studentCode,
+        name: studentName,
+        gender: studentGender,
+        time: nowTime,
+        status: 'វត្តមាន',
+      };
+      localStorage.setItem('bipa_attendance_records', JSON.stringify(list));
+    } else {
+      const newEntry = {
+        id: Date.now(),
+        student_code: studentCode,
+        name: studentName,
+        gender: studentGender,
+        time: nowTime,
+        status: 'វត្តមាន',
+        date: todayStr,
+      };
+      localStorage.setItem('bipa_attendance_records', JSON.stringify([newEntry, ...list]));
+    }
+
+    window.dispatchEvent(new Event('attendance-updated'));
+  };
+
   useEffect(() => {
     let stream: MediaStream | null = null;
     let scanInterval: any = null;
@@ -86,18 +151,9 @@ export function Header() {
                   const barcodes = await detector.detect(videoRef.current);
                   if (barcodes.length > 0) {
                     const code = barcodes[0].rawValue;
-                    const saved = localStorage.getItem('bipa_attendance_records');
-                    const list = saved ? JSON.parse(saved) : [];
-                    const newEntry = {
-                      id: Date.now(),
-                      name: profile?.display_name || code || 'សិស្សស្កែន QR',
-                      gender: 'ប្រុស',
-                      time: new Date().toLocaleTimeString('en-US', { hour12: false }),
-                      status: 'វត្តមាន',
-                      date: new Date().toDateString()
-                    };
-                    localStorage.setItem('bipa_attendance_records', JSON.stringify([newEntry, ...list]));
-                    window.dispatchEvent(new Event('attendance-updated'));
+                    
+                    await recordScannedAttendance(code);
+                    
                     setShowScanner(false);
                     navigate('/attendance');
                   }
