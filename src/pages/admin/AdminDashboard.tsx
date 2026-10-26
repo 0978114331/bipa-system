@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, Building2, FileText, DollarSign, QrCode, Megaphone } from 'lucide-react';
+import { Users, Building2, QrCode, Megaphone } from 'lucide-react';
 import { initialStudents, BipaStudent } from './StudentListPage';
 
 export function AdminDashboard() {
@@ -146,38 +146,6 @@ export function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
-
-        <Card
-          onClick={() => navigate('/admin/leave-requests')}
-          className="bg-[#1e293b] border-slate-800 cursor-pointer hover:border-amber-500/50 transition-colors"
-        >
-          <CardContent className="p-5 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-slate-400">សំណើច្បាប់កំពុងរង់ចាំ</p>
-              <p className="text-3xl font-extrabold text-white my-1">0</p>
-              <p className="text-xs text-amber-400">កំពុងរង់ចាំ</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
-              <FileText className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          onClick={() => navigate('/admin/payments')}
-          className="bg-[#1e293b] border-slate-800 cursor-pointer hover:border-rose-500/50 transition-colors"
-        >
-          <CardContent className="p-5 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-slate-400">សង្ខេបការបង់ប្រាក់</p>
-              <p className="text-3xl font-extrabold text-white my-1">0</p>
-              <p className="text-xs text-rose-400">មិនទាន់បង់ / ហួសកាលកំណត់</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-400">
-              <DollarSign className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -212,7 +180,7 @@ export function AdminDashboard() {
         <Card className="bg-[#1e293b] border-slate-800">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-white">សំណើច្បាប់កំពុងរង់ចាំ (0) & ទ្រព្យសកម្មខូច (0)</h2>
+              <h2 className="text-base font-bold text-white">សំណើផ្សេងៗកំពុងរង់ចាំ</h2>
               <button
                 onClick={() => navigate('/admin/leave-requests')}
                 className="text-xs text-blue-400 hover:underline"
