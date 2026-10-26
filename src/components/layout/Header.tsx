@@ -28,6 +28,14 @@ export interface ScanProcessResult {
   message: string;
 }
 
+const hasKhmerScript = (text?: string) => /[\u1780-\u17FF]/.test(String(text || ''));
+
+export const normalizeGenderToKhmer = (raw?: string) => {
+  const val = String(raw || '').trim();
+  if (val === 'ស្រី' || val.toUpperCase() === 'F' || val.toUpperCase() === 'FEMALE') return 'ស្រី';
+  return 'ប្រុស';
+};
+
 export async function resolveStudentByIdOrName(query: string): Promise<{
   code: string;
   nameKm: string;
@@ -51,17 +59,22 @@ export async function resolveStudentByIdOrName(query: string): Promise<{
     if (data && data.length > 0) {
       dbList = data.map((r: any) => {
         const fb = initialStudents.find(
-          (s) => s.student_code.toLowerCase() === String(r.student_code || '').toLowerCase()
+          (s) => s.student_code.toLowerCase() === String(r.student_code || '').trim().toLowerCase()
         );
-        const rawGender = String(r.gender_km || r.gender || fb?.gender_km || 'ប្រុស').trim();
-        const isFemale = rawGender === 'ស្រី' || rawGender.toUpperCase() === 'F' || rawGender.toUpperCase() === 'FEMALE';
+        const gKm = normalizeGenderToKhmer(r.gender_km || fb?.gender_km || r.gender);
+        const dbNameKm = hasKhmerScript(r.full_name_km)
+          ? r.full_name_km
+          : hasKhmerScript(r.full_name)
+          ? r.full_name
+          : fb?.full_name_km || r.full_name_km || r.full_name || '';
+
         return {
           id: String(r.id),
           student_code: String(r.student_code || fb?.student_code || '').trim().toUpperCase(),
-          full_name_km: r.full_name_km || r.full_name || fb?.full_name_km || '',
-          full_name_en: r.full_name_en || r.full_name || fb?.full_name_en || '',
-          gender_km: isFemale ? 'ស្រី' : 'ប្រុស',
-          gender_en: isFemale ? 'F' : 'M',
+          full_name_km: dbNameKm,
+          full_name_en: r.full_name_en || fb?.full_name_en || r.full_name || '',
+          gender_km: gKm,
+          gender_en: gKm === 'ស្រី' ? 'F' : 'M',
           dob: r.dob || '',
           major_km: r.major_km || '',
           major_en: r.major_en || '',
@@ -83,10 +96,32 @@ export async function resolveStudentByIdOrName(query: string): Promise<{
     }
   } catch {}
 
-  const combined = [...localList, ...dbList, ...initialStudents];
+  const mapByCode = new Map<string, BipaStudent>();
+  [...initialStudents, ...dbList, ...localList].forEach((s) => {
+    const c = String(s.student_code || '').trim().toUpperCase();
+    if (!c) return;
+    const prev = mapByCode.get(c);
+    const bestKm = hasKhmerScript(s.full_name_km)
+      ? s.full_name_km
+      : hasKhmerScript(prev?.full_name_km)
+      ? prev!.full_name_km
+      : s.full_name_km || prev?.full_name_km || s.full_name_en;
+    const bestGender =
+      s.gender_km === 'ស្រី' || prev?.gender_km === 'ស្រី'
+        ? 'ស្រី'
+        : normalizeGenderToKhmer(s.gender_km || prev?.gender_km);
+    mapByCode.set(c, {
+      ...s,
+      student_code: c,
+      full_name_km: bestKm,
+      gender_km: bestGender,
+    });
+  });
+
+  const combined = Array.from(mapByCode.values());
   const matched = combined.find((s) => {
     const sCode = String(s.student_code || '').trim().replace(/\s+/g, '').toLowerCase();
-    const sNameKm = String(s.full_name_km || (s as any).full_name || '').trim().toLowerCase();
+    const sNameKm = String(s.full_name_km || '').trim().toLowerCase();
     const sNameEn = String(s.full_name_en || '').trim().toLowerCase();
     return (
       sCode === clean.toLowerCase() ||
@@ -98,16 +133,20 @@ export async function resolveStudentByIdOrName(query: string): Promise<{
   if (!matched) return null;
 
   const initMatch = initialStudents.find(
-    (s) => s.student_code.toLowerCase() === String(matched.student_code || '').trim().toLowerCase()
+    (s) => s.student_code.toLowerCase() === matched.student_code.toLowerCase()
   );
-  const rawG = String(matched.gender_km || (matched as any).gender || initMatch?.gender_km || 'ប្រុស').trim();
-  const isF = rawG === 'ស្រី' || rawG.toUpperCase() === 'F' || rawG.toUpperCase() === 'FEMALE';
-  const khmerName = matched.full_name_km || (matched as any).full_name || initMatch?.full_name_km || matched.full_name_en;
+  const khmerName = hasKhmerScript(matched.full_name_km)
+    ? matched.full_name_km
+    : initMatch?.full_name_km || matched.full_name_km || matched.full_name_en;
+  const genderKm =
+    initMatch?.gender_km === 'ស្រី' || matched.gender_km === 'ស្រី'
+      ? 'ស្រី'
+      : normalizeGenderToKhmer(matched.gender_km);
 
   return {
-    code: String(matched.student_code).trim().toUpperCase(),
+    code: matched.student_code,
     nameKm: khmerName,
-    genderKm: isF ? 'ស្រី' : 'ប្រុស',
+    genderKm,
   };
 }
 
@@ -145,76 +184,55 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
   const nowTime = new Date().toLocaleTimeString('en-US', { hour12: false });
   const todayStr = new Date().toDateString();
 
-  let allRecords: any[] = [];
-  const saved = localStorage.getItem(ATT_STORAGE_KEY);
-  if (saved) {
-    try {
-      allRecords = JSON.parse(saved);
-    } catch {}
-  }
-
+  let dbTodayRecords: any[] = [];
   try {
-    const { data: dbToday } = await supabase
+    const { data } = await supabase
       .from('bipa_attendance')
       .select('*')
       .eq('attendance_date', todayStr);
-    if (dbToday && dbToday.length > 0) {
-      const otherDays = allRecords.filter((r) => r.date !== todayStr);
-      const mappedDb = dbToday.map((r: any) => ({
-        id: String(r.id),
-        student_code: r.student_code,
-        name: r.full_name,
-        gender: r.gender,
-        time_out: r.time_out || '--:--:--',
-        time_in: r.time_in || '--:--:--',
-        status: r.status || 'ចេញក្រៅ',
-        date: r.attendance_date,
-      }));
-      allRecords = [...mappedDb, ...otherDays];
-    }
+    if (data) dbTodayRecords = data;
   } catch {}
 
-  const unhideDailyRecord = (code: string) => {
-    try {
-      const hiddenIds: string[] = JSON.parse(localStorage.getItem('bipa_hidden_daily_ids') || '[]');
-      localStorage.setItem(
-        'bipa_hidden_daily_ids',
-        JSON.stringify(hiddenIds.filter((c) => c.toUpperCase() !== code.toUpperCase()))
-      );
-    } catch {}
-  };
-
-  const existingIdx = allRecords.findIndex(
-    (r: any) =>
-      r.date === todayStr &&
-      r.student_code &&
-      String(r.student_code).toLowerCase() === resolved.code.toLowerCase()
+  const existingDb = dbTodayRecords.find(
+    (r: any) => r.student_code && String(r.student_code).toLowerCase() === resolved.code.toLowerCase()
   );
 
-  if (existingIdx >= 0) {
-    const current = { ...allRecords[existingIdx] };
-    const hasOut = current.time_out && current.time_out !== '--:--:--';
-    const hasIn = current.time_in && current.time_in !== '--:--:--';
+  if (existingDb) {
+    const isHidden = String(existingDb.status || '').includes('[HIDDEN]');
+    const hasOut = existingDb.time_out && existingDb.time_out !== '--:--:--';
+    const hasIn = existingDb.time_in && existingDb.time_in !== '--:--:--';
+
+    if (isHidden) {
+      await supabase
+        .from('bipa_attendance')
+        .update({
+          full_name: resolved.nameKm,
+          gender: resolved.genderKm,
+          time_out: nowTime,
+          time_in: '--:--:--',
+          status: 'ចេញក្រៅ',
+        })
+        .eq('id', existingDb.id);
+      window.dispatchEvent(new Event('attendance-updated'));
+      return {
+        ok: true,
+        action: 'OUT',
+        studentName: resolved.nameKm,
+        time: nowTime,
+        message: `ស្កែនចេញជោគជ័យ! (${resolved.nameKm} - ${nowTime})`,
+      };
+    }
 
     if (!hasOut) {
-      current.time_out = nowTime;
-      current.status = 'ចេញក្រៅ';
-      current.name = resolved.nameKm;
-      current.gender = resolved.genderKm;
-      allRecords[existingIdx] = current;
-      localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify(allRecords));
-      unhideDailyRecord(resolved.code);
-      try {
-        await supabase
-          .from('bipa_attendance')
-          .update({
-            full_name: resolved.nameKm,
-            gender: resolved.genderKm,
-            time_out: nowTime,
-            status: 'ចេញក្រៅ',
-          })
-          .eq('id', current.id);
-      } catch {}
+      await supabase
+        .from('bipa_attendance')
+        .update({
+          full_name: resolved.nameKm,
+          gender: resolved.genderKm,
+          time_out: nowTime,
+          status: 'ចេញក្រៅ',
+        })
+        .eq('id', existingDb.id);
       window.dispatchEvent(new Event('attendance-updated'));
       return {
         ok: true,
@@ -226,24 +244,15 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
     }
 
     if (!hasIn) {
-      current.time_in = nowTime;
-      current.status = 'វត្តមាន';
-      current.name = resolved.nameKm;
-      current.gender = resolved.genderKm;
-      allRecords[existingIdx] = current;
-      localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify(allRecords));
-      unhideDailyRecord(resolved.code);
-      try {
-        await supabase
-          .from('bipa_attendance')
-          .update({
-            full_name: resolved.nameKm,
-            gender: resolved.genderKm,
-            time_in: nowTime,
-            status: 'វត្តមាន',
-          })
-          .eq('id', current.id);
-      } catch {}
+      await supabase
+        .from('bipa_attendance')
+        .update({
+          full_name: resolved.nameKm,
+          gender: resolved.genderKm,
+          time_in: nowTime,
+          status: 'វត្តមាន',
+        })
+        .eq('id', existingDb.id);
       window.dispatchEvent(new Event('attendance-updated'));
       return {
         ok: true,
@@ -261,20 +270,6 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
   }
 
   const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
-  const newEntry = {
-    id: newId,
-    student_code: resolved.code,
-    name: resolved.nameKm,
-    gender: resolved.genderKm,
-    time_out: nowTime,
-    time_in: '--:--:--',
-    status: 'ចេញក្រៅ',
-    date: todayStr,
-  };
-  const updatedAll = [newEntry, ...allRecords];
-  localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify(updatedAll));
-  unhideDailyRecord(resolved.code);
-
   try {
     await supabase.from('bipa_attendance').insert([
       {
@@ -289,6 +284,25 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
       },
     ]);
   } catch {}
+
+  const saved = localStorage.getItem(ATT_STORAGE_KEY);
+  const localArr: any[] = saved ? JSON.parse(saved) : [];
+  localStorage.setItem(
+    ATT_STORAGE_KEY,
+    JSON.stringify([
+      {
+        id: newId,
+        student_code: resolved.code,
+        name: resolved.nameKm,
+        gender: resolved.genderKm,
+        time_out: nowTime,
+        time_in: '--:--:--',
+        status: 'ចេញក្រៅ',
+        date: todayStr,
+      },
+      ...localArr,
+    ])
+  );
 
   window.dispatchEvent(new Event('attendance-updated'));
   return {
@@ -383,7 +397,6 @@ export function Header() {
           cameraId,
           {
             fps: 25,
-            qrbox: { width: 230, height: 230 },
             aspectRatio: 1.0,
             disableFlip: false,
           },
@@ -407,7 +420,7 @@ export function Header() {
                   setShowScanner(false);
                   navigate('/attendance');
                 }
-              }, 1300);
+              }, 1200);
             } else {
               setScanFeedback({ type: 'error', text: res.message });
               setTimeout(() => {
@@ -502,12 +515,12 @@ export function Header() {
               width: 100% !important;
               height: 100% !important;
               object-fit: cover !important;
-              border-radius: 1rem;
+              border-radius: 1.25rem;
             }
-            #global-qr-reader__scan_region > div {
-              display: none !important;
-            }
-            #global-qr-reader__dashboard {
+            #global-qr-reader img,
+            #global-qr-reader canvas,
+            #global-qr-reader__dashboard,
+            #global-qr-reader__header_message {
               display: none !important;
             }
           `}</style>

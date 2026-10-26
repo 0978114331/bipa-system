@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { BipaStudent, initialStudents } from '@/pages/admin/StudentListPage';
+import { normalizeGenderToKhmer } from '@/components/layout/Header';
 
 export interface AttendanceRecord {
   id: string;
@@ -19,6 +20,7 @@ export interface AttendanceRecord {
 }
 
 const ATT_STORAGE_KEY = 'bipa_attendance_sync_v4';
+const hasKhmerScript = (text?: string) => /[\u1780-\u17FF]/.test(String(text || ''));
 
 export function AttendancePage() {
   const { hasRole } = useAuth();
@@ -30,14 +32,6 @@ export function AttendancePage() {
   const [students, setStudents] = useState<AttendanceRecord[]>([]);
   const [directoryStudents, setDirectoryStudents] = useState<BipaStudent[]>([]);
   const [mapQuery, setMapQuery] = useState('Preah Sihanouk Raja Buddhist University, Phnom Penh');
-
-  const [hiddenDailyCodes, setHiddenDailyCodes] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('bipa_hidden_daily_ids') || '[]');
-    } catch {
-      return [];
-    }
-  });
 
   const [myStudentId, setMyStudentId] = useState(() => localStorage.getItem('bipa_linked_student_id') || '');
   const [tempStudentId, setTempStudentId] = useState('');
@@ -56,38 +50,39 @@ export function AttendancePage() {
   const [editTimeIn, setEditTimeIn] = useState('');
   const [editStatus, setEditStatus] = useState('វត្តមាន');
 
-  const normalizeGenderKm = (raw?: string) => {
-    const val = String(raw || '').trim();
-    if (val === 'ស្រី' || val.toUpperCase() === 'F' || val.toUpperCase() === 'FEMALE') return 'ស្រី';
-    return 'ប្រុស';
-  };
-
   const resolveKhmerStudentInfo = (code: string | undefined, rawName: string, rawGender: string, dir: BipaStudent[]) => {
     const cleanCode = String(code || '').trim().replace(/\s+/g, '').toLowerCase();
     const cleanName = String(rawName || '').trim().toLowerCase();
 
-    const foundDir = dir.find(
-      (d) =>
-        (cleanCode && String(d.student_code || '').trim().replace(/\s+/g, '').toLowerCase() === cleanCode) ||
-        (cleanName && String(d.full_name_en || '').trim().toLowerCase() === cleanName) ||
-        (cleanName && String(d.full_name_km || '').trim().toLowerCase() === cleanName)
-    );
     const foundInit = initialStudents.find(
       (d) =>
         (cleanCode && d.student_code.toLowerCase() === cleanCode) ||
         (cleanName && d.full_name_en.toLowerCase() === cleanName) ||
         (cleanName && d.full_name_km.toLowerCase() === cleanName)
     );
+    const foundDir = dir.find(
+      (d) =>
+        (cleanCode && String(d.student_code || '').trim().replace(/\s+/g, '').toLowerCase() === cleanCode) ||
+        (cleanName && String(d.full_name_en || '').trim().toLowerCase() === cleanName) ||
+        (cleanName && String(d.full_name_km || '').trim().toLowerCase() === cleanName)
+    );
 
-    const nameKm = foundDir?.full_name_km || foundInit?.full_name_km || rawName;
-    const genderKm = foundDir
-      ? normalizeGenderKm(foundDir.gender_km)
-      : foundInit
-      ? normalizeGenderKm(foundInit.gender_km)
-      : normalizeGenderKm(rawGender);
+    const bestKhmerName = hasKhmerScript(foundDir?.full_name_km)
+      ? foundDir!.full_name_km
+      : hasKhmerScript(foundInit?.full_name_km)
+      ? foundInit!.full_name_km
+      : hasKhmerScript(rawName)
+      ? rawName
+      : foundInit?.full_name_km || foundDir?.full_name_km || rawName;
+
+    const bestGender =
+      foundInit?.gender_km === 'ស្រី' || foundDir?.gender_km === 'ស្រី' || normalizeGenderToKhmer(rawGender) === 'ស្រី'
+        ? 'ស្រី'
+        : 'ប្រុស';
+
     const finalCode = (foundDir?.student_code || foundInit?.student_code || code || '').trim().toUpperCase();
 
-    return { nameKm, genderKm, finalCode };
+    return { nameKm: bestKhmerName, genderKm: bestGender, finalCode };
   };
 
   const loadData = async () => {
@@ -110,13 +105,22 @@ export function AttendancePage() {
         .order('student_code', { ascending: true });
       if (dbStudents && dbStudents.length > 0) {
         dbDir = dbStudents.map((r: any) => {
-          const fb = initialStudents.find((s) => s.student_code.toLowerCase() === String(r.student_code || '').toLowerCase());
-          const gKm = normalizeGenderKm(r.gender_km || r.gender || fb?.gender_km);
+          const fb = initialStudents.find((s) => s.student_code.toLowerCase() === String(r.student_code || '').trim().toLowerCase());
+          const gKm =
+            fb?.gender_km === 'ស្រី' || normalizeGenderToKhmer(r.gender_km || r.gender) === 'ស្រី'
+              ? 'ស្រី'
+              : 'ប្រុស';
+          const kmName = hasKhmerScript(r.full_name_km)
+            ? r.full_name_km
+            : hasKhmerScript(r.full_name)
+            ? r.full_name
+            : fb?.full_name_km || r.full_name_km || r.full_name || '';
+
           return {
             id: String(r.id),
             student_code: String(r.student_code || fb?.student_code || '').trim().toUpperCase(),
-            full_name_km: r.full_name_km || r.full_name || fb?.full_name_km || '',
-            full_name_en: r.full_name_en || r.full_name || fb?.full_name_en || '',
+            full_name_km: kmName,
+            full_name_en: r.full_name_en || fb?.full_name_en || r.full_name || '',
             gender_km: gKm,
             gender_en: gKm === 'ស្រី' ? 'F' : 'M',
             dob: r.dob || '',
@@ -143,17 +147,21 @@ export function AttendancePage() {
     const mapByCode = new Map<string, BipaStudent>();
     [...initialStudents, ...dbDir, ...localDir].forEach((stu) => {
       const key = String(stu.student_code || '').trim().toUpperCase();
-      if (key) mapByCode.set(key, stu);
+      if (!key) return;
+      const prev = mapByCode.get(key);
+      const km = hasKhmerScript(stu.full_name_km)
+        ? stu.full_name_km
+        : hasKhmerScript(prev?.full_name_km)
+        ? prev!.full_name_km
+        : stu.full_name_km || prev?.full_name_km || '';
+      const gen = stu.gender_km === 'ស្រី' || prev?.gender_km === 'ស្រី' ? 'ស្រី' : 'ប្រុស';
+      mapByCode.set(key, { ...stu, student_code: key, full_name_km: km, gender_km: gen });
     });
+
     const mergedDirectory = Array.from(mapByCode.values()).sort((a, b) =>
       a.student_code.localeCompare(b.student_code)
     );
     setDirectoryStudents(mergedDirectory);
-
-    try {
-      const savedHidden = JSON.parse(localStorage.getItem('bipa_hidden_daily_ids') || '[]');
-      if (Array.isArray(savedHidden)) setHiddenDailyCodes(savedHidden);
-    } catch {}
 
     try {
       const { data: dbAtt, error } = await supabase
@@ -163,7 +171,8 @@ export function AttendancePage() {
         .order('created_at', { ascending: false });
 
       if (!error && dbAtt) {
-        const mapped: AttendanceRecord[] = dbAtt.map((r: any) => {
+        const visibleToday = dbAtt.filter((r: any) => !String(r.status || '').includes('[HIDDEN]'));
+        const mapped: AttendanceRecord[] = visibleToday.map((r: any) => {
           const resolved = resolveKhmerStudentInfo(r.student_code, r.full_name || '', r.gender || '', mergedDirectory);
           return {
             id: String(r.id),
@@ -172,21 +181,12 @@ export function AttendancePage() {
             gender: resolved.genderKm,
             time_out: r.time_out || '--:--:--',
             time_in: r.time_in || '--:--:--',
-            status: r.status || 'ចេញក្រៅ',
+            status: String(r.status || 'ចេញក្រៅ').replace('[HIDDEN]', '').trim(),
             date: r.attendance_date,
           };
         });
         setStudents(mapped);
-
-        const localRaw = localStorage.getItem(ATT_STORAGE_KEY);
-        let otherDays: AttendanceRecord[] = [];
-        if (localRaw) {
-          try {
-            const parsed: AttendanceRecord[] = JSON.parse(localRaw);
-            otherDays = parsed.filter((item) => item.date !== todayStr);
-          } catch {}
-        }
-        localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify([...mapped, ...otherDays]));
+        localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify(mapped));
         return;
       }
     } catch {}
@@ -196,7 +196,7 @@ export function AttendancePage() {
       try {
         const parsed: AttendanceRecord[] = JSON.parse(localSaved);
         const todayOnly = parsed
-          .filter((item) => item.date === todayStr)
+          .filter((item) => item.date === todayStr && !String(item.status || '').includes('[HIDDEN]'))
           .map((item) => {
             const resolved = resolveKhmerStudentInfo(item.student_code, item.name, item.gender, mergedDirectory);
             return {
@@ -219,8 +219,6 @@ export function AttendancePage() {
   };
 
   useEffect(() => {
-    localStorage.removeItem('bipa_attendance_records');
-    localStorage.removeItem('bipa_attendance_v3');
     loadData();
 
     const clockTimer = setInterval(() => {
@@ -228,13 +226,11 @@ export function AttendancePage() {
       setTime(now);
       if (now.toDateString() !== currentDateStr) {
         setCurrentDateStr(now.toDateString());
-        localStorage.removeItem('bipa_hidden_daily_ids');
-        setHiddenDailyCodes([]);
         setStudents([]);
       }
     }, 1000);
 
-    const syncTimer = setInterval(() => loadData(), 2000);
+    const syncTimer = setInterval(() => loadData(), 1800);
     window.addEventListener('attendance-updated', loadData);
     window.addEventListener('students-updated', loadData);
     window.addEventListener('storage', loadData);
@@ -255,21 +251,6 @@ export function AttendancePage() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [currentDateStr]);
-
-  const saveStudentsLocal = (updatedToday: AttendanceRecord[]) => {
-    setStudents(updatedToday);
-    const todayStr = new Date().toDateString();
-    let otherDays: AttendanceRecord[] = [];
-    const saved = localStorage.getItem(ATT_STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed: AttendanceRecord[] = JSON.parse(saved);
-        otherDays = parsed.filter((r) => r.date !== todayStr);
-      } catch {}
-    }
-    localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify([...updatedToday, ...otherDays]));
-    window.dispatchEvent(new Event('attendance-updated'));
-  };
 
   const handleSaveMyId = () => {
     if (!tempStudentId.trim()) return;
@@ -304,86 +285,83 @@ export function AttendancePage() {
     const targetName = resolved.nameKm;
     const targetGender = matchedDir ? resolved.genderKm : newGender;
 
-    const nextHidden = hiddenDailyCodes.filter((c) => c.toUpperCase() !== targetCode.toUpperCase());
-    setHiddenDailyCodes(nextHidden);
-    localStorage.setItem('bipa_hidden_daily_ids', JSON.stringify(nextHidden));
+    try {
+      const { data: existingDb } = await supabase
+        .from('bipa_attendance')
+        .select('*')
+        .eq('attendance_date', todayStr)
+        .ilike('student_code', targetCode)
+        .maybeSingle();
 
-    const existingIndex = students.findIndex(
-      (s) =>
-        (s.student_code && targetCode && s.student_code.toLowerCase() === targetCode.toLowerCase()) ||
-        s.name === targetName
-    );
+      if (existingDb) {
+        const isCurrentlyHidden = String(existingDb.status || '').includes('[HIDDEN]');
+        const nextOut = isCurrentlyHidden || !existingDb.time_out || existingDb.time_out === '--:--:--' ? nowTime : existingDb.time_out;
+        const nextIn = !isCurrentlyHidden && existingDb.time_out && existingDb.time_out !== '--:--:--' ? nowTime : '--:--:--';
+        const nextStat = nextIn !== '--:--:--' ? 'វត្តមាន' : newStatus;
 
-    if (existingIndex >= 0) {
-      const updated = [...students];
-      const current = { ...updated[existingIndex] };
-      if (!current.time_out || current.time_out === '--:--:--') {
-        current.time_out = nowTime;
-        current.status = newStatus;
+        await supabase
+          .from('bipa_attendance')
+          .update({
+            full_name: targetName,
+            gender: targetGender,
+            time_out: nextOut,
+            time_in: nextIn,
+            status: nextStat,
+          })
+          .eq('id', existingDb.id);
       } else {
-        current.time_in = nowTime;
-        current.status = 'វត្តមាន';
+        const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+        await supabase.from('bipa_attendance').insert([
+          {
+            id: newId,
+            student_code: targetCode,
+            full_name: targetName,
+            gender: targetGender,
+            time_out: nowTime,
+            time_in: '--:--:--',
+            status: newStatus,
+            attendance_date: todayStr,
+          },
+        ]);
       }
-      current.name = targetName;
-      current.gender = targetGender;
-      current.student_code = targetCode;
-      updated[existingIndex] = current;
-      saveStudentsLocal(updated);
-      try {
-        await supabase.from('bipa_attendance').update({
-          full_name: targetName,
-          gender: targetGender,
-          time_out: current.time_out,
-          time_in: current.time_in,
-          status: current.status,
-        }).eq('id', current.id);
-      } catch {}
-    } else {
-      const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
-      const newRecord: AttendanceRecord = {
-        id: newId,
-        student_code: targetCode,
-        name: targetName,
-        gender: targetGender,
-        time_out: nowTime,
-        time_in: '--:--:--',
-        status: newStatus,
-        date: todayStr,
-      };
-      saveStudentsLocal([newRecord, ...students]);
-      try {
-        await supabase.from('bipa_attendance').insert([{
-          id: newId,
-          student_code: targetCode,
-          full_name: targetName,
-          gender: targetGender,
-          time_out: nowTime,
-          time_in: '--:--:--',
-          status: newStatus,
-          attendance_date: todayStr,
-        }]);
-      } catch {}
-    }
+    } catch {}
+
     setNewName('');
     setShowPicker(false);
+    await loadData();
+    window.dispatchEvent(new Event('attendance-updated'));
   };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('តើអ្នកពិតជាចង់លុបឈ្មោះនេះចេញពីតារាងវត្តមានថ្ងៃនេះមែនទេ? (ទិន្នន័យនៅតែរក្សាទុកក្នុងតារាងរក្សាទុកទិន្នន័យ Admin)')) return;
     const target = students.find((s) => s.id === id);
-    const keyToHide = target?.student_code || target?.id || id;
-    const updatedHidden = Array.from(new Set([...hiddenDailyCodes, keyToHide]));
-    setHiddenDailyCodes(updatedHidden);
-    localStorage.setItem('bipa_hidden_daily_ids', JSON.stringify(updatedHidden));
+    const nextStatus = `${target?.status || 'ចេញក្រៅ'} [HIDDEN]`;
+
+    setStudents((prev) => prev.filter((s) => s.id !== id));
+    try {
+      await supabase
+        .from('bipa_attendance')
+        .update({ status: nextStatus })
+        .eq('id', id);
+    } catch {}
+    await loadData();
     window.dispatchEvent(new Event('attendance-updated'));
   };
 
   const handleClearAll = async () => {
-    if (!window.confirm('តើអ្នកពិតជាចង់សម្អាតតារាងវត្តមានថ្ងៃនេះមែនទេ? (ទិន្នន័យទាំងអស់នៅតែរក្សាទុកក្នុងតារាងរក្សាទុកទិន្នន័យ Admin)')) return;
-    const allKeys = students.map((s) => s.student_code || s.id);
-    const updatedHidden = Array.from(new Set([...hiddenDailyCodes, ...allKeys]));
-    setHiddenDailyCodes(updatedHidden);
-    localStorage.setItem('bipa_hidden_daily_ids', JSON.stringify(updatedHidden));
+    if (!window.confirm('តើអ្នកពិតជាចង់លុបសម្អាតតារាងវត្តមានថ្ងៃនេះទាំងអស់មែនទេ? (ទិន្នន័យនៅតែរក្សាទុកក្នុងតារាងរក្សាទុកទិន្នន័យ Admin)')) return;
+    const currentList = [...students];
+    setStudents([]);
+    try {
+      for (const item of currentList) {
+        const hiddenStat = `${item.status.replace('[HIDDEN]', '').trim()} [HIDDEN]`;
+        await supabase
+          .from('bipa_attendance')
+          .update({ status: hiddenStat })
+          .eq('id', item.id);
+      }
+    } catch {}
+    await loadData();
     window.dispatchEvent(new Event('attendance-updated'));
   };
 
@@ -397,10 +375,6 @@ export function AttendancePage() {
   };
 
   const saveEdit = async (id: string) => {
-    const updated = students.map((s) =>
-      s.id === id ? { ...s, name: editName, gender: editGender, time_out: editTimeOut, time_in: editTimeIn, status: editStatus } : s
-    );
-    saveStudentsLocal(updated);
     setEditingId(null);
     try {
       await supabase.from('bipa_attendance').update({
@@ -411,14 +385,14 @@ export function AttendancePage() {
         status: editStatus,
       }).eq('id', id);
     } catch {}
+    await loadData();
+    window.dispatchEvent(new Event('attendance-updated'));
   };
 
   const todayStr = new Date().toDateString();
   const todayData = students.filter(
     (s) =>
       s.date === todayStr &&
-      !hiddenDailyCodes.includes(s.student_code || '') &&
-      !hiddenDailyCodes.includes(s.id) &&
       (s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (s.student_code && s.student_code.toLowerCase().includes(searchQuery.toLowerCase())))
   );
@@ -647,14 +621,14 @@ export function AttendancePage() {
                           key={stu.id}
                           onClick={() => {
                             setNewName(stu.student_code);
-                            setNewGender(normalizeGenderKm(stu.gender_km));
+                            setNewGender(stu.gender_km);
                             setShowPicker(false);
                           }}
                           className="w-full text-left px-3.5 py-2.5 hover:bg-slate-700/70 transition-colors flex flex-col"
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-extrabold text-white">{stu.student_code}</span>
-                            <span className="text-[11px] text-amber-400 font-semibold">{normalizeGenderKm(stu.gender_km)}</span>
+                            <span className="text-[11px] text-amber-400 font-semibold">{stu.gender_km}</span>
                           </div>
                           <span className="text-xs text-slate-300 mt-0.5">{stu.full_name_km}</span>
                         </button>
@@ -697,7 +671,7 @@ export function AttendancePage() {
         <div className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
           <div className="bg-slate-50 dark:bg-[#0f172a] rounded-xl p-3.5 mb-4 border border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-y-2 text-[11px] sm:text-xs text-slate-600 dark:text-slate-400">
             <div><span className="font-bold mr-1">អ្នកគ្រប់គ្រង:</span> <span className="text-slate-900 dark:text-white">BIPA Admin</span></div>
-            <div className="text-right"><span className="font-bold mr-1">វេន:</span> <span className="text-amber-500 font-bold">ចេញ-ចូលប្រចាំថ្ងៃ (លុប Auto ម៉ោង 12 យប់)</span></div>
+            <div className="text-right"><span className="font-bold mr-1">វេន:</span> <span className="text-amber-500 font-bold">ចេញ-ចូលប្រចាំថ្ងៃ</span></div>
             <div><span className="font-bold mr-1">ម៉ោងកំណត់:</span> <span className="text-[#3b82f6] font-bold">7:30-21:00</span></div>
             <div className="text-right"><span className="font-bold mr-1">កាលបរិច្ឆេទ:</span> <span className="text-slate-900 dark:text-white">{time.toLocaleDateString('en-GB')}</span></div>
           </div>
