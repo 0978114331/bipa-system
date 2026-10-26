@@ -27,14 +27,14 @@ export function AttendancePage() {
   };
 
   const resolveStudentDetails = (code: string | undefined, rawName: string, rawGender: string, dir: BipaStudent[]) => {
-    const cleanCode = String(code || '').trim().toLowerCase();
+    const cleanCode = String(code || '').trim().replace(/\s+/g, '').toLowerCase();
     const cleanName = String(rawName || '').trim().toLowerCase();
 
     const foundDir = dir.find(
       (d) =>
-        (cleanCode && d.student_code.toLowerCase() === cleanCode) ||
-        (cleanName && d.full_name_en.toLowerCase() === cleanName) ||
-        (cleanName && d.full_name_km.toLowerCase() === cleanName)
+        (cleanCode && String(d.student_code || '').trim().replace(/\s+/g, '').toLowerCase() === cleanCode) ||
+        (cleanName && String(d.full_name_en || '').trim().toLowerCase() === cleanName) ||
+        (cleanName && String(d.full_name_km || '').trim().toLowerCase() === cleanName)
     );
     const foundInit = initialStudents.find(
       (d) =>
@@ -50,19 +50,21 @@ export function AttendancePage() {
         : foundInit
         ? normalizeGenderKm(foundInit.gender_km)
         : normalizeGenderKm(rawGender),
-      finalCode: (foundDir?.student_code || foundInit?.student_code || code || '').toUpperCase(),
+      finalCode: (foundDir?.student_code || foundInit?.student_code || code || '').trim().toUpperCase(),
     };
   };
 
   const loadRecords = async () => {
-    let dirList: BipaStudent[] = initialStudents;
+    let localDir: BipaStudent[] = [];
     const savedDir = localStorage.getItem('bipa_students_directory_v2') || localStorage.getItem('bipa_students_directory');
     if (savedDir) {
       try {
         const parsed = JSON.parse(savedDir);
-        if (Array.isArray(parsed) && parsed.length > 0) dirList = parsed;
+        if (Array.isArray(parsed)) localDir = parsed;
       } catch {}
     }
+
+    const dirList = [...localDir, ...initialStudents];
 
     try {
       const { data: dbAtt, error } = await supabase
@@ -70,7 +72,7 @@ export function AttendancePage() {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (!error && dbAtt) {
+      if (!error && dbAtt && dbAtt.length > 0) {
         const mapped: AttendanceRecord[] = dbAtt.map((r: any) => {
           const info = resolveStudentDetails(r.student_code, r.full_name || '', r.gender || '', dirList);
           return {
@@ -133,7 +135,7 @@ export function AttendancePage() {
   const filteredRecords = allRecords.filter((r) => r.date === targetDateString);
 
   const handleDeleteRecord = async (id: string, studentCode?: string, recDate?: string) => {
-    if (!window.confirm('តើអ្នកពិតជាចង់លុបទិន្នន័យនេះមែនទេ?')) return;
+    if (!window.confirm('តើអ្នកពិតជាចង់លុបទិន្នន័យនេះចេញពីតារាងរក្សាទុកទិន្នន័យជាអចិន្ត្រៃយ៍មែនទេ?')) return;
     const updated = allRecords.filter((r) => r.id !== id);
     setAllRecords(updated);
     localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify(updated));
@@ -147,6 +149,18 @@ export function AttendancePage() {
           .eq('attendance_date', recDate)
           .eq('student_code', studentCode);
       }
+    } catch {}
+  };
+
+  const handleDeleteAllByDate = async () => {
+    const displayDate = selectedIsoDate.split('-').reverse().join('/');
+    if (!window.confirm(`តើអ្នកពិតជាចង់លុបទិន្នន័យរក្សាទុកសម្រាប់ថ្ងៃទី ${displayDate} ទាំងអស់ចេញពីប្រព័ន្ធជាអចិន្ត្រៃយ៍មែនទេ?`)) return;
+    const remaining = allRecords.filter((r) => r.date !== targetDateString);
+    setAllRecords(remaining);
+    localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify(remaining));
+    window.dispatchEvent(new Event('attendance-updated'));
+    try {
+      await supabase.from('bipa_attendance').delete().eq('attendance_date', targetDateString);
     } catch {}
   };
 
@@ -404,6 +418,15 @@ export function AttendancePage() {
                   >
                     <Printer className="h-3.5 w-3.5 mr-1.5" /> បោះពុម្ព (Print)
                   </Button>
+
+                  {filteredRecords.length > 0 && (
+                    <Button
+                      onClick={handleDeleteAllByDate}
+                      className="h-9 px-3 bg-red-600 hover:bg-red-700 text-white text-xs font-bold"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> លុបទិន្នន័យថ្ងៃនេះ
+                    </Button>
+                  )}
                 </div>
               </div>
 

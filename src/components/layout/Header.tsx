@@ -33,22 +33,23 @@ export async function resolveStudentByIdOrName(query: string): Promise<{
   nameKm: string;
   genderKm: string;
 } | null> {
-  const clean = query.trim();
+  const clean = query.trim().replace(/\s+/g, '');
   if (!clean) return null;
 
-  let dirList: BipaStudent[] = [];
+  let localList: BipaStudent[] = [];
   const savedDir = localStorage.getItem('bipa_students_directory_v2') || localStorage.getItem('bipa_students_directory');
   if (savedDir) {
     try {
       const parsed = JSON.parse(savedDir);
-      if (Array.isArray(parsed)) dirList = parsed;
+      if (Array.isArray(parsed)) localList = parsed;
     } catch {}
   }
 
+  let dbList: BipaStudent[] = [];
   try {
     const { data } = await supabase.from('bipa_students').select('*');
     if (data && data.length > 0) {
-      dirList = data.map((r: any) => {
+      dbList = data.map((r: any) => {
         const fb = initialStudents.find(
           (s) => s.student_code.toLowerCase() === String(r.student_code || '').toLowerCase()
         );
@@ -56,9 +57,9 @@ export async function resolveStudentByIdOrName(query: string): Promise<{
         const isFemale = rawGender === 'ស្រី' || rawGender.toUpperCase() === 'F' || rawGender.toUpperCase() === 'FEMALE';
         return {
           id: String(r.id),
-          student_code: String(r.student_code || fb?.student_code || '').toUpperCase(),
-          full_name_km: r.full_name_km || fb?.full_name_km || r.full_name || '',
-          full_name_en: r.full_name_en || fb?.full_name_en || r.full_name || '',
+          student_code: String(r.student_code || fb?.student_code || '').trim().toUpperCase(),
+          full_name_km: r.full_name_km || r.full_name || fb?.full_name_km || '',
+          full_name_en: r.full_name_en || r.full_name || fb?.full_name_en || '',
           gender_km: isFemale ? 'ស្រី' : 'ប្រុស',
           gender_en: isFemale ? 'F' : 'M',
           dob: r.dob || '',
@@ -82,25 +83,29 @@ export async function resolveStudentByIdOrName(query: string): Promise<{
     }
   } catch {}
 
-  const combined = [...dirList, ...initialStudents];
-  const matched = combined.find(
-    (s) =>
-      (s.student_code && s.student_code.toLowerCase() === clean.toLowerCase()) ||
-      (s.full_name_km && s.full_name_km.trim() === clean) ||
-      (s.full_name_en && s.full_name_en.toLowerCase() === clean.toLowerCase())
-  );
+  const combined = [...localList, ...dbList, ...initialStudents];
+  const matched = combined.find((s) => {
+    const sCode = String(s.student_code || '').trim().replace(/\s+/g, '').toLowerCase();
+    const sNameKm = String(s.full_name_km || (s as any).full_name || '').trim().toLowerCase();
+    const sNameEn = String(s.full_name_en || '').trim().toLowerCase();
+    return (
+      sCode === clean.toLowerCase() ||
+      sNameKm === query.trim().toLowerCase() ||
+      sNameEn === query.trim().toLowerCase()
+    );
+  });
 
   if (!matched) return null;
 
   const initMatch = initialStudents.find(
-    (s) => s.student_code.toLowerCase() === matched.student_code.toLowerCase()
+    (s) => s.student_code.toLowerCase() === String(matched.student_code || '').trim().toLowerCase()
   );
-  const rawG = String(matched.gender_km || initMatch?.gender_km || 'ប្រុស').trim();
-  const isF = rawG === 'ស្រី' || rawG.toUpperCase() === 'F';
-  const khmerName = matched.full_name_km || initMatch?.full_name_km || matched.full_name_en;
+  const rawG = String(matched.gender_km || (matched as any).gender || initMatch?.gender_km || 'ប្រុស').trim();
+  const isF = rawG === 'ស្រី' || rawG.toUpperCase() === 'F' || rawG.toUpperCase() === 'FEMALE';
+  const khmerName = matched.full_name_km || (matched as any).full_name || initMatch?.full_name_km || matched.full_name_en;
 
   return {
-    code: matched.student_code.toUpperCase(),
+    code: String(matched.student_code).trim().toUpperCase(),
     nameKm: khmerName,
     genderKm: isF ? 'ស្រី' : 'ប្រុស',
   };
@@ -169,6 +174,16 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
     }
   } catch {}
 
+  const unhideDailyRecord = (code: string) => {
+    try {
+      const hiddenIds: string[] = JSON.parse(localStorage.getItem('bipa_hidden_daily_ids') || '[]');
+      localStorage.setItem(
+        'bipa_hidden_daily_ids',
+        JSON.stringify(hiddenIds.filter((c) => c.toUpperCase() !== code.toUpperCase()))
+      );
+    } catch {}
+  };
+
   const existingIdx = allRecords.findIndex(
     (r: any) =>
       r.date === todayStr &&
@@ -188,6 +203,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
       current.gender = resolved.genderKm;
       allRecords[existingIdx] = current;
       localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify(allRecords));
+      unhideDailyRecord(resolved.code);
       try {
         await supabase
           .from('bipa_attendance')
@@ -216,6 +232,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
       current.gender = resolved.genderKm;
       allRecords[existingIdx] = current;
       localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify(allRecords));
+      unhideDailyRecord(resolved.code);
       try {
         await supabase
           .from('bipa_attendance')
@@ -256,6 +273,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
   };
   const updatedAll = [newEntry, ...allRecords];
   localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify(updatedAll));
+  unhideDailyRecord(resolved.code);
 
   try {
     await supabase.from('bipa_attendance').insert([
@@ -340,7 +358,7 @@ export function Header() {
         setScanFeedback(null);
       }
 
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, 200));
       if (!isMounted || !document.getElementById('global-qr-reader')) return;
 
       try {
@@ -363,7 +381,12 @@ export function Header() {
 
         await html5QrCode.start(
           cameraId,
-          { fps: 10, qrbox: { width: 220, height: 220 } },
+          {
+            fps: 25,
+            qrbox: { width: 230, height: 230 },
+            aspectRatio: 1.0,
+            disableFlip: false,
+          },
           async (decodedText) => {
             if (processingLockRef.current) return;
             processingLockRef.current = true;
@@ -384,12 +407,12 @@ export function Header() {
                   setShowScanner(false);
                   navigate('/attendance');
                 }
-              }, 1400);
+              }, 1300);
             } else {
               setScanFeedback({ type: 'error', text: res.message });
               setTimeout(() => {
                 processingLockRef.current = false;
-              }, 2200);
+              }, 2000);
             }
           },
           () => {}
@@ -439,7 +462,7 @@ export function Header() {
         setTimeout(() => {
           setShowScanner(false);
           navigate('/attendance');
-        }, 1300);
+        }, 1200);
       } else {
         setScanFeedback({ type: 'error', text: res.message });
       }
@@ -470,7 +493,10 @@ export function Header() {
               100% { top: 8%; }
             }
             .animate-scan {
-              animation: scanLine 2.5s ease-in-out infinite;
+              animation: scanLine 2.2s ease-in-out infinite;
+            }
+            #global-qr-reader {
+              border: none !important;
             }
             #global-qr-reader video {
               width: 100% !important;
@@ -478,9 +504,15 @@ export function Header() {
               object-fit: cover !important;
               border-radius: 1rem;
             }
+            #global-qr-reader__scan_region > div {
+              display: none !important;
+            }
+            #global-qr-reader__dashboard {
+              display: none !important;
+            }
           `}</style>
 
-          <div className="mb-3 px-4 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-300">
+          <div className="mb-4 px-4 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-300">
             អត្តលេខសិស្សបច្ចុប្បន្ន៖{' '}
             <span className={cn('font-bold', currentLinkedId ? 'text-emerald-400' : 'text-red-400')}>
               {currentLinkedId || 'មិនទាន់ភ្ជាប់ ID'}

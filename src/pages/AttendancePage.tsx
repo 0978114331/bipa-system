@@ -25,10 +25,19 @@ export function AttendancePage() {
   const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
 
   const [time, setTime] = useState(new Date());
+  const [currentDateStr, setCurrentDateStr] = useState(() => new Date().toDateString());
   const [searchQuery, setSearchQuery] = useState('');
   const [students, setStudents] = useState<AttendanceRecord[]>([]);
   const [directoryStudents, setDirectoryStudents] = useState<BipaStudent[]>([]);
   const [mapQuery, setMapQuery] = useState('Preah Sihanouk Raja Buddhist University, Phnom Penh');
+
+  const [hiddenDailyCodes, setHiddenDailyCodes] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('bipa_hidden_daily_ids') || '[]');
+    } catch {
+      return [];
+    }
+  });
 
   const [myStudentId, setMyStudentId] = useState(() => localStorage.getItem('bipa_linked_student_id') || '');
   const [tempStudentId, setTempStudentId] = useState('');
@@ -54,14 +63,14 @@ export function AttendancePage() {
   };
 
   const resolveKhmerStudentInfo = (code: string | undefined, rawName: string, rawGender: string, dir: BipaStudent[]) => {
-    const cleanCode = String(code || '').trim().toLowerCase();
+    const cleanCode = String(code || '').trim().replace(/\s+/g, '').toLowerCase();
     const cleanName = String(rawName || '').trim().toLowerCase();
 
     const foundDir = dir.find(
       (d) =>
-        (cleanCode && d.student_code.toLowerCase() === cleanCode) ||
-        (cleanName && d.full_name_en.toLowerCase() === cleanName) ||
-        (cleanName && d.full_name_km.toLowerCase() === cleanName)
+        (cleanCode && String(d.student_code || '').trim().replace(/\s+/g, '').toLowerCase() === cleanCode) ||
+        (cleanName && String(d.full_name_en || '').trim().toLowerCase() === cleanName) ||
+        (cleanName && String(d.full_name_km || '').trim().toLowerCase() === cleanName)
     );
     const foundInit = initialStudents.find(
       (d) =>
@@ -76,37 +85,38 @@ export function AttendancePage() {
       : foundInit
       ? normalizeGenderKm(foundInit.gender_km)
       : normalizeGenderKm(rawGender);
-    const finalCode = (foundDir?.student_code || foundInit?.student_code || code || '').toUpperCase();
+    const finalCode = (foundDir?.student_code || foundInit?.student_code || code || '').trim().toUpperCase();
 
     return { nameKm, genderKm, finalCode };
   };
 
   const loadData = async () => {
     const todayStr = new Date().toDateString();
-    let dirList: BipaStudent[] = [];
 
+    let localDir: BipaStudent[] = [];
     const savedDir = localStorage.getItem('bipa_students_directory_v2') || localStorage.getItem('bipa_students_directory');
     if (savedDir) {
       try {
         const parsed = JSON.parse(savedDir);
-        if (Array.isArray(parsed) && parsed.length > 0) dirList = parsed;
+        if (Array.isArray(parsed)) localDir = parsed;
       } catch {}
     }
 
+    let dbDir: BipaStudent[] = [];
     try {
       const { data: dbStudents } = await supabase
         .from('bipa_students')
         .select('*')
         .order('student_code', { ascending: true });
       if (dbStudents && dbStudents.length > 0) {
-        const dbMapped: BipaStudent[] = dbStudents.map((r: any) => {
+        dbDir = dbStudents.map((r: any) => {
           const fb = initialStudents.find((s) => s.student_code.toLowerCase() === String(r.student_code || '').toLowerCase());
           const gKm = normalizeGenderKm(r.gender_km || r.gender || fb?.gender_km);
           return {
             id: String(r.id),
-            student_code: String(r.student_code || fb?.student_code || '').toUpperCase(),
-            full_name_km: r.full_name_km || fb?.full_name_km || r.full_name || '',
-            full_name_en: r.full_name_en || fb?.full_name_en || r.full_name || '',
+            student_code: String(r.student_code || fb?.student_code || '').trim().toUpperCase(),
+            full_name_km: r.full_name_km || r.full_name || fb?.full_name_km || '',
+            full_name_en: r.full_name_en || r.full_name || fb?.full_name_en || '',
             gender_km: gKm,
             gender_en: gKm === 'ស្រី' ? 'F' : 'M',
             dob: r.dob || '',
@@ -127,14 +137,23 @@ export function AttendancePage() {
             others_en: r.others_en || '',
           };
         });
-        if (dbMapped.length >= dirList.length) {
-          dirList = dbMapped;
-        }
       }
     } catch {}
 
-    if (dirList.length === 0) dirList = initialStudents;
-    setDirectoryStudents(dirList);
+    const mapByCode = new Map<string, BipaStudent>();
+    [...initialStudents, ...dbDir, ...localDir].forEach((stu) => {
+      const key = String(stu.student_code || '').trim().toUpperCase();
+      if (key) mapByCode.set(key, stu);
+    });
+    const mergedDirectory = Array.from(mapByCode.values()).sort((a, b) =>
+      a.student_code.localeCompare(b.student_code)
+    );
+    setDirectoryStudents(mergedDirectory);
+
+    try {
+      const savedHidden = JSON.parse(localStorage.getItem('bipa_hidden_daily_ids') || '[]');
+      if (Array.isArray(savedHidden)) setHiddenDailyCodes(savedHidden);
+    } catch {}
 
     try {
       const { data: dbAtt, error } = await supabase
@@ -145,7 +164,7 @@ export function AttendancePage() {
 
       if (!error && dbAtt) {
         const mapped: AttendanceRecord[] = dbAtt.map((r: any) => {
-          const resolved = resolveKhmerStudentInfo(r.student_code, r.full_name || '', r.gender || '', dirList);
+          const resolved = resolveKhmerStudentInfo(r.student_code, r.full_name || '', r.gender || '', mergedDirectory);
           return {
             id: String(r.id),
             student_code: resolved.finalCode,
@@ -179,7 +198,7 @@ export function AttendancePage() {
         const todayOnly = parsed
           .filter((item) => item.date === todayStr)
           .map((item) => {
-            const resolved = resolveKhmerStudentInfo(item.student_code, item.name, item.gender, dirList);
+            const resolved = resolveKhmerStudentInfo(item.student_code, item.name, item.gender, mergedDirectory);
             return {
               ...item,
               student_code: resolved.finalCode,
@@ -203,7 +222,18 @@ export function AttendancePage() {
     localStorage.removeItem('bipa_attendance_records');
     localStorage.removeItem('bipa_attendance_v3');
     loadData();
-    const clockTimer = setInterval(() => setTime(new Date()), 1000);
+
+    const clockTimer = setInterval(() => {
+      const now = new Date();
+      setTime(now);
+      if (now.toDateString() !== currentDateStr) {
+        setCurrentDateStr(now.toDateString());
+        localStorage.removeItem('bipa_hidden_daily_ids');
+        setHiddenDailyCodes([]);
+        setStudents([]);
+      }
+    }, 1000);
+
     const syncTimer = setInterval(() => loadData(), 2000);
     window.addEventListener('attendance-updated', loadData);
     window.addEventListener('students-updated', loadData);
@@ -224,7 +254,7 @@ export function AttendancePage() {
       window.removeEventListener('storage', loadData);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [currentDateStr]);
 
   const saveStudentsLocal = (updatedToday: AttendanceRecord[]) => {
     setStudents(updatedToday);
@@ -273,6 +303,10 @@ export function AttendancePage() {
     const targetCode = resolved.finalCode;
     const targetName = resolved.nameKm;
     const targetGender = matchedDir ? resolved.genderKm : newGender;
+
+    const nextHidden = hiddenDailyCodes.filter((c) => c.toUpperCase() !== targetCode.toUpperCase());
+    setHiddenDailyCodes(nextHidden);
+    localStorage.setItem('bipa_hidden_daily_ids', JSON.stringify(nextHidden));
 
     const existingIndex = students.findIndex(
       (s) =>
@@ -335,29 +369,22 @@ export function AttendancePage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('តើអ្នកពិតជាចង់លុបទិន្នន័យនេះចេញពីតារាងមែនទេ?')) return;
+    if (!window.confirm('តើអ្នកពិតជាចង់លុបឈ្មោះនេះចេញពីតារាងវត្តមានថ្ងៃនេះមែនទេ? (ទិន្នន័យនៅតែរក្សាទុកក្នុងតារាងរក្សាទុកទិន្នន័យ Admin)')) return;
     const target = students.find((s) => s.id === id);
-    const filtered = students.filter((s) => s.id !== id);
-    saveStudentsLocal(filtered);
-    try {
-      await supabase.from('bipa_attendance').delete().eq('id', id);
-      if (target?.student_code) {
-        await supabase
-          .from('bipa_attendance')
-          .delete()
-          .eq('attendance_date', new Date().toDateString())
-          .eq('student_code', target.student_code);
-      }
-    } catch {}
+    const keyToHide = target?.student_code || target?.id || id;
+    const updatedHidden = Array.from(new Set([...hiddenDailyCodes, keyToHide]));
+    setHiddenDailyCodes(updatedHidden);
+    localStorage.setItem('bipa_hidden_daily_ids', JSON.stringify(updatedHidden));
+    window.dispatchEvent(new Event('attendance-updated'));
   };
 
   const handleClearAll = async () => {
-    if (!window.confirm('តើអ្នកពិតជាចង់លុបឈ្មោះក្នុងតារាងវត្តមានថ្ងៃនេះទាំងអស់មែនទេ?')) return;
-    const todayStr = new Date().toDateString();
-    saveStudentsLocal([]);
-    try {
-      await supabase.from('bipa_attendance').delete().eq('attendance_date', todayStr);
-    } catch {}
+    if (!window.confirm('តើអ្នកពិតជាចង់សម្អាតតារាងវត្តមានថ្ងៃនេះមែនទេ? (ទិន្នន័យទាំងអស់នៅតែរក្សាទុកក្នុងតារាងរក្សាទុកទិន្នន័យ Admin)')) return;
+    const allKeys = students.map((s) => s.student_code || s.id);
+    const updatedHidden = Array.from(new Set([...hiddenDailyCodes, ...allKeys]));
+    setHiddenDailyCodes(updatedHidden);
+    localStorage.setItem('bipa_hidden_daily_ids', JSON.stringify(updatedHidden));
+    window.dispatchEvent(new Event('attendance-updated'));
   };
 
   const startEdit = (student: AttendanceRecord) => {
@@ -390,6 +417,8 @@ export function AttendancePage() {
   const todayData = students.filter(
     (s) =>
       s.date === todayStr &&
+      !hiddenDailyCodes.includes(s.student_code || '') &&
+      !hiddenDailyCodes.includes(s.id) &&
       (s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (s.student_code && s.student_code.toLowerCase().includes(searchQuery.toLowerCase())))
   );
@@ -668,7 +697,7 @@ export function AttendancePage() {
         <div className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
           <div className="bg-slate-50 dark:bg-[#0f172a] rounded-xl p-3.5 mb-4 border border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-y-2 text-[11px] sm:text-xs text-slate-600 dark:text-slate-400">
             <div><span className="font-bold mr-1">អ្នកគ្រប់គ្រង:</span> <span className="text-slate-900 dark:text-white">BIPA Admin</span></div>
-            <div className="text-right"><span className="font-bold mr-1">វេន:</span> <span className="text-amber-500 font-bold">ចេញ-ចូលប្រចាំថ្ងៃ</span></div>
+            <div className="text-right"><span className="font-bold mr-1">វេន:</span> <span className="text-amber-500 font-bold">ចេញ-ចូលប្រចាំថ្ងៃ (លុប Auto ម៉ោង 12 យប់)</span></div>
             <div><span className="font-bold mr-1">ម៉ោងកំណត់:</span> <span className="text-[#3b82f6] font-bold">7:30-21:00</span></div>
             <div className="text-right"><span className="font-bold mr-1">កាលបរិច្ឆេទ:</span> <span className="text-slate-900 dark:text-white">{time.toLocaleDateString('en-GB')}</span></div>
           </div>
@@ -779,7 +808,7 @@ export function AttendancePage() {
         {isAdmin && (
           <div className="flex flex-wrap justify-center gap-3 pt-1">
             <Button onClick={handleClearAll} className="bg-[#dc2626] hover:bg-red-700 text-white rounded-xl px-4 h-10 text-xs font-bold">
-              <Trash2 className="h-4 w-4 mr-1.5" /> លុបទាំងអស់
+              <Trash2 className="h-4 w-4 mr-1.5" /> លុបតារាងថ្ងៃនេះ
             </Button>
             <Button onClick={handlePrintDocument} className="bg-slate-700 hover:bg-slate-600 text-white rounded-xl px-4 h-10 text-xs font-bold">
               <Printer className="h-4 w-4 mr-1.5" /> PDF
