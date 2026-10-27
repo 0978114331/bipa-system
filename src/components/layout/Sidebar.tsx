@@ -488,7 +488,7 @@ export function Sidebar() {
                   ))}
                 </div>
                 
-                {/* នេះជាប៊ូតុងរក្សាទុក Banner ថ្មីដែលបានបន្ថែម */}
+                {/* Banner */}
                 <div className="flex justify-end border-t border-slate-800 pt-4">
                   <Button onClick={handleSaveBanners} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 px-8 rounded-xl shadow-md">
                     <Save className="h-4 w-4 mr-2" /> រក្សាទុករូប Banner
