@@ -7,12 +7,42 @@ import { useI18n } from '@/contexts/I18nContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
-  Home, Info, Building2, Megaphone, Phone, LogIn, UserPlus,
-  LogOut, LayoutDashboard, User, Menu, Sun, Moon, Languages,
-  GraduationCap, ChevronDown, Shield, QrCode, Eye, UserCheck, FileText, LayoutGrid, X, ImageUp, CheckCircle2, AlertCircle
+  Home,
+  Info,
+  Building2,
+  Megaphone,
+  Phone,
+  LogIn,
+  UserPlus,
+  LogOut,
+  LayoutDashboard,
+  User,
+  Menu,
+  Sun,
+  Moon,
+  Languages,
+  GraduationCap,
+  ChevronDown,
+  Shield,
+  QrCode,
+  Eye,
+  UserCheck,
+  FileText,
+  LayoutGrid,
+  X,
+  ImageUp,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
 import { TranslationKey } from '@/types';
@@ -45,7 +75,9 @@ export async function resolveStudentByIdOrName(query: string): Promise<{
   if (!clean) return null;
 
   let localList: BipaStudent[] = [];
-  const savedDir = localStorage.getItem('bipa_students_directory_v2') || localStorage.getItem('bipa_students_directory');
+  const savedDir =
+    localStorage.getItem('bipa_students_directory_v2') ||
+    localStorage.getItem('bipa_students_directory');
   if (savedDir) {
     try {
       const parsed = JSON.parse(savedDir);
@@ -269,7 +301,8 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
     };
   }
 
-  const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+  const newId =
+    typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
   try {
     await supabase.from('bipa_attendance').insert([
       {
@@ -329,9 +362,11 @@ export function Header() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processingLockRef = useRef(false);
-  const [systemLogoUrl, setSystemLogoUrl] = useState("https://i.ibb.co/tphX7kd4/ce2e43f3-9d48-4d71-86a6-dd1ac3d77c49.png");
-  const [systemNameKm, setSystemNameKm] = useState("BIPA");
-  const [systemNameEn, setSystemNameEn] = useState("BIPA");
+  const [systemLogoUrl, setSystemLogoUrl] = useState(
+    'https://i.ibb.co/tphX7kd4/ce2e43f3-9d48-4d71-86a6-dd1ac3d77c49.png'
+  );
+  const [systemNameKm, setSystemNameKm] = useState('BIPA');
+  const [systemNameEn, setSystemNameEn] = useState('BIPA');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -342,14 +377,13 @@ export function Header() {
         setSystemNameEn(data.name_en);
       }
     };
-    
-    fetchSettings(); 
-    
-    // Admin 
+
+    fetchSettings();
+
     window.addEventListener('system-settings-updated', fetchSettings);
     return () => window.removeEventListener('system-settings-updated', fetchSettings);
   }, []);
-  
+
   const mainNavItems = [
     { key: 'nav.home', path: '/', icon: Home, labelKm: 'ផ្ទះ', labelEn: 'Home' },
     { key: 'nav.attendance', path: '/attendance', icon: UserCheck, labelKm: 'វត្តមាន', labelEn: 'Attendance' },
@@ -357,10 +391,10 @@ export function Header() {
     { key: 'nav.about', path: '/about', icon: Info, labelKm: 'អំពីយើង', labelEn: 'About' },
   ];
 
-  const extraNavItems: { key: TranslationKey; path: string; icon: typeof Home }[] = [
-    { key: 'nav.residence', path: '/residence-info', icon: Building2 },
-    { key: 'nav.announcements', path: '/announcements', icon: Megaphone },
-    { key: 'nav.contact', path: '/contact', icon: Phone },
+  const extraNavItems: { key: TranslationKey; path: string; icon: typeof Home; color: string }[] = [
+    { key: 'nav.residence', path: '/residence-info', icon: Building2, color: 'text-cyan-400' },
+    { key: 'nav.announcements', path: '/announcements', icon: Megaphone, color: 'text-amber-400' },
+    { key: 'nav.contact', path: '/contact', icon: Phone, color: 'text-indigo-400' },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -635,7 +669,9 @@ export function Header() {
                   onClick={() => navigate(item.path)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all duration-300 font-khmer',
-                    isActive(item.path) ? 'bg-[#3b82f6] text-white shadow-md' : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                    isActive(item.path)
+                      ? 'bg-[#3b82f6] text-white shadow-md'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -653,7 +689,11 @@ export function Header() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 bg-[#1e293b] border-slate-700 text-white font-khmer">
                   {extraNavItems.map((item) => (
-                    <DropdownMenuItem key={item.path} onClick={() => navigate(item.path)} className="hover:bg-slate-800 cursor-pointer">
+                    <DropdownMenuItem
+                      key={item.path}
+                      onClick={() => navigate(item.path)}
+                      className="hover:bg-slate-800 cursor-pointer"
+                    >
                       <item.icon className="h-4 w-4 mr-3 text-slate-400" />
                       {t(item.key)}
                     </DropdownMenuItem>
@@ -683,8 +723,12 @@ export function Header() {
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col items-start justify-center">
-                        <span className="text-sm font-medium max-w-[100px] truncate leading-none">{profile?.display_name || 'User'}</span>
-                        <span className="text-[10px] text-slate-400 mt-1 uppercase leading-none">{renderRole(profile?.role)}</span>
+                        <span className="text-sm font-medium max-w-[100px] truncate leading-none">
+                          {profile?.display_name || 'User'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 mt-1 uppercase leading-none">
+                          {renderRole(profile?.role)}
+                        </span>
                       </div>
                       <ChevronDown className="h-4 w-4 opacity-50 ml-1" />
                     </Button>
@@ -697,35 +741,71 @@ export function Header() {
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator className="bg-slate-700" />
-                    <DropdownMenuItem onClick={() => navigate('/dashboard')} className="hover:bg-slate-800 cursor-pointer"><LayoutDashboard className="h-4 w-4 mr-3 text-slate-400" />{t('nav.dashboard')}</DropdownMenuItem>
-                    
+                    <DropdownMenuItem onClick={() => navigate('/dashboard')} className="hover:bg-slate-800 cursor-pointer">
+                      <LayoutDashboard className="h-4 w-4 mr-3 text-slate-400" />
+                      {t('nav.dashboard')}
+                    </DropdownMenuItem>
+
                     {isAdminRoute ? (
-                      <DropdownMenuItem onClick={() => navigate('/')} className="hover:bg-slate-800 cursor-pointer"><Eye className="h-4 w-4 mr-3 text-slate-400" />View Site</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate('/')} className="hover:bg-slate-800 cursor-pointer">
+                        <Eye className="h-4 w-4 mr-3 text-slate-400" />
+                        View Site
+                      </DropdownMenuItem>
                     ) : (
-                      isAdmin && <DropdownMenuItem onClick={() => navigate('/admin')} className="hover:bg-slate-800 cursor-pointer"><Shield className="h-4 w-4 mr-3 text-slate-400" />{t('dashboard.adminDashboard')}</DropdownMenuItem>
+                      isAdmin && (
+                        <DropdownMenuItem onClick={() => navigate('/admin')} className="hover:bg-slate-800 cursor-pointer">
+                          <Shield className="h-4 w-4 mr-3 text-slate-400" />
+                          {t('dashboard.adminDashboard')}
+                        </DropdownMenuItem>
+                      )
                     )}
 
-                    <DropdownMenuItem onClick={() => navigate('/profile')} className="hover:bg-slate-800 cursor-pointer"><User className="h-4 w-4 mr-3 text-slate-400" />{t('nav.profile')}</DropdownMenuItem>
-                    
+                    <DropdownMenuItem onClick={() => navigate('/profile')} className="hover:bg-slate-800 cursor-pointer">
+                      <User className="h-4 w-4 mr-3 text-slate-400" />
+                      {t('nav.profile')}
+                    </DropdownMenuItem>
+
                     <DropdownMenuSeparator className="bg-slate-700" />
                     <div className="px-2 py-2 flex items-center justify-between">
-                      <Button variant="ghost" size="sm" onClick={() => setLang(lang === 'en' ? 'km' : 'en')} className="text-slate-300 hover:text-white hover:bg-slate-800">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setLang(lang === 'en' ? 'km' : 'en')}
+                        className="text-slate-300 hover:text-white hover:bg-slate-800"
+                      >
                         <Languages className="h-4 w-4 mr-2" />
                         {lang === 'en' ? 'KH' : 'EN'}
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={toggleTheme} className="text-slate-300 hover:text-white hover:bg-slate-800">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={toggleTheme}
+                        className="text-slate-300 hover:text-white hover:bg-slate-800"
+                      >
                         {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
                       </Button>
                     </div>
                     <DropdownMenuSeparator className="bg-slate-700" />
 
-                    <DropdownMenuItem onClick={handleSignOut} className="text-red-400 hover:bg-slate-800 hover:text-red-300 cursor-pointer"><LogOut className="h-4 w-4 mr-3" />{t('nav.signOut')}</DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handleSignOut}
+                      className="text-red-400 hover:bg-slate-800 hover:text-red-300 cursor-pointer"
+                    >
+                      <LogOut className="h-4 w-4 mr-3" />
+                      {t('nav.signOut')}
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
                 <div className="hidden md:flex items-center gap-2 font-khmer">
-                  <Button variant="ghost" size="sm" onClick={() => navigate('/signin')} className="text-white hover:bg-white/10"><LogIn className="h-4 w-4 mr-2" />{t('nav.signIn')}</Button>
-                  <Button size="sm" onClick={() => navigate('/signup')} className="bg-[#3b82f6] hover:bg-[#2563eb] text-white font-semibold"><UserPlus className="h-4 w-4 mr-2" />{t('nav.createAccount')}</Button>
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/signin')} className="text-white hover:bg-white/10">
+                    <LogIn className="h-4 w-4 mr-2" />
+                    {t('nav.signIn')}
+                  </Button>
+                  <Button size="sm" onClick={() => navigate('/signup')} className="bg-[#3b82f6] hover:bg-[#2563eb] text-white font-semibold">
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    {t('nav.createAccount')}
+                  </Button>
                 </div>
               )}
             </div>
@@ -734,13 +814,25 @@ export function Header() {
       </header>
 
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#0f172a] border-t border-slate-200 dark:border-slate-800 flex items-center justify-around h-16 pb-safe px-1 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] font-khmer">
-        <button onClick={() => navigate('/')} className={cn("flex flex-col items-center justify-center w-full gap-1 transition-colors", isActive('/') ? "text-[#3b82f6]" : "text-slate-500 dark:text-slate-400")}>
+        <button
+          onClick={() => navigate('/')}
+          className={cn(
+            'flex flex-col items-center justify-center w-full gap-1 transition-colors',
+            isActive('/') ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
+          )}
+        >
           <Home className="h-[22px] w-[22px]" />
           <span className="text-[10px] font-medium">{lang === 'km' ? 'ផ្ទះ' : 'Home'}</span>
         </button>
 
-        <button onClick={() => navigate('/attendance')} className={cn("flex flex-col items-center justify-center w-full gap-1 transition-colors", isActive('/attendance') ? "text-[#3b82f6]" : "text-slate-500 dark:text-slate-400")}>
-          <div className={cn("p-1.5 rounded-full transition-colors", isActive('/attendance') ? "bg-blue-50 dark:bg-blue-950/60" : "")}>
+        <button
+          onClick={() => navigate('/attendance')}
+          className={cn(
+            'flex flex-col items-center justify-center w-full gap-1 transition-colors',
+            isActive('/attendance') ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
+          )}
+        >
+          <div className={cn('p-1.5 rounded-full transition-colors', isActive('/attendance') ? 'bg-blue-50 dark:bg-blue-950/60' : '')}>
             <UserCheck className="h-[20px] w-[20px]" />
           </div>
           <span className="text-[10px] font-bold">{lang === 'km' ? 'វត្តមាន' : 'Attendance'}</span>
@@ -752,92 +844,215 @@ export function Header() {
               <div className="bg-[#1e293b] text-white h-[52px] w-[52px] flex items-center justify-center rounded-full shadow-lg border-[4px] border-white dark:border-[#0f172a] transition-transform active:scale-95">
                 <Menu className="h-6 w-6" />
               </div>
-              <span className="text-[10px] font-medium mt-1 text-slate-600 dark:text-slate-300">{lang === 'km' ? 'ម៉ឺនុយ' : 'Menu'}</span>
+              <span className="text-[10px] font-medium mt-1 text-slate-600 dark:text-slate-300">
+                {lang === 'km' ? 'ម៉ឺនុយ' : 'Menu'}
+              </span>
             </button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto bg-white dark:bg-[#0f172a] p-0 border-t border-slate-200 dark:border-slate-800 font-khmer">
+          <SheetContent
+            side="bottom"
+            className="rounded-t-[28px] max-h-[85vh] overflow-y-auto bg-white dark:bg-[#151e2e] p-0 border-t border-slate-200 dark:border-slate-700/80 font-khmer shadow-2xl [&>button]:hidden"
+          >
             <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
             <SheetDescription className="sr-only">Mobile navigation links</SheetDescription>
-            <div className="p-5 flex flex-col gap-4">
-              {user && (
-                <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                  <Avatar className="h-10 w-10 border border-slate-200 dark:border-slate-600">
-                    <AvatarImage src={profile?.avatar_url ? profile.avatar_url : undefined} />
-                    <AvatarFallback className="bg-[#3b82f6] text-white font-bold">
-                      {profile?.display_name?.charAt(0).toUpperCase() || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-800 dark:text-white">{profile?.display_name || 'User'}</span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">{profile?.email || ''}</span>
+
+            <div className="p-4 sm:p-5 pb-6 flex flex-col gap-4">
+              <div
+                onClick={() => setMobileOpen(false)}
+                className="w-11 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full mx-auto cursor-pointer"
+              />
+
+              {user ? (
+                <div className="flex items-center justify-between gap-2 bg-slate-100/90 dark:bg-[#1e2a3f] p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700/70">
+                  <div
+                    onClick={() => {
+                      navigate('/profile');
+                      setMobileOpen(false);
+                    }}
+                    className="flex items-center gap-3 min-w-0 cursor-pointer"
+                  >
+                    <Avatar className="h-11 w-11 border border-slate-300 dark:border-slate-600 shrink-0">
+                      <AvatarImage src={profile?.avatar_url ? profile.avatar_url : undefined} />
+                      <AvatarFallback className="bg-[#3b82f6] text-white font-bold">
+                        {profile?.display_name?.charAt(0).toUpperCase() || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                          {profile?.display_name || 'User'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
+                          {renderRole(profile?.role)}
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                        {profile?.email || ''}
+                      </span>
+                    </div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleSignOut();
+                      setMobileOpen(false);
+                    }}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[11px] font-bold transition-all active:scale-95"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    <span>{t('nav.signOut')}</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      navigate('/signin');
+                      setMobileOpen(false);
+                    }}
+                    className="h-10 rounded-xl border-slate-300 dark:border-slate-700 text-xs font-bold"
+                  >
+                    <LogIn className="h-4 w-4 mr-1.5" /> {t('nav.signIn')}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      navigate('/signup');
+                      setMobileOpen(false);
+                    }}
+                    className="h-10 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-bold"
+                  >
+                    <UserPlus className="h-4 w-4 mr-1.5" /> {t('nav.createAccount')}
+                  </Button>
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3 mb-2">
-                <Button variant="outline" size="sm" onClick={() => setLang(lang === 'en' ? 'km' : 'en')} className="flex items-center justify-center gap-2 h-10 border-slate-200 dark:border-slate-700 bg-transparent text-slate-700 dark:text-slate-200">
-                  <Languages className="h-4 w-4" />
+              <div className="grid grid-cols-2 gap-2.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLang(lang === 'en' ? 'km' : 'en')}
+                  className="flex items-center justify-center gap-2 h-10 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold"
+                >
+                  <Languages className="h-4 w-4 text-blue-500" />
                   {lang === 'en' ? 'ប្តូរជាខ្មែរ' : 'English'}
                 </Button>
-                <Button variant="outline" size="sm" onClick={toggleTheme} className="flex items-center justify-center gap-2 h-10 border-slate-200 dark:border-slate-700 bg-transparent text-slate-700 dark:text-slate-200">
-                  {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleTheme}
+                  className="flex items-center justify-center gap-2 h-10 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold"
+                >
+                  {theme === 'light' ? (
+                    <Moon className="h-4 w-4 text-amber-500" />
+                  ) : (
+                    <Sun className="h-4 w-4 text-amber-400" />
+                  )}
                   {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
                 </Button>
               </div>
 
-              <div className="space-y-1">
-                <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-1">Menu</div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-2.5 px-1">
+                  Menu
+                </div>
 
-                {user && (
-                  <>
-                    <Button variant="ghost" onClick={() => { navigate('/dashboard'); setMobileOpen(false); }} className="w-full justify-start h-12 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
-                      <LayoutDashboard className="h-5 w-5 mr-3 text-[#3b82f6]" /> {t('nav.dashboard')}
-                    </Button>
-                    {isAdminRoute ? (
-                      <Button variant="ghost" onClick={() => { navigate('/'); setMobileOpen(false); }} className="w-full justify-start h-12 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
-                        <Eye className="h-5 w-5 mr-3 text-emerald-500" /> View Site
-                      </Button>
-                    ) : (
-                      isAdmin && <Button variant="ghost" onClick={() => { navigate('/admin'); setMobileOpen(false); }} className="w-full justify-start h-12 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
-                        <Shield className="h-5 w-5 mr-3 text-[#eab308]" /> {t('dashboard.adminDashboard')}
-                      </Button>
-                    )}
-                  </>
-                )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {user && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigate('/dashboard');
+                          setMobileOpen(false);
+                        }}
+                        className={cn(
+                          'flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl border text-center transition-all active:scale-95',
+                          isActive('/dashboard')
+                            ? 'bg-blue-600/15 border-blue-500/60 text-blue-600 dark:text-white'
+                            : 'bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
+                        )}
+                      >
+                        <LayoutDashboard className="h-5 w-5 text-[#3b82f6]" />
+                        <span className="text-xs font-bold line-clamp-1">{t('nav.dashboard')}</span>
+                      </button>
 
-                {extraNavItems.map((item) => (
-                  <Button key={item.path} variant="ghost" onClick={() => { navigate(item.path); setMobileOpen(false); }} className="w-full justify-start h-12 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
-                    <item.icon className="h-5 w-5 mr-3 text-slate-400" /> {t(item.key)}
-                  </Button>
-                ))}
-              </div>
+                      {isAdminRoute ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate('/');
+                            setMobileOpen(false);
+                          }}
+                          className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl border bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95"
+                        >
+                          <Eye className="h-5 w-5 text-emerald-500" />
+                          <span className="text-xs font-bold line-clamp-1">View Site</span>
+                        </button>
+                      ) : (
+                        isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigate('/admin');
+                              setMobileOpen(false);
+                            }}
+                            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl border bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95"
+                          >
+                            <Shield className="h-5 w-5 text-[#eab308]" />
+                            <span className="text-xs font-bold line-clamp-1">
+                              {t('dashboard.adminDashboard')}
+                            </span>
+                          </button>
+                        )
+                      )}
+                    </>
+                  )}
 
-              <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                {user ? (
-                  <Button variant="ghost" onClick={() => { handleSignOut(); setMobileOpen(false); }} className="w-full justify-start h-12 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30">
-                    <LogOut className="h-5 w-5 mr-3" /> {t('nav.signOut')}
-                  </Button>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    <Button variant="outline" onClick={() => { navigate('/signin'); setMobileOpen(false); }} className="w-full h-11 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200">
-                      <LogIn className="h-4 w-4 mr-2" /> {t('nav.signIn')}
-                    </Button>
-                    <Button onClick={() => { navigate('/signup'); setMobileOpen(false); }} className="w-full h-11 bg-[#3b82f6] hover:bg-[#2563eb] text-white">
-                      <UserPlus className="h-4 w-4 mr-2" /> {t('nav.createAccount')}
-                    </Button>
-                  </div>
-                )}
+                  {extraNavItems.map((item) => (
+                    <button
+                      key={item.path}
+                      type="button"
+                      onClick={() => {
+                        navigate(item.path);
+                        setMobileOpen(false);
+                      }}
+                      className={cn(
+                        'flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl border text-center transition-all active:scale-95',
+                        isActive(item.path)
+                          ? 'bg-blue-600/15 border-blue-500/60 text-blue-600 dark:text-white'
+                          : 'bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
+                      )}
+                    >
+                      <item.icon className={cn('h-5 w-5', item.color)} />
+                      <span className="text-xs font-bold line-clamp-1">{t(item.key)}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </SheetContent>
         </Sheet>
 
-        <button onClick={() => navigate('/leave')} className={cn("flex flex-col items-center justify-center w-full gap-1 transition-colors", isActive('/leave') ? "text-[#3b82f6]" : "text-slate-500 dark:text-slate-400")}>
+        <button
+          onClick={() => navigate('/leave')}
+          className={cn(
+            'flex flex-col items-center justify-center w-full gap-1 transition-colors',
+            isActive('/leave') ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
+          )}
+        >
           <FileText className="h-[22px] w-[22px]" />
           <span className="text-[10px] font-medium">{lang === 'km' ? 'សុំច្បាប់' : 'Leave'}</span>
         </button>
 
-        <button onClick={() => navigate('/about')} className={cn("flex flex-col items-center justify-center w-full gap-1 transition-colors", isActive('/about') ? "text-[#3b82f6]" : "text-slate-500 dark:text-slate-400")}>
+        <button
+          onClick={() => navigate('/about')}
+          className={cn(
+            'flex flex-col items-center justify-center w-full gap-1 transition-colors',
+            isActive('/about') ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
+          )}
+        >
           <Info className="h-[22px] w-[22px]" />
           <span className="text-[10px] font-medium">{lang === 'km' ? 'អំពីយើង' : 'About'}</span>
         </button>
