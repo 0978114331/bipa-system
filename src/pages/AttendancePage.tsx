@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, MapPin, Save, Edit2, Trash2, Check, X, Printer, Share2, KeyRound, LogOut, LogIn, Plus, ChevronDown } from 'lucide-react';
+import { Search, MapPin, Save, Edit2, Trash2, Check, X, Printer, Share2, KeyRound, LogOut, LogIn, Plus, ChevronDown, Settings } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,6 +22,10 @@ export interface AttendanceRecord {
 const ATT_STORAGE_KEY = 'bipa_attendance_sync_v4';
 const hasKhmerScript = (text?: string) => /[\u1780-\u17FF]/.test(String(text || ''));
 
+// លំនាំដើមទីតាំង BIPA ដែលអ្នកបានផ្តល់ឱ្យ
+const DEFAULT_MAP_EMBED = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d232.24763622391725!2d104.9075625!3d11.5234375!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x310951ab85ceb931%3A0x9cc23dccc13c386e!2sBIPA!5e1!3m2!1skm!2skh!4v1793068621187!5m2!1skm!2skh";
+const DEFAULT_MAP_LINK = "https://maps.app.goo.gl/ptPPcisD7D6Acreu9";
+
 export function AttendancePage() {
   const { hasRole } = useAuth();
   const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
@@ -31,7 +35,13 @@ export function AttendancePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [students, setStudents] = useState<AttendanceRecord[]>([]);
   const [directoryStudents, setDirectoryStudents] = useState<BipaStudent[]>([]);
-  const [mapQuery, setMapQuery] = useState('Preah Sihanouk Raja Buddhist University, Phnom Penh');
+
+  // States សម្រាប់ផែនទី
+  const [mapEmbedUrl, setMapEmbedUrl] = useState(() => localStorage.getItem('bipa_map_embed') || DEFAULT_MAP_EMBED);
+  const [mapLinkUrl, setMapLinkUrl] = useState(() => localStorage.getItem('bipa_map_link') || DEFAULT_MAP_LINK);
+  const [showMapSettings, setShowMapSettings] = useState(false);
+  const [editMapEmbed, setEditMapEmbed] = useState(mapEmbedUrl);
+  const [editMapLink, setEditMapLink] = useState(mapLinkUrl);
 
   const [myStudentId, setMyStudentId] = useState(() => localStorage.getItem('bipa_linked_student_id') || '');
   const [tempStudentId, setTempStudentId] = useState('');
@@ -213,12 +223,11 @@ export function AttendancePage() {
     } else {
       setStudents([]);
     }
-
-    const savedMap = localStorage.getItem('bipa_map_location');
-    if (savedMap) setMapQuery(savedMap);
   };
 
   useEffect(() => {
+    localStorage.removeItem('bipa_attendance_records');
+    localStorage.removeItem('bipa_attendance_v3');
     loadData();
 
     const clockTimer = setInterval(() => {
@@ -233,7 +242,6 @@ export function AttendancePage() {
     const syncTimer = setInterval(() => loadData(), 1800);
     window.addEventListener('attendance-updated', loadData);
     window.addEventListener('students-updated', loadData);
-    window.addEventListener('storage', loadData);
 
     const handleClickOutside = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
@@ -247,10 +255,24 @@ export function AttendancePage() {
       clearInterval(syncTimer);
       window.removeEventListener('attendance-updated', loadData);
       window.removeEventListener('students-updated', loadData);
-      window.removeEventListener('storage', loadData);
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [currentDateStr]);
+
+  const saveStudentsLocal = (updatedToday: AttendanceRecord[]) => {
+    setStudents(updatedToday);
+    const todayStr = new Date().toDateString();
+    let otherDays: AttendanceRecord[] = [];
+    const saved = localStorage.getItem(ATT_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed: AttendanceRecord[] = JSON.parse(saved);
+        otherDays = parsed.filter((r) => r.date !== todayStr);
+      } catch {}
+    }
+    localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify([...updatedToday, ...otherDays]));
+    window.dispatchEvent(new Event('attendance-updated'));
+  };
 
   const handleSaveMyId = () => {
     if (!tempStudentId.trim()) return;
@@ -260,6 +282,14 @@ export function AttendancePage() {
     setTempStudentId('');
     setIdSavedMsg(true);
     setTimeout(() => setIdSavedMsg(false), 2500);
+  };
+
+  const handleSaveMapSettings = () => {
+    setMapEmbedUrl(editMapEmbed);
+    setMapLinkUrl(editMapLink);
+    localStorage.setItem('bipa_map_embed', editMapEmbed);
+    localStorage.setItem('bipa_map_link', editMapLink);
+    setShowMapSettings(false);
   };
 
   const handleAddStudent = async () => {
@@ -462,7 +492,7 @@ export function AttendancePage() {
         </head>
         <body>
           <div class="header-title">
-            <h1>របាយការណ៍វត្តមានសិស្សប្រចាំថ្ងៃ (ចេញ-ចូល)</h1>
+            <h1>របាយការណ៍វត្តមាននិស្សិតប្រចាំថ្ងៃ (ចេញ-ចូល)</h1>
             <p>កាលបរិច្ឆេទ: ${time.toLocaleDateString('en-GB')} | BIPA Admin</p>
           </div>
           <table>
@@ -494,9 +524,15 @@ export function AttendancePage() {
     printWindow.document.close();
   };
 
+  const matchedMyStudent = directoryStudents.find(
+    (s) => s.student_code.toLowerCase() === myStudentId.trim().toLowerCase()
+  );
+
   return (
     <div className="min-h-screen bg-[#f1f5f9] dark:bg-[#0b1120] pb-24 font-khmer flex justify-center">
       <div className="w-full max-w-4xl p-3 sm:p-6 space-y-4">
+        
+        {/* ផ្នែកទីតាំងផែនទី */}
         <div className="w-full h-40 sm:h-48 rounded-2xl overflow-hidden relative shadow-md border border-slate-200 dark:border-slate-800 bg-slate-200">
           <iframe
             title="Location Map"
@@ -505,16 +541,27 @@ export function AttendancePage() {
             style={{ border: 0 }}
             loading="lazy"
             allowFullScreen
-            src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+            src={mapEmbedUrl}
           />
-          <a
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="absolute top-3 left-3 bg-white dark:bg-[#0f172a] px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 text-xs font-semibold text-[#3b82f6] border border-slate-100 dark:border-slate-700"
-          >
-            ផែនទី <MapPin className="h-3.5 w-3.5" />
-          </a>
+          <div className="absolute top-3 left-3 flex gap-2">
+            <a
+              href={mapLinkUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-white dark:bg-[#0f172a] px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 text-xs font-semibold text-[#3b82f6] border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              ផែនទី <MapPin className="h-3.5 w-3.5" />
+            </a>
+            {isAdmin && (
+              <button
+                onClick={() => setShowMapSettings(true)}
+                className="bg-white dark:bg-[#0f172a] px-2 py-1.5 rounded-lg shadow-lg text-amber-500 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                title="កែប្រែទីតាំងផែនទី"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="bg-gradient-to-r from-[#2563eb] to-[#4f46e5] rounded-2xl p-6 text-center shadow-lg text-white">
@@ -556,7 +603,7 @@ export function AttendancePage() {
                 type="text"
                 value={tempStudentId}
                 onChange={(e) => setTempStudentId(e.target.value.toUpperCase())}
-                placeholder="វាយបញ្ចូលតែ ID សុទ្ធ (ឧ. BIPA-001)..."
+                placeholder="សូមបញ្ចូល ID របស់អ្នក (ឧ.BIPA-001)..."
                 className="flex-1 h-11 rounded-xl border border-slate-200 dark:border-slate-700 px-3 bg-slate-50 dark:bg-[#0f172a] text-sm font-bold uppercase"
               />
               <Button
@@ -671,8 +718,8 @@ export function AttendancePage() {
         <div className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
           <div className="bg-slate-50 dark:bg-[#0f172a] rounded-xl p-3.5 mb-4 border border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-y-2 text-[11px] sm:text-xs text-slate-600 dark:text-slate-400">
             <div><span className="font-bold mr-1">អ្នកគ្រប់គ្រង:</span> <span className="text-slate-900 dark:text-white">BIPA Admin</span></div>
-            <div className="text-right"><span className="font-bold mr-1">វេន:</span> <span className="text-amber-500 font-bold">ចេញ-ចូលប្រចាំថ្ងៃ</span></div>
-            <div><span className="font-bold mr-1">ម៉ោងកំណត់:</span> <span className="text-[#3b82f6] font-bold">7:30-21:00</span></div>
+            <div className="text-right"><span className="font-bold mr-1">ម៉ោង:</span> <span className="text-amber-500 font-bold">ចេញ-ចូលប្រចាំថ្ងៃ</span></div>
+            <div><span className="font-bold mr-1">ម៉ោងកំណត់:</span> <span className="text-[#3b82f6] font-bold"> 6:30AM-11:00PM</span></div>
             <div className="text-right"><span className="font-bold mr-1">កាលបរិច្ឆេទ:</span> <span className="text-slate-900 dark:text-white">{time.toLocaleDateString('en-GB')}</span></div>
           </div>
 
@@ -793,6 +840,39 @@ export function AttendancePage() {
           </div>
         )}
       </div>
+
+      {/* Admin Settings for Edit Map */}
+      {showMapSettings && (
+        <div className="fixed inset-0 z-[110] bg-black/80 flex items-center justify-center p-4 font-khmer">
+          <div className="bg-white dark:bg-[#1e293b] rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 dark:border-slate-700">
+            <h3 className="font-bold text-lg mb-4 text-slate-800 dark:text-white">កែប្រែទីតាំងផែនទី (Map Settings)</h3>
+            <div className="space-y-4 text-sm">
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1 font-semibold">Google Maps Embed URL (iframe src)</label>
+                <textarea
+                  value={editMapEmbed}
+                  onChange={(e) => setEditMapEmbed(e.target.value)}
+                  placeholder="https://www.google.com/maps/embed?pb=..."
+                  className="w-full h-24 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-slate-800 dark:text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1 font-semibold">Google Maps Link (ចុចទៅ Map)</label>
+                <Input
+                  value={editMapLink}
+                  onChange={(e) => setEditMapLink(e.target.value)}
+                  placeholder="https://maps.app.goo.gl/..."
+                  className="bg-slate-50 dark:bg-[#0f172a] border-slate-200 dark:border-slate-700"
+                />
+              </div>
+              <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <Button variant="outline" onClick={() => setShowMapSettings(false)} className="rounded-lg">បោះបង់</Button>
+                <Button onClick={handleSaveMapSettings} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg">រក្សាទុក</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

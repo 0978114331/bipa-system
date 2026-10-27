@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AttendancePage as UserAttendancePage } from '@/pages/AttendancePage';
 import { AttendancePage as AdminAttendancePage } from '@/pages/admin/AttendancePage';
 import { StudentListPage } from '@/pages/admin/StudentListPage';
+import { AdminHomeManager } from './pages/admin/AdminHomeManager';
 
 import { PublicLayout } from '@/components/layout/PublicLayout';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -91,7 +92,7 @@ export function App() {
               <Route path="/admin" element={<ProtectedRoute roles={ADMIN_ROLES}><DashboardLayout><AdminDashboard /></DashboardLayout></ProtectedRoute>} />
               
               <Route path="/admin/students" element={<ProtectedRoute roles={['super_admin', 'residence_admin']}><DashboardLayout><StudentListPage /></DashboardLayout></ProtectedRoute>} />
-              
+              <Route path="home-manager" element={<AdminHomeManager />} />
               <Route path="/admin/residences" element={<ProtectedRoute roles={['super_admin', 'residence_admin']}><DashboardLayout><ModulePlaceholder titleKey="feature.facilities" /></DashboardLayout></ProtectedRoute>} />
               <Route path="/admin/attendance" element={<ProtectedRoute roles={['super_admin', 'residence_admin', 'duty_manager']}><DashboardLayout><AdminAttendancePage /></DashboardLayout></ProtectedRoute>} />
               <Route path="/admin/payments" element={<ProtectedRoute roles={['super_admin', 'residence_admin', 'finance_admin']}><DashboardLayout><ModulePlaceholder titleKey="feature.payments" /></DashboardLayout></ProtectedRoute>} />

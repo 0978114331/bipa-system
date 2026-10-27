@@ -327,12 +327,29 @@ export function Header() {
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
   const processingLockRef = useRef(false);
+  const [systemLogoUrl, setSystemLogoUrl] = useState("https://i.ibb.co/tphX7kd4/ce2e43f3-9d48-4d71-86a6-dd1ac3d77c49.png");
+  const [systemNameKm, setSystemNameKm] = useState("BIPA");
+  const [systemNameEn, setSystemNameEn] = useState("BIPA");
 
-  const systemLogoUrl = "https://i.ibb.co/tphX7kd4/ce2e43f3-9d48-4d71-86a6-dd1ac3d77c49.png";
-  const systemNameEn = "BIPA";
-  const systemNameKm = "BIPA";
-
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const { data } = await supabase.from('bipa_settings').select('*').eq('id', '1').single();
+      if (data) {
+        setSystemLogoUrl(data.logo_url);
+        setSystemNameKm(data.name_km);
+        setSystemNameEn(data.name_en);
+      }
+    };
+    
+    fetchSettings(); 
+    
+    // Admin 
+    window.addEventListener('system-settings-updated', fetchSettings);
+    return () => window.removeEventListener('system-settings-updated', fetchSettings);
+  }, []);
+  
   const mainNavItems = [
     { key: 'nav.home', path: '/', icon: Home, labelKm: 'ផ្ទះ', labelEn: 'Home' },
     { key: 'nav.attendance', path: '/attendance', icon: UserCheck, labelKm: 'វត្តមាន', labelEn: 'Attendance' },
