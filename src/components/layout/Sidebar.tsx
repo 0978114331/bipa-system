@@ -44,6 +44,7 @@ import {
   HOME_BANNERS_STORAGE_KEY,
   HOME_NEWS_STORAGE_KEY
 } from '@/pages/public/HomePage';
+import { ResidenceManagerPanel } from '@/pages/public/ResidenceInfoPage';
 
 interface NavItem {
   label: string;
@@ -74,6 +75,8 @@ export function Sidebar() {
     location.search.includes('page=home-manager') ||
     location.hash === '#home-manager' ||
     location.pathname === '/admin/home-manager';
+
+  const isResidenceManagerRoute = location.pathname.startsWith('/admin/residences');
 
   const [showHomeManager, setShowHomeManager] = useState(isHomeManagerRoute);
   const [manageTab, setManageTab] = useState<'news' | 'banners' | 'settings'>('news');
@@ -342,7 +345,7 @@ export function Sidebar() {
       label: t('feature.facilities'),
       path: '/admin/residences',
       icon: Building2,
-      roles: ['super_admin', 'residence_admin']
+      roles: ['super_admin', 'residence_admin', 'finance_admin', 'duty_manager']
     },
     {
       label: t('feature.qrAttendance'),
@@ -518,6 +521,12 @@ export function Sidebar() {
           ))}
         </nav>
       </aside>
+
+      {isResidenceManagerRoute && isAdminRole && !showHomeManager && (
+        <div className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 bottom-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-4 sm:p-6 pb-24 scrollbar-thin">
+          <ResidenceManagerPanel />
+        </div>
+      )}
 
       {showHomeManager && isAdminRole && (
         <div className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 bottom-0 z-30 bg-[#0b1120] overflow-y-auto p-4 sm:p-6 font-khmer text-slate-200 space-y-6">
