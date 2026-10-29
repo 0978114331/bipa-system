@@ -392,8 +392,8 @@ export function Header() {
   ];
 
   const extraNavItems: { key: TranslationKey; path: string; icon: typeof Home; color: string }[] = [
-    { key: 'nav.residence', path: '/residence-info', icon: Building2, color: 'text-cyan-400' },
-    { key: 'nav.announcements', path: '/announcements', icon: Megaphone, color: 'text-amber-400' },
+    { key: 'nav.residence', path: '/residence-info', icon: Building2, color: 'text-cyan-500' },
+    { key: 'nav.announcements', path: '/announcements', icon: Megaphone, color: 'text-amber-500' },
     { key: 'nav.contact', path: '/contact', icon: Phone, color: 'text-indigo-400' },
   ];
 
@@ -851,7 +851,7 @@ export function Header() {
           </SheetTrigger>
           <SheetContent
             side="bottom"
-            className="rounded-t-[28px] max-h-[85vh] overflow-y-auto bg-white dark:bg-[#151e2e] p-0 border-t border-slate-200 dark:border-slate-700/80 font-khmer shadow-2xl [&>button]:hidden"
+            className="rounded-t-[28px] max-h-[85vh] overflow-y-auto bg-slate-50 dark:bg-[#151e2e] p-0 border-t border-slate-200 dark:border-slate-700/80 font-khmer shadow-2xl [&>button]:hidden"
           >
             <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
             <SheetDescription className="sr-only">Mobile navigation links</SheetDescription>
@@ -863,7 +863,7 @@ export function Header() {
               />
 
               {user ? (
-                <div className="flex items-center justify-between gap-2 bg-slate-100/90 dark:bg-[#1e2a3f] p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700/70">
+                <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#1e2a3f] p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700/70 shadow-sm">
                   <div
                     onClick={() => {
                       navigate('/profile');
@@ -912,7 +912,7 @@ export function Header() {
                       navigate('/signin');
                       setMobileOpen(false);
                     }}
-                    className="h-10 rounded-xl border-slate-300 dark:border-slate-700 text-xs font-bold"
+                    className="h-10 rounded-xl border-slate-300 dark:border-slate-700 text-xs font-bold bg-white dark:bg-transparent"
                   >
                     <LogIn className="h-4 w-4 mr-1.5" /> {t('nav.signIn')}
                   </Button>
@@ -921,7 +921,7 @@ export function Header() {
                       navigate('/signup');
                       setMobileOpen(false);
                     }}
-                    className="h-10 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-bold"
+                    className="h-10 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-bold shadow-sm"
                   >
                     <UserPlus className="h-4 w-4 mr-1.5" /> {t('nav.createAccount')}
                   </Button>
@@ -933,7 +933,7 @@ export function Header() {
                   variant="outline"
                   size="sm"
                   onClick={() => setLang(lang === 'en' ? 'km' : 'en')}
-                  className="flex items-center justify-center gap-2 h-10 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold"
+                  className="flex items-center justify-center gap-2 h-10 rounded-xl border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold shadow-sm"
                 >
                   <Languages className="h-4 w-4 text-blue-500" />
                   {lang === 'en' ? 'ប្តូរជាខ្មែរ' : 'English'}
@@ -942,12 +942,12 @@ export function Header() {
                   variant="outline"
                   size="sm"
                   onClick={toggleTheme}
-                  className="flex items-center justify-center gap-2 h-10 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold"
+                  className="flex items-center justify-center gap-2 h-10 rounded-xl border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold shadow-sm"
                 >
                   {theme === 'light' ? (
                     <Moon className="h-4 w-4 text-amber-500" />
                   ) : (
-                    <Sun className="h-4 w-4 text-amber-400" />
+                    <Sun className="h-4 w-4 text-amber-500" />
                   )}
                   {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
                 </Button>
@@ -968,14 +968,14 @@ export function Header() {
                           setMobileOpen(false);
                         }}
                         className={cn(
-                          'flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl border text-center transition-all active:scale-95',
+                          'flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border text-center transition-all active:scale-95 shadow-sm',
                           isActive('/dashboard')
                             ? 'bg-blue-600/15 border-blue-500/60 text-blue-600 dark:text-white'
-                            : 'bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
+                            : 'bg-white dark:bg-[#1e2a3f]/90 hover:bg-slate-50 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
                         )}
                       >
                         <LayoutDashboard className="h-5 w-5 text-[#3b82f6]" />
-                        <span className="text-xs font-bold line-clamp-1">{t('nav.dashboard')}</span>
+                        <span className="text-[11px] font-bold line-clamp-1">{t('nav.dashboard')}</span>
                       </button>
 
                       {isAdminRoute ? (
@@ -985,10 +985,10 @@ export function Header() {
                             navigate('/');
                             setMobileOpen(false);
                           }}
-                          className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl border bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95"
+                          className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border bg-white dark:bg-[#1e2a3f]/90 hover:bg-slate-50 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95 shadow-sm"
                         >
                           <Eye className="h-5 w-5 text-emerald-500" />
-                          <span className="text-xs font-bold line-clamp-1">View Site</span>
+                          <span className="text-[11px] font-bold line-clamp-1">View Site</span>
                         </button>
                       ) : (
                         isAdmin && (
@@ -998,10 +998,10 @@ export function Header() {
                               navigate('/admin');
                               setMobileOpen(false);
                             }}
-                            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl border bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95"
+                            className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border bg-white dark:bg-[#1e2a3f]/90 hover:bg-slate-50 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95 shadow-sm"
                           >
                             <Shield className="h-5 w-5 text-[#eab308]" />
-                            <span className="text-xs font-bold line-clamp-1">
+                            <span className="text-[11px] font-bold line-clamp-1">
                               {t('dashboard.adminDashboard')}
                             </span>
                           </button>
@@ -1019,14 +1019,14 @@ export function Header() {
                         setMobileOpen(false);
                       }}
                       className={cn(
-                        'flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl border text-center transition-all active:scale-95',
+                        'flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border text-center transition-all active:scale-95 shadow-sm',
                         isActive(item.path)
                           ? 'bg-blue-600/15 border-blue-500/60 text-blue-600 dark:text-white'
-                          : 'bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
+                          : 'bg-white dark:bg-[#1e2a3f]/90 hover:bg-slate-50 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
                       )}
                     >
                       <item.icon className={cn('h-5 w-5', item.color)} />
-                      <span className="text-xs font-bold line-clamp-1">{t(item.key)}</span>
+                      <span className="text-[11px] font-bold line-clamp-1">{t(item.key)}</span>
                     </button>
                   ))}
                 </div>
