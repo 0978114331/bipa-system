@@ -6,7 +6,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -122,7 +121,7 @@ export async function resolveStudentByIdOrName(query: string): Promise<{
           current_job_en: r.current_job_en || '',
           contact_number: r.contact_number || '',
           others_km: r.others_km || '',
-          others_en: r.others_en || '',
+          others_en: r.others_en || ''
         };
       });
     }
@@ -146,7 +145,7 @@ export async function resolveStudentByIdOrName(query: string): Promise<{
       ...s,
       student_code: c,
       full_name_km: bestKm,
-      gender_km: bestGender,
+      gender_km: bestGender
     });
   });
 
@@ -178,7 +177,7 @@ export async function resolveStudentByIdOrName(query: string): Promise<{
   return {
     code: matched.student_code,
     nameKm: khmerName,
-    genderKm,
+    genderKm
   };
 }
 
@@ -193,7 +192,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
   if (isStationQr && !linkedId) {
     return {
       ok: false,
-      message: 'សូមភ្ជាប់អត្តលេខសិស្ស (ID) របស់អ្នកជាមុនសិន មុនពេលស្កែន!',
+      message: 'សូមភ្ជាប់អត្តលេខសិស្ស (ID) របស់អ្នកជាមុនសិន មុនពេលស្កែន!'
     };
   }
 
@@ -201,7 +200,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
   if (!lookupCode) {
     return {
       ok: false,
-      message: 'មិនឃើញអត្តលេខសិស្ស (ID) សម្រាប់ស្កែនទេ សូមភ្ជាប់ ID ជាមុនសិន!',
+      message: 'មិនឃើញអត្តលេខសិស្ស (ID) សម្រាប់ស្កែនទេ សូមភ្ជាប់ ID ជាមុនសិន!'
     };
   }
 
@@ -209,7 +208,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
   if (!resolved) {
     return {
       ok: false,
-      message: `រកមិនឃើញអត្តលេខ "${lookupCode}" ក្នុងបញ្ជីឈ្មោះនិស្សិតទេ!`,
+      message: `រកមិនឃើញអត្តលេខ "${lookupCode}" ក្នុងបញ្ជីឈ្មោះនិស្សិតទេ!`
     };
   }
 
@@ -242,7 +241,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
           gender: resolved.genderKm,
           time_out: nowTime,
           time_in: '--:--:--',
-          status: 'ចេញក្រៅ',
+          status: 'ចេញក្រៅ'
         })
         .eq('id', existingDb.id);
       window.dispatchEvent(new Event('attendance-updated'));
@@ -251,7 +250,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
         action: 'OUT',
         studentName: resolved.nameKm,
         time: nowTime,
-        message: `ស្កែនចេញជោគជ័យ! (${resolved.nameKm} - ${nowTime})`,
+        message: `ស្កែនចេញជោគជ័យ! (${resolved.nameKm} - ${nowTime})`
       };
     }
 
@@ -262,7 +261,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
           full_name: resolved.nameKm,
           gender: resolved.genderKm,
           time_out: nowTime,
-          status: 'ចេញក្រៅ',
+          status: 'ចេញក្រៅ'
         })
         .eq('id', existingDb.id);
       window.dispatchEvent(new Event('attendance-updated'));
@@ -271,7 +270,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
         action: 'OUT',
         studentName: resolved.nameKm,
         time: nowTime,
-        message: `ស្កែនចេញជោគជ័យ! (${resolved.nameKm} - ${nowTime})`,
+        message: `ស្កែនចេញជោគជ័យ! (${resolved.nameKm} - ${nowTime})`
       };
     }
 
@@ -282,7 +281,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
           full_name: resolved.nameKm,
           gender: resolved.genderKm,
           time_in: nowTime,
-          status: 'វត្តមាន',
+          status: 'វត្តមាន'
         })
         .eq('id', existingDb.id);
       window.dispatchEvent(new Event('attendance-updated'));
@@ -291,13 +290,13 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
         action: 'IN',
         studentName: resolved.nameKm,
         time: nowTime,
-        message: `ស្កែនចូលជោគជ័យ! (${resolved.nameKm} - ${nowTime})`,
+        message: `ស្កែនចូលជោគជ័យ! (${resolved.nameKm} - ${nowTime})`
       };
     }
 
     return {
       ok: false,
-      message: `${resolved.nameKm} បានស្កែនចេញ និងស្កែនចូលគ្រប់ ២ ដងរួចរាល់ហើយថ្ងៃនេះ!`,
+      message: `${resolved.nameKm} បានស្កែនចេញ និងស្កែនចូលគ្រប់ ២ ដងរួចរាល់ហើយថ្ងៃនេះ!`
     };
   }
 
@@ -313,8 +312,8 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
         time_out: nowTime,
         time_in: '--:--:--',
         status: 'ចេញក្រៅ',
-        attendance_date: todayStr,
-      },
+        attendance_date: todayStr
+      }
     ]);
   } catch {}
 
@@ -331,9 +330,9 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
         time_out: nowTime,
         time_in: '--:--:--',
         status: 'ចេញក្រៅ',
-        date: todayStr,
+        date: todayStr
       },
-      ...localArr,
+      ...localArr
     ])
   );
 
@@ -343,7 +342,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
     action: 'OUT',
     studentName: resolved.nameKm,
     time: nowTime,
-    message: `ស្កែនចេញជោគជ័យ! (${resolved.nameKm} - ${nowTime})`,
+    message: `ស្កែនចេញជោគជ័យ! (${resolved.nameKm} - ${nowTime})`
   };
 }
 
@@ -370,12 +369,14 @@ export function Header() {
 
   useEffect(() => {
     const fetchSettings = async () => {
-      const { data } = await supabase.from('bipa_settings').select('*').eq('id', '1').single();
-      if (data) {
-        setSystemLogoUrl(data.logo_url);
-        setSystemNameKm(data.name_km);
-        setSystemNameEn(data.name_en);
-      }
+      try {
+        const { data } = await supabase.from('bipa_settings').select('*').eq('id', '1').single();
+        if (data) {
+          setSystemLogoUrl(data.logo_url);
+          setSystemNameKm(data.name_km);
+          setSystemNameEn(data.name_en);
+        }
+      } catch {}
     };
 
     fetchSettings();
@@ -384,17 +385,32 @@ export function Header() {
     return () => window.removeEventListener('system-settings-updated', fetchSettings);
   }, []);
 
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
   const mainNavItems = [
     { key: 'nav.home', path: '/', icon: Home, labelKm: 'ផ្ទះ', labelEn: 'Home' },
     { key: 'nav.attendance', path: '/attendance', icon: UserCheck, labelKm: 'វត្តមាន', labelEn: 'Attendance' },
     { key: 'nav.leave', path: '/leave', icon: FileText, labelKm: 'សុំច្បាប់', labelEn: 'Leave' },
-    { key: 'nav.about', path: '/about', icon: Info, labelKm: 'អំពីយើង', labelEn: 'About' },
+    { key: 'nav.about', path: '/about', icon: Info, labelKm: 'អំពីយើង', labelEn: 'About' }
   ];
 
   const extraNavItems: { key: TranslationKey; path: string; icon: typeof Home; color: string }[] = [
     { key: 'nav.residence', path: '/residence-info', icon: Building2, color: 'text-cyan-500' },
     { key: 'nav.announcements', path: '/announcements', icon: Megaphone, color: 'text-amber-500' },
-    { key: 'nav.contact', path: '/contact', icon: Phone, color: 'text-indigo-400' },
+    { key: 'nav.contact', path: '/contact', icon: Phone, color: 'text-indigo-400' }
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -417,7 +433,7 @@ export function Header() {
       if (!linkedId) {
         setScanFeedback({
           type: 'error',
-          text: 'អ្នកមិនទាន់បានភ្ជាប់អត្តលេខសិស្ស (ID) ទេ! សូមភ្ជាប់ ID ក្នុងទំព័រវត្តមានជាមុនសិន។',
+          text: 'អ្នកមិនទាន់បានភ្ជាប់អត្តលេខសិស្ស (ID) ទេ! សូមភ្ជាប់ ID ក្នុងទំព័រវត្តមានជាមុនសិន។'
         });
       } else {
         setScanFeedback(null);
@@ -434,7 +450,7 @@ export function Header() {
         if (!devices || devices.length === 0) {
           setScanFeedback({
             type: 'error',
-            text: 'រកមិនឃើញកាមេរ៉ាទេ សូមប្រើប៊ូតុងជ្រើសរើសរូប QR ខាងក្រោម។',
+            text: 'រកមិនឃើញកាមេរ៉ាទេ សូមប្រើប៊ូតុងជ្រើសរើសរូប QR ខាងក្រោម។'
           });
           return;
         }
@@ -449,7 +465,7 @@ export function Header() {
           {
             fps: 25,
             aspectRatio: 1.0,
-            disableFlip: false,
+            disableFlip: false
           },
           async (decodedText) => {
             if (processingLockRef.current) return;
@@ -485,7 +501,7 @@ export function Header() {
         if (isMounted) {
           setScanFeedback({
             type: 'error',
-            text: 'សូមអនុញ្ញាតសិទ្ធិកាមេរ៉ា (Allow Camera) ឬជ្រើសរើសរូបភាព QR ខាងក្រោម។',
+            text: 'សូមអនុញ្ញាតសិទ្ធិកាមេរ៉ា (Allow Camera) ឬជ្រើសរើសរូបភាព QR ខាងក្រោម។'
           });
         }
       }
@@ -533,7 +549,7 @@ export function Header() {
     } catch {
       setScanFeedback({
         type: 'error',
-        text: 'រូបភាពនេះមិនមានកូដ QR ត្រឹមត្រូវទេ សូមជ្រើសរើសរូបម្តងទៀត។',
+        text: 'រូបភាពនេះមិនមានកូដ QR ត្រឹមត្រូវទេ សូមជ្រើសរើសរូបម្តងទៀត។'
       });
     }
     e.target.value = '';
@@ -548,8 +564,24 @@ export function Header() {
 
   return (
     <>
+      <style>{`
+        @keyframes bipaSheetSlideUp {
+          0% {
+            opacity: 0;
+            transform: translateY(100%);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-bipa-sheet-up {
+          animation: bipaSheetSlideUp 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+      `}</style>
+
       {showScanner && (
-        <div className="fixed inset-0 z-[100] bg-[#09090b] flex flex-col items-center justify-center p-4 font-khmer">
+        <div className="fixed inset-0 z-[120] bg-[#09090b] flex flex-col items-center justify-center p-4 font-khmer">
           <style>{`
             @keyframes scanLine {
               0% { top: 8%; }
@@ -813,80 +845,47 @@ export function Header() {
         </div>
       </header>
 
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#0f172a] border-t border-slate-200 dark:border-slate-800 flex items-center justify-around h-16 pb-safe px-1 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] font-khmer">
-        <button
-          onClick={() => navigate('/')}
-          className={cn(
-            'flex flex-col items-center justify-center w-full gap-1 transition-colors',
-            isActive('/') ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
-          )}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden fixed inset-0 z-[95] bg-black/60 backdrop-blur-[2px] font-khmer"
         >
-          <Home className="h-[22px] w-[22px]" />
-          <span className="text-[10px] font-medium">{lang === 'km' ? 'ផ្ទះ' : 'Home'}</span>
-        </button>
-
-        <button
-          onClick={() => navigate('/attendance')}
-          className={cn(
-            'flex flex-col items-center justify-center w-full gap-1 transition-colors',
-            isActive('/attendance') ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
-          )}
-        >
-          <div className={cn('p-1.5 rounded-full transition-colors', isActive('/attendance') ? 'bg-blue-50 dark:bg-blue-950/60' : '')}>
-            <UserCheck className="h-[20px] w-[20px]" />
-          </div>
-          <span className="text-[10px] font-bold">{lang === 'km' ? 'វត្តមាន' : 'Attendance'}</span>
-        </button>
-
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <button className="flex flex-col items-center justify-center shrink-0 -mt-7 mx-1">
-              <div className="bg-[#1e293b] text-white h-[52px] w-[52px] flex items-center justify-center rounded-full shadow-lg border-[4px] border-white dark:border-[#0f172a] transition-transform active:scale-95">
-                <Menu className="h-6 w-6" />
-              </div>
-              <span className="text-[10px] font-medium mt-1 text-slate-600 dark:text-slate-300">
-                {lang === 'km' ? 'ម៉ឺនុយ' : 'Menu'}
-              </span>
-            </button>
-          </SheetTrigger>
-          <SheetContent
-            side="bottom"
-            className="rounded-t-[28px] max-h-[85vh] overflow-y-auto bg-slate-50 dark:bg-[#151e2e] p-0 border-t border-slate-200 dark:border-slate-700/80 font-khmer shadow-2xl [&>button]:hidden"
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
+            className="fixed left-0 right-0 z-[96] mx-auto w-full max-w-md rounded-t-[28px] bg-white dark:bg-[#151e2e] border-t border-slate-200 dark:border-slate-700/80 shadow-[0_-12px_35px_rgba(0,0,0,0.3)] max-h-[75dvh] overflow-y-auto animate-bipa-sheet-up"
           >
-            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-            <SheetDescription className="sr-only">Mobile navigation links</SheetDescription>
-
-            <div className="p-4 sm:p-5 pb-6 flex flex-col gap-4">
+            <div className="p-3.5 sm:p-4 pb-5 flex flex-col gap-3">
               <div
                 onClick={() => setMobileOpen(false)}
                 className="w-11 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full mx-auto cursor-pointer"
               />
 
               {user ? (
-                <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#1e2a3f] p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700/70 shadow-sm">
+                <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-[#1e2a3f] p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/70">
                   <div
                     onClick={() => {
                       navigate('/profile');
                       setMobileOpen(false);
                     }}
-                    className="flex items-center gap-3 min-w-0 cursor-pointer"
+                    className="flex items-center gap-2.5 min-w-0 cursor-pointer"
                   >
-                    <Avatar className="h-11 w-11 border border-slate-300 dark:border-slate-600 shrink-0">
+                    <Avatar className="h-9 w-9 border border-slate-300 dark:border-slate-600 shrink-0">
                       <AvatarImage src={profile?.avatar_url ? profile.avatar_url : undefined} />
-                      <AvatarFallback className="bg-[#3b82f6] text-white font-bold">
+                      <AvatarFallback className="bg-[#3b82f6] text-white font-bold text-xs">
                         {profile?.display_name?.charAt(0).toUpperCase() || 'U'}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
                           {profile?.display_name || 'User'}
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
                           {renderRole(profile?.role)}
                         </span>
                       </div>
-                      <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
                         {profile?.email || ''}
                       </span>
                     </div>
@@ -898,67 +897,67 @@ export function Header() {
                       handleSignOut();
                       setMobileOpen(false);
                     }}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[11px] font-bold transition-all active:scale-95"
+                    className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[10px] font-bold transition-all active:scale-95"
                   >
-                    <LogOut className="h-3.5 w-3.5" />
+                    <LogOut className="h-3 w-3" />
                     <span>{t('nav.signOut')}</span>
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-2 gap-2">
                   <Button
                     variant="outline"
                     onClick={() => {
                       navigate('/signin');
                       setMobileOpen(false);
                     }}
-                    className="h-10 rounded-xl border-slate-300 dark:border-slate-700 text-xs font-bold bg-white dark:bg-transparent"
+                    className="h-9 rounded-xl border-slate-300 dark:border-slate-700 text-xs font-bold bg-white dark:bg-transparent"
                   >
-                    <LogIn className="h-4 w-4 mr-1.5" /> {t('nav.signIn')}
+                    <LogIn className="h-3.5 w-3.5 mr-1" /> {t('nav.signIn')}
                   </Button>
                   <Button
                     onClick={() => {
                       navigate('/signup');
                       setMobileOpen(false);
                     }}
-                    className="h-10 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-bold shadow-sm"
+                    className="h-9 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-bold"
                   >
-                    <UserPlus className="h-4 w-4 mr-1.5" /> {t('nav.createAccount')}
+                    <UserPlus className="h-3.5 w-3.5 mr-1" /> {t('nav.createAccount')}
                   </Button>
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setLang(lang === 'en' ? 'km' : 'en')}
-                  className="flex items-center justify-center gap-2 h-10 rounded-xl border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold shadow-sm"
+                  className="flex items-center justify-center gap-1.5 h-9 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold"
                 >
-                  <Languages className="h-4 w-4 text-blue-500" />
+                  <Languages className="h-3.5 w-3.5 text-blue-500" />
                   {lang === 'en' ? 'ប្តូរជាខ្មែរ' : 'English'}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={toggleTheme}
-                  className="flex items-center justify-center gap-2 h-10 rounded-xl border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold shadow-sm"
+                  className="flex items-center justify-center gap-1.5 h-9 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold"
                 >
                   {theme === 'light' ? (
-                    <Moon className="h-4 w-4 text-amber-500" />
+                    <Moon className="h-3.5 w-3.5 text-amber-500" />
                   ) : (
-                    <Sun className="h-4 w-4 text-amber-500" />
+                    <Sun className="h-3.5 w-3.5 text-amber-400" />
                   )}
                   {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
                 </Button>
               </div>
 
               <div>
-                <div className="text-[11px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-2.5 px-1">
+                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-2 px-1">
                   Menu
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-3 gap-2">
                   {user && (
                     <>
                       <button
@@ -968,13 +967,13 @@ export function Header() {
                           setMobileOpen(false);
                         }}
                         className={cn(
-                          'flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border text-center transition-all active:scale-95 shadow-sm',
+                          'flex flex-col items-center justify-center gap-1.5 py-2.5 px-1.5 rounded-xl border text-center transition-all active:scale-95',
                           isActive('/dashboard')
                             ? 'bg-blue-600/15 border-blue-500/60 text-blue-600 dark:text-white'
-                            : 'bg-white dark:bg-[#1e2a3f]/90 hover:bg-slate-50 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
+                            : 'bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
                         )}
                       >
-                        <LayoutDashboard className="h-5 w-5 text-[#3b82f6]" />
+                        <LayoutDashboard className="h-4 w-4 text-[#3b82f6]" />
                         <span className="text-[11px] font-bold line-clamp-1">{t('nav.dashboard')}</span>
                       </button>
 
@@ -985,9 +984,9 @@ export function Header() {
                             navigate('/');
                             setMobileOpen(false);
                           }}
-                          className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border bg-white dark:bg-[#1e2a3f]/90 hover:bg-slate-50 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95 shadow-sm"
+                          className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-1.5 rounded-xl border bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95"
                         >
-                          <Eye className="h-5 w-5 text-emerald-500" />
+                          <Eye className="h-4 w-4 text-emerald-500" />
                           <span className="text-[11px] font-bold line-clamp-1">View Site</span>
                         </button>
                       ) : (
@@ -998,9 +997,9 @@ export function Header() {
                               navigate('/admin');
                               setMobileOpen(false);
                             }}
-                            className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border bg-white dark:bg-[#1e2a3f]/90 hover:bg-slate-50 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95 shadow-sm"
+                            className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-1.5 rounded-xl border bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95"
                           >
-                            <Shield className="h-5 w-5 text-[#eab308]" />
+                            <Shield className="h-4 w-4 text-[#eab308]" />
                             <span className="text-[11px] font-bold line-clamp-1">
                               {t('dashboard.adminDashboard')}
                             </span>
@@ -1019,27 +1018,93 @@ export function Header() {
                         setMobileOpen(false);
                       }}
                       className={cn(
-                        'flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border text-center transition-all active:scale-95 shadow-sm',
+                        'flex flex-col items-center justify-center gap-1.5 py-2.5 px-1.5 rounded-xl border text-center transition-all active:scale-95',
                         isActive(item.path)
                           ? 'bg-blue-600/15 border-blue-500/60 text-blue-600 dark:text-white'
-                          : 'bg-white dark:bg-[#1e2a3f]/90 hover:bg-slate-50 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
+                          : 'bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
                       )}
                     >
-                      <item.icon className={cn('h-5 w-5', item.color)} />
+                      <item.icon className={cn('h-4 w-4', item.color)} />
                       <span className="text-[11px] font-bold line-clamp-1">{t(item.key)}</span>
                     </button>
                   ))}
                 </div>
               </div>
             </div>
-          </SheetContent>
-        </Sheet>
+          </div>
+        </div>
+      )}
 
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white dark:bg-[#0f172a] border-t border-slate-200 dark:border-slate-800 flex items-center justify-around h-16 pb-safe px-1 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] font-khmer">
         <button
-          onClick={() => navigate('/leave')}
+          type="button"
+          onClick={() => {
+            setMobileOpen(false);
+            navigate('/');
+          }}
           className={cn(
             'flex flex-col items-center justify-center w-full gap-1 transition-colors',
-            isActive('/leave') ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
+            isActive('/') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
+          )}
+        >
+          <Home className="h-[22px] w-[22px]" />
+          <span className="text-[10px] font-medium">{lang === 'km' ? 'ផ្ទះ' : 'Home'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMobileOpen(false);
+            navigate('/attendance');
+          }}
+          className={cn(
+            'flex flex-col items-center justify-center w-full gap-1 transition-colors',
+            isActive('/attendance') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
+          )}
+        >
+          <div
+            className={cn(
+              'p-1.5 rounded-full transition-colors',
+              isActive('/attendance') && !mobileOpen ? 'bg-blue-50 dark:bg-blue-950/60' : ''
+            )}
+          >
+            <UserCheck className="h-[20px] w-[20px]" />
+          </div>
+          <span className="text-[10px] font-bold">{lang === 'km' ? 'វត្តមាន' : 'Attendance'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileOpen((prev) => !prev)}
+          className="flex flex-col items-center justify-center shrink-0 -mt-7 mx-1"
+        >
+          <div
+            className={cn(
+              'text-white h-[52px] w-[52px] flex items-center justify-center rounded-full shadow-lg border-[4px] border-white dark:border-[#0f172a] transition-all active:scale-95',
+              mobileOpen ? 'bg-[#3b82f6]' : 'bg-[#1e293b]'
+            )}
+          >
+            {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </div>
+          <span
+            className={cn(
+              'text-[10px] font-medium mt-1',
+              mobileOpen ? 'text-[#3b82f6] font-bold' : 'text-slate-600 dark:text-slate-300'
+            )}
+          >
+            {lang === 'km' ? 'ម៉ឺនុយ' : 'Menu'}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMobileOpen(false);
+            navigate('/leave');
+          }}
+          className={cn(
+            'flex flex-col items-center justify-center w-full gap-1 transition-colors',
+            isActive('/leave') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
           <FileText className="h-[22px] w-[22px]" />
@@ -1047,10 +1112,14 @@ export function Header() {
         </button>
 
         <button
-          onClick={() => navigate('/about')}
+          type="button"
+          onClick={() => {
+            setMobileOpen(false);
+            navigate('/about');
+          }}
           className={cn(
             'flex flex-col items-center justify-center w-full gap-1 transition-colors',
-            isActive('/about') ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
+            isActive('/about') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
           <Info className="h-[22px] w-[22px]" />
