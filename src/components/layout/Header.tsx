@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useAuth } from '@/contexts/AuthContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -39,9 +39,7 @@ import {
   FileText,
   LayoutGrid,
   X,
-  ImageUp,
-  CheckCircle2,
-  AlertCircle
+  Check
 } from 'lucide-react';
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
 import { TranslationKey } from '@/types';
@@ -54,6 +52,7 @@ export interface ScanProcessResult {
   action?: 'OUT' | 'IN';
   studentName?: string;
   time?: string;
+  shortTitle?: string;
   message: string;
 }
 
@@ -65,12 +64,24 @@ export const normalizeGenderToKhmer = (raw?: string) => {
   return 'ប្រុស';
 };
 
+export const normalizeStudentCodeInput = (raw: string) => {
+  let cleaned = String(raw || '').trim().replace(/\s+/g, '').toUpperCase();
+  if (cleaned.startsWith('PIBA-')) {
+    cleaned = 'BIPA-' + cleaned.slice(5);
+  } else if (cleaned.startsWith('PIBA')) {
+    cleaned = 'BIPA-' + cleaned.slice(4);
+  } else if (/^\d{1,4}$/.test(cleaned)) {
+    cleaned = 'BIPA-' + cleaned.padStart(3, '0');
+  }
+  return cleaned;
+};
+
 export async function resolveStudentByIdOrName(query: string): Promise<{
   code: string;
   nameKm: string;
   genderKm: string;
 } | null> {
-  const clean = query.trim().replace(/\s+/g, '');
+  const clean = normalizeStudentCodeInput(query);
   if (!clean) return null;
 
   let localList: BipaStudent[] = [];
@@ -150,12 +161,16 @@ export async function resolveStudentByIdOrName(query: string): Promise<{
   });
 
   const combined = Array.from(mapByCode.values());
+  const rawDigits = clean.replace(/\D/g, '');
+
   const matched = combined.find((s) => {
-    const sCode = String(s.student_code || '').trim().replace(/\s+/g, '').toLowerCase();
+    const sCode = normalizeStudentCodeInput(s.student_code || '');
+    const sDigits = sCode.replace(/\D/g, '');
     const sNameKm = String(s.full_name_km || '').trim().toLowerCase();
     const sNameEn = String(s.full_name_en || '').trim().toLowerCase();
     return (
-      sCode === clean.toLowerCase() ||
+      sCode.toLowerCase() === clean.toLowerCase() ||
+      (rawDigits.length > 0 && sDigits.length > 0 && Number(sDigits) === Number(rawDigits)) ||
       sNameKm === query.trim().toLowerCase() ||
       sNameEn === query.trim().toLowerCase()
     );
@@ -187,19 +202,22 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
   const isStationQr =
     raw.toUpperCase().startsWith('BIPA-STATION') ||
     raw.toUpperCase() === 'BIPA-QR' ||
-    raw.toUpperCase() === 'BIPA-ATTENDANCE';
+    raw.toUpperCase() === 'BIPA-ATTENDANCE' ||
+    raw.startsWith('http');
 
   if (isStationQr && !linkedId) {
     return {
       ok: false,
+      shortTitle: 'សូមភ្ជាប់ ID សិន',
       message: 'សូមភ្ជាប់អត្តលេខសិស្ស (ID) របស់អ្នកជាមុនសិន មុនពេលស្កែន!'
     };
   }
 
-  const lookupCode = (isStationQr ? linkedId : raw).trim().toUpperCase();
+  const lookupCode = normalizeStudentCodeInput(isStationQr ? linkedId : raw);
   if (!lookupCode) {
     return {
       ok: false,
+      shortTitle: 'សូមភ្ជាប់ ID សិន',
       message: 'មិនឃើញអត្តលេខសិស្ស (ID) សម្រាប់ស្កែនទេ សូមភ្ជាប់ ID ជាមុនសិន!'
     };
   }
@@ -208,8 +226,13 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
   if (!resolved) {
     return {
       ok: false,
+      shortTitle: 'មិនស្គាល់ ID ទេ',
       message: `រកមិនឃើញអត្តលេខ "${lookupCode}" ក្នុងបញ្ជីឈ្មោះនិស្សិតទេ!`
     };
+  }
+
+  if (linkedId && normalizeStudentCodeInput(linkedId) !== resolved.code) {
+    localStorage.setItem('bipa_linked_student_id', resolved.code);
   }
 
   const nowTime = new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -250,6 +273,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
         action: 'OUT',
         studentName: resolved.nameKm,
         time: nowTime,
+        shortTitle: 'ស្កេនជោគជ័យ',
         message: `ស្កែនចេញជោគជ័យ! (${resolved.nameKm} - ${nowTime})`
       };
     }
@@ -270,6 +294,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
         action: 'OUT',
         studentName: resolved.nameKm,
         time: nowTime,
+        shortTitle: 'ស្កេនជោគជ័យ',
         message: `ស្កែនចេញជោគជ័យ! (${resolved.nameKm} - ${nowTime})`
       };
     }
@@ -290,12 +315,14 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
         action: 'IN',
         studentName: resolved.nameKm,
         time: nowTime,
+        shortTitle: 'ស្កេនជោគជ័យ',
         message: `ស្កែនចូលជោគជ័យ! (${resolved.nameKm} - ${nowTime})`
       };
     }
 
     return {
       ok: false,
+      shortTitle: 'ស្កេនរួចរាល់ហើយ',
       message: `${resolved.nameKm} បានស្កែនចេញ និងស្កែនចូលគ្រប់ ២ ដងរួចរាល់ហើយថ្ងៃនេះ!`
     };
   }
@@ -342,6 +369,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
     action: 'OUT',
     studentName: resolved.nameKm,
     time: nowTime,
+    shortTitle: 'ស្កេនជោគជ័យ',
     message: `ស្កែនចេញជោគជ័យ! (${resolved.nameKm} - ${nowTime})`
   };
 }
@@ -355,12 +383,14 @@ export function Header() {
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
-  const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [scanStage, setScanStage] = useState<'scanning' | 'processing' | 'success' | 'error'>(
+    'scanning'
+  );
+  const [scanOverlayLabel, setScanOverlayLabel] = useState('');
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const processingLockRef = useRef(false);
+
   const [systemLogoUrl, setSystemLogoUrl] = useState(
     'https://i.ibb.co/tphX7kd4/ce2e43f3-9d48-4d71-86a6-dd1ac3d77c49.png'
   );
@@ -390,7 +420,7 @@ export function Header() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
-    if (mobileOpen) {
+    if (mobileOpen || showScanner) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -398,7 +428,7 @@ export function Header() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [mobileOpen]);
+  }, [mobileOpen, showScanner]);
 
   const mainNavItems = [
     { key: 'nav.home', path: '/', icon: Home, labelKm: 'ផ្ទះ', labelEn: 'Home' },
@@ -428,81 +458,108 @@ export function Header() {
     const startCamera = async () => {
       if (!showScanner) return;
       processingLockRef.current = false;
+      setScanStage('scanning');
+      setScanOverlayLabel('');
 
-      const linkedId = (localStorage.getItem('bipa_linked_student_id') || '').trim();
-      if (!linkedId) {
-        setScanFeedback({
-          type: 'error',
-          text: 'អ្នកមិនទាន់បានភ្ជាប់អត្តលេខសិស្ស (ID) ទេ! សូមភ្ជាប់ ID ក្នុងទំព័រវត្តមានជាមុនសិន។'
-        });
-      } else {
-        setScanFeedback(null);
-      }
-
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 100));
       if (!isMounted || !document.getElementById('global-qr-reader')) return;
 
       try {
-        const html5QrCode = new Html5Qrcode('global-qr-reader');
+        const html5QrCode = new Html5Qrcode('global-qr-reader', {
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          useBarCodeDetectorIfSupported: true,
+          verbose: false
+        });
         scannerRef.current = html5QrCode;
 
-        const devices = await Html5Qrcode.getCameras();
-        if (!devices || devices.length === 0) {
-          setScanFeedback({
-            type: 'error',
-            text: 'រកមិនឃើញកាមេរ៉ាទេ សូមប្រើប៊ូតុងជ្រើសរើសរូប QR ខាងក្រោម។'
-          });
-          return;
+        const onScanSuccess = async (decodedText: string) => {
+          if (processingLockRef.current || !isMounted) return;
+          processingLockRef.current = true;
+
+          if (navigator.vibrate) {
+            try {
+              navigator.vibrate(40);
+            } catch {}
+          }
+
+          setScanStage('processing');
+          setScanOverlayLabel('កំពុងដំណើរការ...');
+
+          const [res] = await Promise.all([
+            processAttendanceScan(decodedText),
+            new Promise((resolve) => setTimeout(resolve, 420))
+          ]);
+
+          if (!isMounted) return;
+
+          if (res.ok) {
+            setScanStage('success');
+            setScanOverlayLabel(res.shortTitle || 'ស្កេនជោគជ័យ');
+            setTimeout(() => {
+              if (scannerRef.current?.isScanning) {
+                scannerRef.current
+                  .stop()
+                  .then(() => scannerRef.current?.clear())
+                  .catch(() => {});
+              }
+              if (isMounted) {
+                setShowScanner(false);
+                navigate('/attendance');
+              }
+            }, 900);
+          } else {
+            setScanStage('error');
+            setScanOverlayLabel(res.shortTitle || 'ស្កេនរួចរាល់ហើយ');
+            setTimeout(() => {
+              if (!isMounted) return;
+              setScanStage('scanning');
+              setScanOverlayLabel('');
+              processingLockRef.current = false;
+            }, 1500);
+          }
+        };
+
+        const scanConfig = {
+          fps: 30,
+          aspectRatio: 1.0,
+          disableFlip: false
+        };
+
+        try {
+          await html5QrCode.start(
+            { facingMode: 'environment' },
+            {
+              ...scanConfig,
+              videoConstraints: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+              }
+            },
+            onScanSuccess,
+            () => {}
+          );
+        } catch {
+          const devices = await Html5Qrcode.getCameras();
+          if (!devices || devices.length === 0) {
+            setScanStage('error');
+            setScanOverlayLabel('មិនឃើញកាមេរ៉ា');
+            return;
+          }
+          const backCam =
+            devices.find(
+              (d) =>
+                d.label.toLowerCase().includes('back') ||
+                d.label.toLowerCase().includes('environment') ||
+                d.label.toLowerCase().includes('rear')
+            ) || devices[devices.length - 1];
+
+          await html5QrCode.start(backCam.id, scanConfig, onScanSuccess, () => {});
         }
-
-        const backCam = devices.find(
-          (d) => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment')
-        );
-        const cameraId = backCam ? backCam.id : devices[0].id;
-
-        await html5QrCode.start(
-          cameraId,
-          {
-            fps: 25,
-            aspectRatio: 1.0,
-            disableFlip: false
-          },
-          async (decodedText) => {
-            if (processingLockRef.current) return;
-            processingLockRef.current = true;
-
-            const res = await processAttendanceScan(decodedText);
-            if (!isMounted) return;
-
-            if (res.ok) {
-              setScanFeedback({ type: 'success', text: res.message });
-              setTimeout(() => {
-                if (scannerRef.current?.isScanning) {
-                  scannerRef.current
-                    .stop()
-                    .then(() => scannerRef.current?.clear())
-                    .catch(() => {});
-                }
-                if (isMounted) {
-                  setShowScanner(false);
-                  navigate('/attendance');
-                }
-              }, 1200);
-            } else {
-              setScanFeedback({ type: 'error', text: res.message });
-              setTimeout(() => {
-                processingLockRef.current = false;
-              }, 2000);
-            }
-          },
-          () => {}
-        );
       } catch {
         if (isMounted) {
-          setScanFeedback({
-            type: 'error',
-            text: 'សូមអនុញ្ញាតសិទ្ធិកាមេរ៉ា (Allow Camera) ឬជ្រើសរើសរូបភាព QR ខាងក្រោម។'
-          });
+          setScanStage('error');
+          setScanOverlayLabel('សូមបើកសិទ្ធិកាមេរ៉ា');
         }
       }
     };
@@ -527,40 +584,10 @@ export function Header() {
     };
   }, [showScanner, navigate]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const html5QrCode = scannerRef.current || new Html5Qrcode('global-qr-reader');
-      if (scannerRef.current?.isScanning) {
-        await scannerRef.current.stop();
-      }
-      const decodedText = await html5QrCode.scanFile(file, true);
-      const res = await processAttendanceScan(decodedText);
-      if (res.ok) {
-        setScanFeedback({ type: 'success', text: res.message });
-        setTimeout(() => {
-          setShowScanner(false);
-          navigate('/attendance');
-        }, 1200);
-      } else {
-        setScanFeedback({ type: 'error', text: res.message });
-      }
-    } catch {
-      setScanFeedback({
-        type: 'error',
-        text: 'រូបភាពនេះមិនមានកូដ QR ត្រឹមត្រូវទេ សូមជ្រើសរើសរូបម្តងទៀត។'
-      });
-    }
-    e.target.value = '';
-  };
-
   const renderRole = (role?: string) => {
     if (!role) return 'STUDENT';
     return role.replace(/_/g, ' ').toUpperCase();
   };
-
-  const currentLinkedId = localStorage.getItem('bipa_linked_student_id') || '';
 
   return (
     <>
@@ -581,7 +608,7 @@ export function Header() {
       `}</style>
 
       {showScanner && (
-        <div className="fixed inset-0 z-[120] bg-[#09090b] flex flex-col items-center justify-center p-4 font-khmer">
+        <div className="fixed inset-0 z-[140] bg-[#070b14] flex flex-col items-center justify-center p-6 font-khmer select-none">
           <style>{`
             @keyframes scanLine {
               0% { top: 8%; }
@@ -589,88 +616,90 @@ export function Header() {
               100% { top: 8%; }
             }
             .animate-scan {
-              animation: scanLine 2.2s ease-in-out infinite;
+              animation: scanLine 2.1s ease-in-out infinite;
             }
             #global-qr-reader {
               border: none !important;
+              width: 100% !important;
+              height: 100% !important;
             }
             #global-qr-reader video {
               width: 100% !important;
               height: 100% !important;
               object-fit: cover !important;
-              border-radius: 1.25rem;
+              border-radius: 1.5rem !important;
             }
             #global-qr-reader img,
             #global-qr-reader canvas,
             #global-qr-reader__dashboard,
-            #global-qr-reader__header_message {
+            #global-qr-reader__header_message,
+            #global-qr-reader__scan_region > div {
               display: none !important;
             }
           `}</style>
 
-          <div className="mb-4 px-4 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-300">
-            អត្តលេខសិស្សបច្ចុប្បន្ន៖{' '}
-            <span className={cn('font-bold', currentLinkedId ? 'text-emerald-400' : 'text-red-400')}>
-              {currentLinkedId || 'មិនទាន់ភ្ជាប់ ID'}
-            </span>
-          </div>
-
-          <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-2xl overflow-hidden mb-5 bg-slate-900 flex items-center justify-center">
+          <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-[24px] overflow-hidden bg-[#111827] shadow-[0_0_50px_rgba(0,0,0,0.85)] flex items-center justify-center">
             <div id="global-qr-reader" className="w-full h-full" />
-            <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-white rounded-tl-2xl z-10 pointer-events-none" />
-            <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-white rounded-tr-2xl z-10 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-white rounded-bl-2xl z-10 pointer-events-none" />
-            <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-white rounded-br-2xl z-10 pointer-events-none" />
-            <div className="absolute left-4 right-4 h-0.5 bg-green-400 shadow-[0_0_12px_#4ade80] animate-scan z-20 pointer-events-none" />
+
+            <div className="absolute top-0 left-0 w-11 h-11 border-t-[4px] border-l-[4px] border-white rounded-tl-[24px] z-10 pointer-events-none" />
+            <div className="absolute top-0 right-0 w-11 h-11 border-t-[4px] border-r-[4px] border-white rounded-tr-[24px] z-10 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-11 h-11 border-b-[4px] border-l-[4px] border-white rounded-bl-[24px] z-10 pointer-events-none" />
+            <div className="absolute bottom-0 right-0 w-11 h-11 border-b-[4px] border-r-[4px] border-white rounded-br-[24px] z-10 pointer-events-none" />
+
+            {scanStage === 'scanning' && (
+              <div className="absolute left-4 right-4 h-0.5 bg-emerald-400 shadow-[0_0_12px_#34d399] animate-scan z-20 pointer-events-none" />
+            )}
+
+            {scanStage !== 'scanning' && (
+              <div className="absolute inset-0 z-30 bg-black/65 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center animate-in fade-in duration-150">
+                {scanStage === 'processing' && (
+                  <>
+                    <div className="w-14 h-14 rounded-full border-4 border-white/20 border-t-white animate-spin mb-3.5" />
+                    <span className="text-white font-extrabold text-sm sm:text-base tracking-wide drop-shadow">
+                      {scanOverlayLabel || 'កំពុងដំណើរការ...'}
+                    </span>
+                  </>
+                )}
+
+                {scanStage === 'success' && (
+                  <>
+                    <div className="w-16 h-16 rounded-full bg-[#10b981] flex items-center justify-center shadow-[0_0_25px_rgba(16,185,129,0.55)] mb-3.5 animate-in zoom-in-75 duration-200">
+                      <div className="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center">
+                        <Check className="h-4 w-4 text-white stroke-[3]" />
+                      </div>
+                    </div>
+                    <span className="text-[#10b981] font-extrabold text-sm sm:text-base tracking-wide drop-shadow">
+                      {scanOverlayLabel || 'ស្កេនជោគជ័យ'}
+                    </span>
+                  </>
+                )}
+
+                {scanStage === 'error' && (
+                  <>
+                    <div className="w-16 h-16 rounded-full bg-[#dc2626] flex items-center justify-center shadow-[0_0_25px_rgba(220,38,38,0.55)] mb-3.5 animate-in zoom-in-75 duration-200">
+                      <X className="h-8 w-8 text-white stroke-[2.5]" />
+                    </div>
+                    <span className="text-[#ef4444] font-extrabold text-sm sm:text-base tracking-wide drop-shadow">
+                      {scanOverlayLabel || 'ស្កេនរួចរាល់ហើយ'}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
-          {scanFeedback ? (
-            <div
-              className={cn(
-                'max-w-xs w-full px-4 py-3 rounded-xl mb-5 text-xs font-bold flex items-center gap-2.5 border shadow-lg',
-                scanFeedback.type === 'success'
-                  ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300'
-                  : 'bg-red-950/90 border-red-500 text-red-300'
-              )}
-            >
-              {scanFeedback.type === 'success' ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
-              ) : (
-                <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
-              )}
-              <span className="leading-relaxed">{scanFeedback.text}</span>
-            </div>
-          ) : (
-            <p className="text-slate-400 text-xs mb-6">
-              ស្កែនលើកទី១ = ម៉ោងចេញ | ស្កែនលើកទី២ = ម៉ោងចូល
-            </p>
-          )}
+          <p className="text-slate-500 text-xs sm:text-sm font-medium mt-8 mb-5 tracking-wide">
+            ដាក់កូដ QR ឱ្យចំកណ្តាល
+          </p>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              className="bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-full px-5 py-5 shadow-lg text-xs font-bold"
-            >
-              <ImageUp className="h-4 w-4 mr-2" />
-              ជ្រើសរើសរូប QR
-            </Button>
-
-            <Button
-              onClick={() => setShowScanner(false)}
-              className="bg-white/10 hover:bg-white/20 text-white rounded-full px-6 py-5 border border-white/10 shadow-lg text-xs font-bold"
-            >
-              <X className="h-4 w-4 mr-2" />
-              បិទកាមេរ៉ា
-            </Button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowScanner(false)}
+            className="flex items-center justify-center gap-2.5 px-7 py-3 rounded-2xl bg-[#111622] hover:bg-[#1a2234] text-white border border-white/10 shadow-lg text-xs sm:text-sm font-bold active:scale-95 transition-all"
+          >
+            <X className="h-4 w-4 text-slate-300" />
+            <span>បិទកាមេរ៉ា</span>
+          </button>
         </div>
       )}
 
