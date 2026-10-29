@@ -483,8 +483,45 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="hidden lg:flex w-64 shrink-0 border-r bg-card flex-col z-40">
-        <div className="p-4 border-b">
+      {location.pathname.startsWith('/admin/students') && (
+        <style>{`
+          @media screen and (max-width: 768px) {
+            main > div {
+              padding-left: 0.25rem !important;
+              padding-right: 0.25rem !important;
+              padding-top: 0.25rem !important;
+            }
+          }
+          @media screen {
+            main table {
+              border-collapse: separate !important;
+              border-spacing: 0 !important;
+            }
+            main table thead th {
+              position: sticky !important;
+              top: 0 !important;
+              z-index: 20 !important;
+              background-color: #f3d078 !important;
+            }
+            main div:has(> table) {
+              max-height: 64vh !important;
+              overflow-y: auto !important;
+              overflow-x: auto !important;
+              -webkit-overflow-scrolling: touch !important;
+              border-radius: 0.75rem;
+            }
+          }
+          @media print {
+            main div:has(> table) {
+              max-height: none !important;
+              overflow: visible !important;
+            }
+          }
+        `}</style>
+      )}
+
+      <aside className="hidden lg:flex w-64 shrink-0 border-r bg-card flex-col z-40 sticky top-20 h-[calc(100vh-5rem)] overflow-hidden">
+        <div className="p-4 border-b shrink-0">
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-navy-gradient">
               <GraduationCap className="h-5 w-5 text-gold" />
@@ -523,19 +560,25 @@ export function Sidebar() {
       </aside>
 
       {isResidenceManagerRoute && isAdminRole && !showHomeManager && (
-        <div className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 bottom-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-4 sm:p-6 pb-24 scrollbar-thin">
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+        >
           <ResidenceManagerPanel />
         </div>
       )}
 
       {showHomeManager && isAdminRole && (
-        <div className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 bottom-0 z-30 bg-[#0b1120] overflow-y-auto p-4 sm:p-6 font-khmer text-slate-200 space-y-6">
-          <div className="bg-[#1e293b] rounded-2xl p-5 sm:p-6 shadow-md border border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-5">
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 font-khmer text-slate-200 space-y-5 scrollbar-thin"
+        >
+          <div className="bg-[#1e293b] rounded-2xl p-4 sm:p-6 shadow-md border border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
             <div>
               <Badge className="bg-[#eab308] text-[#0f172a] font-bold px-2.5 py-1 mb-2">
                 HOME & NEWS CMS
               </Badge>
-              <h1 className="text-xl sm:text-2xl font-bold text-white">
+              <h1 className="text-lg sm:text-2xl font-bold text-white">
                 គ្រប់គ្រងព័ត៌មានទំព័រដើម (Home Page)
               </h1>
               <p className="text-slate-400 text-xs sm:text-sm mt-0.5">
@@ -552,49 +595,49 @@ export function Sidebar() {
                 type="button"
                 onClick={() => setManageTab('news')}
                 className={cn(
-                  'relative z-10 py-2.5 px-2 text-xs font-bold rounded-xl transition-colors duration-200 truncate',
+                  'relative z-10 py-2.5 px-1.5 text-[11px] sm:text-xs font-bold rounded-xl transition-colors duration-200 truncate',
                   manageTab === 'news' ? 'text-white' : 'text-slate-400 hover:text-slate-200'
                 )}
               >
-                គ្រប់គ្រងព័ត៌មានទូទៅ ({newsList.length})
+                ព័ត៌មានទូទៅ ({newsList.length})
               </button>
               <button
                 type="button"
                 onClick={() => setManageTab('banners')}
                 className={cn(
-                  'relative z-10 py-2.5 px-2 text-xs font-bold rounded-xl transition-colors duration-200 truncate',
+                  'relative z-10 py-2.5 px-1.5 text-[11px] sm:text-xs font-bold rounded-xl transition-colors duration-200 truncate',
                   manageTab === 'banners' ? 'text-white' : 'text-slate-400 hover:text-slate-200'
                 )}
               >
-                គ្រប់គ្រងរូប Banner ({banners.length})
+                រូប Banner ({banners.length})
               </button>
               <button
                 type="button"
                 onClick={() => setManageTab('settings')}
                 className={cn(
-                  'relative z-10 py-2.5 px-2 text-xs font-bold rounded-xl transition-colors duration-200 flex items-center justify-center gap-1.5 truncate',
+                  'relative z-10 py-2.5 px-1.5 text-[11px] sm:text-xs font-bold rounded-xl transition-colors duration-200 flex items-center justify-center gap-1 truncate',
                   manageTab === 'settings' ? 'text-white' : 'text-slate-400 hover:text-slate-200'
                 )}
               >
                 <Settings className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">ការកំណត់ប្រព័ន្ធ</span>
+                <span className="truncate">ការកំណត់</span>
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
             <Card className="bg-[#1e293b] border-slate-800 shadow-lg xl:col-span-7 overflow-hidden">
               <CardHeader className="pb-3 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <CardTitle className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-cyan-400" />
-                    ក្រាបសន្ទុះអ្នកមើល និងចុចបេះដូង (Market Trend Analytics)
+                    <TrendingUp className="h-5 w-5 text-cyan-400 shrink-0" />
+                    <span>ក្រាបសន្ទុះអ្នកមើល និងចុចបេះដូង (Market Trend Analytics)</span>
                   </CardTitle>
                   <p className="text-[11px] text-slate-400 mt-0.5">
                     ទិន្នន័យប្រៀបធៀបសន្ទុះ Views និង Likes តាមកាតព័ត៌មាននីមួយៗ
                   </p>
                 </div>
-                <div className="flex items-center gap-3 text-xs font-bold bg-[#0f172a] px-3.5 py-2 rounded-xl border border-slate-800">
+                <div className="flex items-center gap-3 text-xs font-bold bg-[#0f172a] px-3.5 py-2 rounded-xl border border-slate-800 w-fit">
                   <span className="flex items-center gap-1.5 text-cyan-400">
                     <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block" />
                     Views: {totalViews}
@@ -606,9 +649,9 @@ export function Sidebar() {
                   </span>
                 </div>
               </CardHeader>
-              <CardContent className="p-4 sm:p-5">
+              <CardContent className="p-3.5 sm:p-5">
                 <div className="relative bg-[#0b1325] rounded-2xl border border-slate-800/90 p-3">
-                  <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-48 sm:h-52 overflow-visible">
+                  <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-44 sm:h-52 overflow-visible">
                     <defs>
                       <linearGradient id="stockViewsGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.45" />
@@ -676,6 +719,7 @@ export function Sidebar() {
                           className="cursor-pointer"
                           onMouseEnter={() => setHoveredPointIdx(i)}
                           onMouseLeave={() => setHoveredPointIdx(null)}
+                          onClick={() => setHoveredPointIdx(isHovered ? null : i)}
                         >
                           {isHovered && (
                             <line
@@ -733,15 +777,15 @@ export function Sidebar() {
             <Card className="bg-[#1e293b] border-slate-800 shadow-lg xl:col-span-5">
               <CardHeader className="pb-3 border-b border-slate-800">
                 <CardTitle className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-                  <PieChart className="h-5 w-5 text-amber-400" />
-                  ក្រាបរង្វង់មូលតាមពណ៌ (Engagement Share)
+                  <PieChart className="h-5 w-5 text-amber-400 shrink-0" />
+                  <span>ក្រាបរង្វង់មូលតាមពណ៌ (Engagement Share)</span>
                 </CardTitle>
                 <p className="text-[11px] text-slate-400 mt-0.5">
                   សមាមាត្រភាគរយនៃការចាប់អារម្មណ៍សរុបតាមព័ត៌មាននីមួយៗ
                 </p>
               </CardHeader>
               <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-5">
-                <div className="relative w-40 h-40 shrink-0 flex items-center justify-center">
+                <div className="relative w-36 h-36 sm:w-40 sm:h-40 shrink-0 flex items-center justify-center">
                   <svg viewBox="0 0 160 160" className="w-full h-full -rotate-90">
                     <circle
                       cx="80"
@@ -812,7 +856,7 @@ export function Sidebar() {
           {manageTab === 'settings' && (
             <Card className="bg-[#1e293b] border-slate-800 shadow-md animate-in fade-in duration-300">
               <CardHeader className="border-b border-slate-800">
-                <CardTitle className="text-amber-500 text-lg font-bold flex items-center gap-2">
+                <CardTitle className="text-amber-500 text-base sm:text-lg font-bold flex items-center gap-2">
                   <Settings className="h-5 w-5" /> ការកំណត់ទូទៅ (General Settings)
                 </CardTitle>
               </CardHeader>
@@ -870,10 +914,10 @@ export function Sidebar() {
           )}
 
           {manageTab === 'news' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-12 animate-in fade-in duration-300">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pb-12 animate-in fade-in duration-300">
               <Card className="bg-[#1e293b] border-slate-800 shadow-md h-fit">
                 <CardHeader className="pb-3 border-b border-slate-800">
-                  <CardTitle className="text-blue-400 text-base font-bold">
+                  <CardTitle className="text-blue-400 text-sm sm:text-base font-bold">
                     {editingNews ? 'កែប្រែព័ត៌មានដែលបានជ្រើសរើស' : 'បង្ហោះព័ត៌មានថ្មីទៅកាន់ទំព័រដើម'}
                   </CardTitle>
                 </CardHeader>
@@ -972,24 +1016,24 @@ export function Sidebar() {
 
               <Card className="bg-[#1e293b] border-slate-800 shadow-md">
                 <CardHeader className="pb-3 border-b border-slate-800">
-                  <CardTitle className="text-white text-base font-bold">
+                  <CardTitle className="text-white text-sm sm:text-base font-bold">
                     បញ្ជីព័ត៌មានដែលកំពុងបង្ហាញលើទំព័រដើម
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-4 max-h-[620px] overflow-y-auto space-y-3 scrollbar-thin">
+                <CardContent className="pt-4 max-h-[580px] overflow-y-auto space-y-3 scrollbar-thin">
                   {newsList.map((n, index) => (
                     <div
                       key={n.id}
-                      className="bg-[#0f172a] border border-slate-800 p-3.5 rounded-xl flex items-center gap-3.5 hover:border-slate-700 transition-colors"
+                      className="bg-[#0f172a] border border-slate-800 p-3 rounded-xl flex items-center gap-3 hover:border-slate-700 transition-colors"
                     >
                       {n.images && n.images[0] ? (
                         <img
                           src={n.images[0]}
                           alt=""
-                          className="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-800"
+                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover shrink-0 bg-slate-800"
                         />
                       ) : (
-                        <div className="w-16 h-16 rounded-xl bg-slate-800 shrink-0 flex items-center justify-center text-[10px] text-slate-500">
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-800 shrink-0 flex items-center justify-center text-[10px] text-slate-500">
                           No Img
                         </div>
                       )}
@@ -1016,7 +1060,7 @@ export function Sidebar() {
                           </span>
                         </div>
                       </div>
-                      <div className="flex flex-col gap-2 shrink-0">
+                      <div className="flex flex-col gap-1.5 shrink-0">
                         <button
                           onClick={() => openEditNewsForm(n)}
                           className="p-2 bg-blue-500/15 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-colors"
@@ -1042,11 +1086,11 @@ export function Sidebar() {
           {manageTab === 'banners' && (
             <Card className="bg-[#1e293b] border-slate-800 shadow-md animate-in fade-in duration-300">
               <CardHeader className="pb-3 border-b border-slate-800">
-                <CardTitle className="text-white text-base font-bold">
+                <CardTitle className="text-white text-sm sm:text-base font-bold">
                   គ្រប់គ្រង កែប្រែ Link និងប្តូរទីតាំងរូបភាព Banner
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-6">
+              <CardContent className="p-4 sm:p-6 space-y-6">
                 <div className="flex flex-col sm:flex-row gap-3 max-w-3xl">
                   <Input
                     value={newBannerUrl}

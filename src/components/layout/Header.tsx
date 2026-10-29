@@ -935,7 +935,7 @@ export function Header() {
                   className="flex items-center justify-center gap-1.5 h-9 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold"
                 >
                   <Languages className="h-3.5 w-3.5 text-blue-500" />
-                  {lang === 'en' ? 'ប្តូរជាខ្មែរ' : 'English'}
+                  {lang === 'en' ? 'ខ្មែរ' : 'En'}
                 </Button>
                 <Button
                   variant="outline"

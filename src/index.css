@@ -199,17 +199,13 @@ body {
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }
-
-  html.ios-standalone div.fixed.bottom-0 {
-    height: calc(4rem + env(safe-area-inset-bottom));
-    padding-bottom: env(safe-area-inset-bottom);
-  }
 }
 
 html,
 body {
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 @media screen and (max-width: 768px) {
@@ -217,5 +213,32 @@ body {
   select,
   textarea {
     font-size: 16px !important;
+  }
+
+  main {
+    padding-left: 0.35rem !important;
+    padding-right: 0.35rem !important;
+    padding-top: 0.35rem !important;
+  }
+}
+
+@media screen and (min-width: 1024px) {
+  aside {
+    position: sticky !important;
+    top: 5rem !important;
+    height: calc(100vh - 5rem) !important;
+    overflow-y: auto !important;
+  }
+
+  main {
+    height: calc(100vh - 5rem) !important;
+    overflow-y: auto !important;
+  }
+}
+
+@media screen and (max-width: 1023px) {
+  .bipa-student-sheet-wrap {
+    margin-left: -0.25rem !important;
+    margin-right: -0.25rem !important;
   }
 }
