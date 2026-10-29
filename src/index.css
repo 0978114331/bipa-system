@@ -190,3 +190,32 @@ body {
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
 }
+
+@supports (padding-top: env(safe-area-inset-top)) {
+  html.ios-standalone header.sticky.top-0 {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  html.ios-standalone div.fixed.bottom-0 {
+    height: calc(4rem + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+html,
+body {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media screen and (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
