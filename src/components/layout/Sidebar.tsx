@@ -45,6 +45,7 @@ import {
   HOME_NEWS_STORAGE_KEY
 } from '@/pages/public/HomePage';
 import { ResidenceManagerPanel } from '@/pages/public/ResidenceInfoPage';
+import { DutyRosterAdminPanel, DutyScheduleUserView } from '@/components/duty/DutyScheduleSystem';
 
 interface NavItem {
   label: string;
@@ -1229,6 +1230,27 @@ export function Sidebar() {
           )}
         </div>
       )}
+
+      {location.pathname.startsWith('/admin/duties') && isAdminRole && !showHomeManager && (
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+        >
+          <DutyRosterAdminPanel />
+        </div>
+      )}
+
+      {(location.pathname.startsWith('/dashboard/duties') || location.pathname === '/duties') &&
+        !showHomeManager && (
+          <div
+            style={{ height: 'calc(100dvh - 4rem)' }}
+            className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+          >
+            <DutyScheduleUserView
+              onSwitchToAdmin={isAdminRole ? () => navigate('/admin/duties') : undefined}
+            />
+          </div>
+        )}
     </>
   );
 }

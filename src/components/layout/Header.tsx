@@ -44,6 +44,7 @@ import {
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
 import { TranslationKey } from '@/types';
 import { cn } from '@/lib/utils';
+import { DutyScheduleUserView, DutyRosterAdminPanel } from '@/components/duty/DutyScheduleSystem';
 
 const ATT_STORAGE_KEY = 'bipa_attendance_sync_v4';
 
@@ -1155,6 +1156,26 @@ export function Header() {
           <span className="text-[10px] font-medium">{lang === 'km' ? 'អំពីយើង' : 'About'}</span>
         </button>
       </div>
+
+      {(location.pathname.startsWith('/admin/duties') ||
+        location.pathname.startsWith('/dashboard/duties') ||
+        location.pathname === '/duties') && (
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className={cn(
+            'fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin',
+            isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
+          )}
+        >
+          {isAdmin && location.pathname.startsWith('/admin/duties') ? (
+            <DutyRosterAdminPanel />
+          ) : (
+            <DutyScheduleUserView
+              onSwitchToAdmin={isAdmin ? () => navigate('/admin/duties') : undefined}
+            />
+          )}
+        </div>
+      )}
     </>
   );
 }
