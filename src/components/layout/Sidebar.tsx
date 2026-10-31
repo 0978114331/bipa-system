@@ -4,22 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { cn } from '@/lib/utils';
-import {
-  LayoutDashboard,
-  Users,
-  Building2,
-  QrCode,
-  DollarSign,
-  CalendarClock,
-  FileText,
-  Package,
-  Megaphone,
-  Settings,
-  GraduationCap,
-  ClipboardList,
-  LayoutTemplate,
-  Plus,
-  Edit2,
+import { LayoutDashboard, Users, Building2, QrCode, DollarSign, CalendarClock, FileText, Package, Megaphone, Settings, GraduationCap, ClipboardList, LayoutTemplate, Plus, Edit2,
   Trash2,
   Eye,
   Heart,
@@ -37,17 +22,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import {
-  HomeBannerItem,
-  HomeNewsItem,
-  fetchHomeContentFromDb,
-  HOME_BANNERS_STORAGE_KEY,
-  HOME_NEWS_STORAGE_KEY
-} from '@/pages/public/HomePage';
+import { HomeBannerItem, HomeNewsItem, fetchHomeContentFromDb, HOME_BANNERS_STORAGE_KEY, HOME_NEWS_STORAGE_KEY } from '@/pages/public/HomePage';
 import { ResidenceManagerPanel } from '@/pages/public/ResidenceInfoPage';
 import { DutyRosterAdminPanel, DutyScheduleUserView } from '@/components/duty/DutyScheduleSystem';
 import { PaymentAdminDashboard, PaymentStudentView } from '@/components/payment/PaymentManagementSystem';
 import { RiceAdminDashboard, RiceStudentView } from '@/components/rice/RiceContributionSystem';
+import { LeaveAdminDashboard } from '@/components/leave/LeaveRequestSystem';
 
 interface NavItem {
   label: string;
@@ -1294,7 +1274,18 @@ export function Sidebar() {
             />
           </div>
         )}
-        
+
+        {location.pathname.startsWith('/admin/leave-requests') &&
+        isAdminRole &&
+        !showHomeManager && (
+          <div
+            style={{ height: 'calc(100dvh - 4rem)' }}
+            className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+          >
+            <LeaveAdminDashboard />
+          </div>
+        )}
+
     </>
   );
 }

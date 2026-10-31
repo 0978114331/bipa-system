@@ -35,7 +35,7 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
-import { normalizeStudentCodeInput } from '@/components/layout/Header';
+import { normalizeStudentCodeInput, resolveStudentByIdOrName } from '@/components/layout/Header';
 import { cn } from '@/lib/utils';
 
 export type MonthRiceStatus = 'paid' | 'owed' | 'unpaid';
@@ -290,7 +290,7 @@ export function findHomeFeatureCardByKeyword(keywords: string[]): HTMLElement | 
   ) as HTMLElement[];
 
   for (const el of allElements) {
-    if (el.closest('aside, nav, header')) continue;
+    if (el.closest('aside, nav, header, .fixed, [role="dialog"]')) continue;
     if (
       el.classList.contains('bipa-tg-payment-badge') ||
       el.classList.contains('bipa-tg-rice-badge')
@@ -307,19 +307,20 @@ export function findHomeFeatureCardByKeyword(keywords: string[]): HTMLElement | 
     const clean = directText.replace(/\s+/g, ' ').trim();
     if (!clean) continue;
 
-    const matched = keywords.some((kw) => clean === kw || clean.includes(kw));
+    const matched = keywords.some((kw) => clean === kw);
     if (!matched) continue;
 
     let curr: HTMLElement | null = el.parentElement;
     while (curr && curr !== document.body) {
+      if (curr.classList.contains('grid') || curr.tagName === 'MAIN') break;
       const hasSvg = curr.querySelector('svg') !== null;
       const rect = curr.getBoundingClientRect();
       if (
         hasSvg &&
         rect.width >= 75 &&
-        rect.width <= 460 &&
+        rect.width <= 320 &&
         rect.height >= 65 &&
-        rect.height <= 260
+        rect.height <= 220
       ) {
         return curr;
       }
@@ -350,6 +351,7 @@ export function GlobalRiceBadgeEnhancer() {
     refreshCount();
     const interval = setInterval(refreshCount, 3000);
     window.addEventListener('rice-system-updated', refreshCount);
+    window.addEventListener('student-id-linked', refreshCount);
     window.addEventListener('storage', refreshCount);
 
     let bc: BroadcastChannel | null = null;
@@ -363,6 +365,7 @@ export function GlobalRiceBadgeEnhancer() {
     return () => {
       clearInterval(interval);
       window.removeEventListener('rice-system-updated', refreshCount);
+      window.removeEventListener('student-id-linked', refreshCount);
       window.removeEventListener('storage', refreshCount);
       if (bc) bc.close();
     };
@@ -370,14 +373,14 @@ export function GlobalRiceBadgeEnhancer() {
 
   useEffect(() => {
     const handleCaptureClick = (e: MouseEvent) => {
+      if (location.pathname !== '/') return;
       const target = e.target as HTMLElement | null;
       if (!target) return;
-      if (target.closest('aside, nav, header')) return;
+      if (target.closest('aside, nav, header, .fixed, [role="dialog"]')) return;
 
       const riceCard = findHomeFeatureCardByKeyword([
         'ការរួមចំណែកអង្ករ',
-        'រួមចំណែកអង្ករ',
-        'របាយការណ៍បង់អង្ករ'
+        'រួមចំណែកអង្ករ'
       ]);
       if (riceCard && riceCard.contains(target)) {
         e.preventDefault();
@@ -388,7 +391,7 @@ export function GlobalRiceBadgeEnhancer() {
         return;
       }
 
-      const residenceCard = findHomeFeatureCardByKeyword(['សេវាកម្មមណ្ឌល', 'ព័ត៌មានមណ្ឌល']);
+      const residenceCard = findHomeFeatureCardByKeyword(['សេវាកម្មមណ្ឌល']);
       if (residenceCard && residenceCard.contains(target)) {
         e.preventDefault();
         e.stopPropagation();
@@ -400,16 +403,20 @@ export function GlobalRiceBadgeEnhancer() {
 
     window.addEventListener('click', handleCaptureClick, true);
     return () => window.removeEventListener('click', handleCaptureClick, true);
-  }, [navigate]);
+  }, [navigate, location.pathname]);
 
   useEffect(() => {
     const syncRiceCardBadge = () => {
+      const allRiceBadges = Array.from(document.querySelectorAll('.bipa-tg-rice-badge'));
+      if (location.pathname !== '/') {
+        allRiceBadges.forEach((b) => b.remove());
+        return;
+      }
+
       const riceCard = findHomeFeatureCardByKeyword([
         'ការរួមចំណែកអង្ករ',
-        'រួមចំណែកអង្ករ',
-        'របាយការណ៍បង់អង្ករ'
+        'រួមចំណែកអង្ករ'
       ]);
-      const allRiceBadges = Array.from(document.querySelectorAll('.bipa-tg-rice-badge'));
 
       if (riceCard) {
         riceCard.style.cursor = 'pointer';
@@ -2514,25 +2521,73 @@ export function RiceStudentView({
     );
   }, [allStudentsPool, linkedId]);
 
-  const handleSaveStudentId = () => {
+  useEffect(() => {
+    const syncGlobalId = () => {
+      const latest = normalizeStudentCodeInput(
+        localStorage.getItem('bipa_linked_student_id') || ''
+      );
+      if (latest) {
+        setLinkedId(latest);
+        setInputId(latest);
+        setIsEditingId(false);
+      }
+    };
+    window.addEventListener('student-id-linked', syncGlobalId);
+    return () => window.removeEventListener('student-id-linked', syncGlobalId);
+  }, []);
+
+  const handleSaveStudentId = async () => {
     const clean = normalizeStudentCodeInput(inputId);
     if (!clean) {
       setIdError('សូមបញ្ចូលអត្តលេខសិស្សរបស់អ្នក (ឧ. BIPA-015)');
       return;
     }
-    const found = allStudentsPool.find(
+    let found = allStudentsPool.find(
       (s) => normalizeStudentCodeInput(s.student_code).toLowerCase() === clean.toLowerCase()
     );
+
+    if (!found) {
+      const resolved = await resolveStudentByIdOrName(clean);
+      if (resolved) {
+        found = {
+          id: resolved.code,
+          student_code: resolved.code,
+          full_name_km: resolved.nameKm,
+          full_name_en: resolved.nameKm,
+          gender_km: resolved.genderKm,
+          major_km: 'ព័ត៌មានវិទ្យា',
+          generation_km: 'សិស្សមណ្ឌល'
+        };
+      }
+    }
+
     if (!found) {
       setIdError(`រកមិនឃើញអត្តលេខ "${clean}" ក្នុងបញ្ជីមណ្ឌលទេ!`);
       return;
     }
+
     setIdError('');
     localStorage.setItem('bipa_linked_student_id', found.student_code);
     setLinkedId(found.student_code);
     setInputId(found.student_code);
     setIsEditingId(false);
+
+    if (
+      !(payload.residentStudents || []).some(
+        (s) => normalizeStudentCodeInput(s.student_code) === found!.student_code
+      )
+    ) {
+      const nextPayload = {
+        ...payload,
+        residentStudents: [...(payload.residentStudents || []), found]
+      };
+      setPayload(nextPayload);
+      await saveRicePayloadToDb(nextPayload);
+    }
+
+    window.dispatchEvent(new Event('student-id-linked'));
     window.dispatchEvent(new Event('rice-system-updated'));
+    window.dispatchEvent(new Event('payment-system-updated'));
   };
 
   const myYearMonths = useMemo(() => {

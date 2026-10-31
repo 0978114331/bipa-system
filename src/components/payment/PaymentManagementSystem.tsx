@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { useI18n } from '@/contexts/I18nContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,9 +32,7 @@ import {
   Eye
 } from 'lucide-react';
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
-import { normalizeStudentCodeInput } from '@/components/layout/Header';
-import { cn } from '@/lib/utils';
-
+import { normalizeStudentCodeInput, resolveStudentByIdOrName } from '@/components/layout/Header';import { cn } from '@/lib/utils';
 export type MonthPaymentStatus = 'paid' | 'owed' | 'unpaid';
 
 export interface StudentMonthRecord {
@@ -2190,25 +2187,73 @@ export function PaymentStudentView({
     );
   }, [allStudentsPool, linkedId]);
 
-  const handleSaveStudentId = () => {
+  useEffect(() => {
+    const syncGlobalId = () => {
+      const latest = normalizeStudentCodeInput(
+        localStorage.getItem('bipa_linked_student_id') || ''
+      );
+      if (latest) {
+        setLinkedId(latest);
+        setInputId(latest);
+        setIsEditingId(false);
+      }
+    };
+    window.addEventListener('student-id-linked', syncGlobalId);
+    return () => window.removeEventListener('student-id-linked', syncGlobalId);
+  }, []);
+
+  const handleSaveStudentId = async () => {
     const clean = normalizeStudentCodeInput(inputId);
     if (!clean) {
       setIdError('សូមបញ្ចូលអត្តលេខសិស្សរបស់អ្នក (ឧ. BIPA-015)');
       return;
     }
-    const found = allStudentsPool.find(
+    let found = allStudentsPool.find(
       (s) => normalizeStudentCodeInput(s.student_code).toLowerCase() === clean.toLowerCase()
     );
+
+    if (!found) {
+      const resolved = await resolveStudentByIdOrName(clean);
+      if (resolved) {
+        found = {
+          id: resolved.code,
+          student_code: resolved.code,
+          full_name_km: resolved.nameKm,
+          full_name_en: resolved.nameKm,
+          gender_km: resolved.genderKm,
+          major_km: 'ព័ត៌មានវិទ្យា',
+          generation_km: 'សិស្សមណ្ឌល'
+        };
+      }
+    }
+
     if (!found) {
       setIdError(`រកមិនឃើញអត្តលេខ "${clean}" ក្នុងបញ្ជីមណ្ឌលទេ!`);
       return;
     }
+
     setIdError('');
     localStorage.setItem('bipa_linked_student_id', found.student_code);
     setLinkedId(found.student_code);
     setInputId(found.student_code);
     setIsEditingId(false);
+
+    if (
+      !(payload.residentStudents || []).some(
+        (s) => normalizeStudentCodeInput(s.student_code) === found!.student_code
+      )
+    ) {
+      const nextPayload = {
+        ...payload,
+        residentStudents: [...(payload.residentStudents || []), found]
+      };
+      setPayload(nextPayload);
+      await savePaymentPayloadToDb(nextPayload);
+    }
+
+    window.dispatchEvent(new Event('student-id-linked'));
     window.dispatchEvent(new Event('payment-system-updated'));
+    window.dispatchEvent(new Event('rice-system-updated'));
   };
 
   const myYearMonths = useMemo(() => {

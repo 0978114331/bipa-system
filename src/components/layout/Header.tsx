@@ -47,6 +47,7 @@ import { cn } from '@/lib/utils';
 import { DutyScheduleUserView, DutyRosterAdminPanel } from '@/components/duty/DutyScheduleSystem';
 import { GlobalPaymentBadgeEnhancer } from '@/components/payment/PaymentManagementSystem';
 import { GlobalRiceBadgeEnhancer, RiceAdminDashboard, RiceStudentView } from '@/components/rice/RiceContributionSystem';
+import { LeaveStudentView, LeaveAdminDashboard, GlobalLeaveBadgeEnhancer } from '@/components/leave/LeaveRequestSystem';
 
 const ATT_STORAGE_KEY = 'bipa_attendance_sync_v4';
 
@@ -1201,6 +1202,30 @@ export function Header() {
         </div>
       )}
       <GlobalRiceBadgeEnhancer />
+
+      {(location.pathname === '/leave' ||
+        location.pathname.startsWith('/dashboard/leave') ||
+        location.pathname.startsWith('/admin/leave-requests')) && (
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className={cn(
+            'fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin',
+            isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
+          )}
+        >
+          {isAdmin && location.pathname.startsWith('/admin/leave-requests') ? (
+            <LeaveAdminDashboard />
+          ) : (
+            <LeaveStudentView
+              onSwitchToAdmin={
+                isAdmin ? () => navigate('/admin/leave-requests') : undefined
+              }
+            />
+          )}
+        </div>
+      )}
+      <GlobalLeaveBadgeEnhancer />
+      
     </>
   );
 }
