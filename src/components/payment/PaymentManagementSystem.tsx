@@ -327,41 +327,69 @@ export function GlobalPaymentBadgeEnhancer() {
 
   useEffect(() => {
     const applyBadgesToDom = () => {
-      const elements = Array.from(document.querySelectorAll('button, a, div'));
-      elements.forEach((el) => {
-        const directText = (el.textContent || '').trim();
-        if (
-          (directText === 'ការបង់ប្រាក់ប្រចាំខែ' || directText === 'ការបង់ប្រាក់') &&
-          el.children.length <= 3
-        ) {
-          const parentCard = el.closest('button, a, div');
-          if (!parentCard) return;
-          const existingBadge = parentCard.querySelector('.bipa-tg-payment-badge');
-          if (badgeCount > 0) {
-            if (parentCard instanceof HTMLElement) {
-              const style = window.getComputedStyle(parentCard);
-              if (style.position === 'static') {
-                parentCard.style.position = 'relative';
-              }
-            }
-            if (existingBadge) {
-              existingBadge.textContent = String(badgeCount);
-            } else {
-              const span = document.createElement('span');
-              span.className =
-                'bipa-tg-payment-badge absolute top-2.5 right-2.5 z-20 min-w-[22px] h-[22px] px-1.5 rounded-full bg-rose-600 text-white text-[11px] font-black flex items-center justify-center shadow-[0_0_12px_rgba(225,29,72,0.85)] border-2 border-white dark:border-[#0f172a] animate-bounce';
-              span.textContent = String(badgeCount);
-              parentCard.appendChild(span);
-            }
-          } else if (existingBadge) {
-            existingBadge.remove();
+      const allNodes = Array.from(document.querySelectorAll('main *, #root *')) as HTMLElement[];
+      let payCard: HTMLElement | null = null;
+
+      for (const el of allNodes) {
+        if (el.closest('aside, nav, header')) continue;
+        if (el.classList.contains('bipa-tg-payment-badge')) continue;
+
+        let directText = '';
+        el.childNodes.forEach((node) => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            directText += node.textContent || '';
           }
+        });
+        const clean = directText.replace(/\s+/g, ' ').trim();
+        if (clean !== 'ការបង់ប្រាក់ប្រចាំខែ' && clean !== 'ការបង់ប្រាក់') continue;
+
+        let curr: HTMLElement | null = el.parentElement;
+        while (curr && curr !== document.body) {
+          const hasSvg = curr.querySelector('svg') !== null;
+          const rect = curr.getBoundingClientRect();
+          if (
+            hasSvg &&
+            rect.width >= 75 &&
+            rect.width <= 460 &&
+            rect.height >= 65 &&
+            rect.height <= 260
+          ) {
+            payCard = curr;
+            break;
+          }
+          curr = curr.parentElement;
         }
-      });
+        if (payCard) break;
+      }
+
+      const oldBadges = Array.from(document.querySelectorAll('.bipa-tg-payment-badge'));
+
+      if (payCard && badgeCount > 0) {
+        const style = window.getComputedStyle(payCard);
+        if (style.position === 'static') {
+          payCard.style.position = 'relative';
+        }
+        const existing = payCard.querySelector('.bipa-tg-payment-badge') as HTMLElement | null;
+        if (existing) {
+          existing.textContent = String(badgeCount);
+          oldBadges.forEach((b) => {
+            if (b !== existing) b.remove();
+          });
+        } else {
+          oldBadges.forEach((b) => b.remove());
+          const span = document.createElement('span');
+          span.className =
+            'bipa-tg-payment-badge absolute top-2.5 right-2.5 z-20 min-w-[22px] h-[22px] px-1.5 rounded-full bg-rose-600 text-white text-[11px] font-black flex items-center justify-center shadow-[0_0_12px_rgba(225,29,72,0.85)] border-2 border-white dark:border-[#0f172a] pointer-events-none animate-bounce';
+          span.textContent = String(badgeCount);
+          payCard.appendChild(span);
+        }
+      } else {
+        oldBadges.forEach((b) => b.remove());
+      }
     };
 
     applyBadgesToDom();
-    const timer = setInterval(applyBadgesToDom, 1200);
+    const timer = setInterval(applyBadgesToDom, 900);
     return () => clearInterval(timer);
   }, [badgeCount]);
 

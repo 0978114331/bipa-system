@@ -46,6 +46,7 @@ import { TranslationKey } from '@/types';
 import { cn } from '@/lib/utils';
 import { DutyScheduleUserView, DutyRosterAdminPanel } from '@/components/duty/DutyScheduleSystem';
 import { GlobalPaymentBadgeEnhancer } from '@/components/payment/PaymentManagementSystem';
+import { GlobalRiceBadgeEnhancer, RiceAdminDashboard, RiceStudentView } from '@/components/rice/RiceContributionSystem';
 
 const ATT_STORAGE_KEY = 'bipa_attendance_sync_v4';
 
@@ -1177,8 +1178,29 @@ export function Header() {
           )}
         </div>
       )}
-      
       <GlobalPaymentBadgeEnhancer />
+
+      {(location.pathname.startsWith('/admin/assets') ||
+        location.pathname.startsWith('/dashboard/assets') ||
+        location.pathname === '/assets' ||
+        location.pathname === '/rice') && (
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className={cn(
+            'fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin',
+            isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
+          )}
+        >
+          {isAdmin && location.pathname.startsWith('/admin/assets') ? (
+            <RiceAdminDashboard />
+          ) : (
+            <RiceStudentView
+              onSwitchToAdmin={isAdmin ? () => navigate('/admin/assets') : undefined}
+            />
+          )}
+        </div>
+      )}
+      <GlobalRiceBadgeEnhancer />
     </>
   );
 }

@@ -47,6 +47,7 @@ import {
 import { ResidenceManagerPanel } from '@/pages/public/ResidenceInfoPage';
 import { DutyRosterAdminPanel, DutyScheduleUserView } from '@/components/duty/DutyScheduleSystem';
 import { PaymentAdminDashboard, PaymentStudentView } from '@/components/payment/PaymentManagementSystem';
+import { RiceAdminDashboard, RiceStudentView } from '@/components/rice/RiceContributionSystem';
 
 interface NavItem {
   label: string;
@@ -146,7 +147,7 @@ export function Sidebar() {
         name_en: sysNameEn
       });
       window.dispatchEvent(new Event('system-settings-updated'));
-      alert('បានរក្សាទុកការកំណត់ប្រព័ន្ធដោយជោគជ័យ!');
+      alert('បានរក្សាទុកជោគជ័យ!');
     } catch (error) {
       console.error(error);
     }
@@ -234,7 +235,7 @@ export function Sidebar() {
   };
 
   const handleDeleteNewsItem = async (id: string) => {
-    if (!window.confirm('តើអ្នកពិតជាចង់លុបព័ត៌មាននេះមែនទេ?')) return;
+    if (!window.confirm('តើអ្នកចង់លុបព័ត៌មាននេះមែនទេ?')) return;
     const nextList = newsList.filter((n) => n.id !== id);
     setNewsList(nextList);
     localStorage.setItem(HOME_NEWS_STORAGE_KEY, JSON.stringify(nextList));
@@ -317,7 +318,7 @@ export function Sidebar() {
       }
 
       localStorage.setItem(HOME_BANNERS_STORAGE_KEY, JSON.stringify(banners));
-      alert('បានរក្សាទុករូប Banner ដោយជោគជ័យ!');
+      alert('រក្សាទុករូប Banner ជោគជ័យ!');
       window.dispatchEvent(new Event('home-content-updated'));
     } catch (error) {
       console.error(error);
@@ -374,10 +375,10 @@ export function Sidebar() {
       roles: ['super_admin', 'residence_admin']
     },
     {
-      label: t('feature.facilities') + ' (Assets)',
+      label: isKhmer ? 'របាយការណ៍បង់អង្ករ' : 'Student Rice Report',
       path: '/admin/assets',
       icon: Package,
-      roles: ['super_admin', 'residence_admin']
+      roles: ['super_admin', 'residence_admin', 'finance_admin', 'duty_manager']
     },
     {
       label: t('feature.announcements'),
@@ -633,10 +634,10 @@ export function Sidebar() {
                 <div>
                   <CardTitle className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
                     <TrendingUp className="h-5 w-5 text-cyan-400 shrink-0" />
-                    <span>ក្រាបសន្ទុះអ្នកមើល និងចុចបេះដូង (Market Trend Analytics)</span>
+                    <span>ក្រាបសន្ទុះអ្នកមើល និងបេះដូង (Market Trend Analytics)</span>
                   </CardTitle>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    ទិន្នន័យប្រៀបធៀបសន្ទុះ Views និង Likes តាមកាតព័ត៌មាននីមួយៗ
+                    ទិន្នន័យប្រៀបធៀបសន្ទុះ Views Likes តាមកាតព័ត៌មាននីមួយៗ
                   </p>
                 </div>
                 <div className="flex items-center gap-3 text-xs font-bold bg-[#0f172a] px-3.5 py-2 rounded-xl border border-slate-800 w-fit">
@@ -783,7 +784,7 @@ export function Sidebar() {
                   <span>ក្រាបរង្វង់មូលតាមពណ៌ (Engagement Share)</span>
                 </CardTitle>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  សមាមាត្រភាគរយនៃការចាប់អារម្មណ៍សរុបតាមព័ត៌មាននីមួយៗ
+                  ភាគរយនៃការចាប់អារម្មណ៍សរុបតាមព័ត៌មាននីមួយៗ
                 </p>
               </CardHeader>
               <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-5">
@@ -1089,7 +1090,7 @@ export function Sidebar() {
             <Card className="bg-[#1e293b] border-slate-800 shadow-md animate-in fade-in duration-300">
               <CardHeader className="pb-3 border-b border-slate-800">
                 <CardTitle className="text-white text-sm sm:text-base font-bold">
-                  គ្រប់គ្រង កែប្រែ Link និងប្តូរទីតាំងរូបភាព Banner
+                  គ្រប់គ្រង កែប្រែ Link ប្តូរទីតាំងរូបភាព Banner
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 sm:p-6 space-y-6">
@@ -1272,6 +1273,28 @@ export function Sidebar() {
           />
         </div>
       )}
+
+      {location.pathname.startsWith('/admin/assets') && isAdminRole && !showHomeManager && (
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+        >
+          <RiceAdminDashboard />
+        </div>
+      )}
+
+      {(location.pathname.startsWith('/dashboard/assets') || location.pathname === '/rice') &&
+        !showHomeManager && (
+          <div
+            style={{ height: 'calc(100dvh - 4rem)' }}
+            className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+          >
+            <RiceStudentView
+              onSwitchToAdmin={isAdminRole ? () => navigate('/admin/assets') : undefined}
+            />
+          </div>
+        )}
+        
     </>
   );
 }
