@@ -46,6 +46,7 @@ import {
 } from '@/pages/public/HomePage';
 import { ResidenceManagerPanel } from '@/pages/public/ResidenceInfoPage';
 import { DutyRosterAdminPanel, DutyScheduleUserView } from '@/components/duty/DutyScheduleSystem';
+import { PaymentAdminDashboard, PaymentStudentView } from '@/components/payment/PaymentManagementSystem';
 
 interface NavItem {
   label: string;
@@ -1251,6 +1252,26 @@ export function Sidebar() {
             />
           </div>
         )}
+
+        {location.pathname.startsWith('/admin/payments') && isAdminRole && !showHomeManager && (
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+        >
+          <PaymentAdminDashboard />
+        </div>
+      )}
+
+      {location.pathname.startsWith('/dashboard/payments') && !showHomeManager && (
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+        >
+          <PaymentStudentView
+            onSwitchToAdmin={isAdminRole ? () => navigate('/admin/payments') : undefined}
+          />
+        </div>
+      )}
     </>
   );
 }

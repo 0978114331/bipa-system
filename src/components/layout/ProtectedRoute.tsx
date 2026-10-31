@@ -6,6 +6,7 @@ import { UserRole } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { DutyScheduleUserView } from '@/components/duty/DutyScheduleSystem';
 import { ResidenceInfoPage } from '@/pages/public/ResidenceInfoPage';
+import { PaymentStudentView } from '@/components/payment/PaymentManagementSystem';
 import { AlertCircle } from 'lucide-react';
 
 interface ProtectedRouteProps {
@@ -46,6 +47,22 @@ export function ProtectedRoute({ children, allowedRoles, roles }: ProtectedRoute
         <Header />
         <div className="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 pt-3 pb-24">
           <DutyScheduleUserView />
+        </div>
+      </div>
+    );
+  }
+
+  const isPaymentRoute =
+    location.pathname.startsWith('/admin/payments') ||
+    location.pathname.startsWith('/dashboard/payments') ||
+    location.pathname === '/payments';
+
+  if (isPaymentRoute && !isAdminUser) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#f4f6fb] dark:bg-[#0b1120] font-khmer">
+        <Header />
+        <div className="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 pt-3 pb-24">
+          <PaymentStudentView />
         </div>
       </div>
     );

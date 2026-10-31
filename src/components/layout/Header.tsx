@@ -45,6 +45,7 @@ import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
 import { TranslationKey } from '@/types';
 import { cn } from '@/lib/utils';
 import { DutyScheduleUserView, DutyRosterAdminPanel } from '@/components/duty/DutyScheduleSystem';
+import { GlobalPaymentBadgeEnhancer } from '@/components/payment/PaymentManagementSystem';
 
 const ATT_STORAGE_KEY = 'bipa_attendance_sync_v4';
 
@@ -1176,6 +1177,8 @@ export function Header() {
           )}
         </div>
       )}
+      
+      <GlobalPaymentBadgeEnhancer />
     </>
   );
 }
