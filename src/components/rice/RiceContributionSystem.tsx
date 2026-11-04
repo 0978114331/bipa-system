@@ -37,6 +37,7 @@ import {
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
 import { normalizeStudentCodeInput, resolveStudentByIdOrName } from '@/components/layout/Header';
 import { cn } from '@/lib/utils';
+import { GoToDashboardPromptCard } from '@/components/security/StudentSecuritySystem';
 
 export type MonthRiceStatus = 'paid' | 'owed' | 'unpaid';
 
@@ -2454,13 +2455,6 @@ export function RiceStudentView({
   const [linkedId, setLinkedId] = useState<string>(() =>
     normalizeStudentCodeInput(localStorage.getItem('bipa_linked_student_id') || '')
   );
-  const [inputId, setInputId] = useState<string>(() =>
-    normalizeStudentCodeInput(localStorage.getItem('bipa_linked_student_id') || '')
-  );
-  const [isEditingId, setIsEditingId] = useState<boolean>(
-    () => !localStorage.getItem('bipa_linked_student_id')
-  );
-  const [idError, setIdError] = useState('');
   const [showMyReceipt, setShowMyReceipt] = useState(false);
 
   const loadData = async () => {
@@ -2474,6 +2468,14 @@ export function RiceStudentView({
     window.addEventListener('rice-system-updated', loadData);
     window.addEventListener('storage', loadData);
 
+    const syncGlobalId = () => {
+      const latest = normalizeStudentCodeInput(
+        localStorage.getItem('bipa_linked_student_id') || ''
+      );
+      setLinkedId(latest);
+    };
+    window.addEventListener('student-id-linked', syncGlobalId);
+
     let bc: BroadcastChannel | null = null;
     try {
       if (typeof BroadcastChannel !== 'undefined') {
@@ -2486,6 +2488,7 @@ export function RiceStudentView({
       clearInterval(timer);
       window.removeEventListener('rice-system-updated', loadData);
       window.removeEventListener('storage', loadData);
+      window.removeEventListener('student-id-linked', syncGlobalId);
       if (bc) bc.close();
     };
   }, []);
@@ -2520,75 +2523,6 @@ export function RiceStudentView({
       ) || null
     );
   }, [allStudentsPool, linkedId]);
-
-  useEffect(() => {
-    const syncGlobalId = () => {
-      const latest = normalizeStudentCodeInput(
-        localStorage.getItem('bipa_linked_student_id') || ''
-      );
-      if (latest) {
-        setLinkedId(latest);
-        setInputId(latest);
-        setIsEditingId(false);
-      }
-    };
-    window.addEventListener('student-id-linked', syncGlobalId);
-    return () => window.removeEventListener('student-id-linked', syncGlobalId);
-  }, []);
-
-  const handleSaveStudentId = async () => {
-    const clean = normalizeStudentCodeInput(inputId);
-    if (!clean) {
-      setIdError('សូមបញ្ចូលអត្តលេខសិស្សរបស់អ្នក (ឧ. BIPA-015)');
-      return;
-    }
-    let found = allStudentsPool.find(
-      (s) => normalizeStudentCodeInput(s.student_code).toLowerCase() === clean.toLowerCase()
-    );
-
-    if (!found) {
-      const resolved = await resolveStudentByIdOrName(clean);
-      if (resolved) {
-        found = {
-          id: resolved.code,
-          student_code: resolved.code,
-          full_name_km: resolved.nameKm,
-          full_name_en: resolved.nameKm,
-          gender_km: resolved.genderKm,
-          major_km: 'ព័ត៌មានវិទ្យា',
-          generation_km: 'សិស្សមណ្ឌល'
-        };
-      }
-    }
-
-    if (!found) {
-      setIdError(`រកមិនឃើញអត្តលេខ "${clean}" ក្នុងបញ្ជីមណ្ឌលទេ!`);
-      return;
-    }
-
-    setIdError('');
-    localStorage.setItem('bipa_linked_student_id', found.student_code);
-    setLinkedId(found.student_code);
-    setInputId(found.student_code);
-    setIsEditingId(false);
-
-    if (
-      !(payload.residentStudents || []).some(
-        (s) => normalizeStudentCodeInput(s.student_code) === found!.student_code
-      )
-    ) {
-      const nextPayload = {
-        ...payload,
-        residentStudents: [...(payload.residentStudents || []), found]
-      };
-      setPayload(nextPayload);
-      await saveRicePayloadToDb(nextPayload);
-    }
-
-    window.dispatchEvent(new Event('student-id-linked'));
-    window.dispatchEvent(new Event('rice-system-updated'));
-    window.dispatchEvent(new Event('payment-system-updated'));
-  };
 
   const myYearMonths = useMemo(() => {
     if (!matchedStudent) return [];
@@ -2646,274 +2580,227 @@ export function RiceStudentView({
     await saveRicePayloadToDb(nextPayload);
   };
 
+  if (!matchedStudent) {
+    return (
+      <GoToDashboardPromptCard titleKm="សូមភ្ជាប់កូដសម្ងាត់ ឬស្កេន QR នៅក្នុងផ្ទាំងគ្រប់គ្រង (Dashboard)" />
+    );
+  }
+
   const currentMonthData = myYearMonths[currentMonthNum - 1];
 
   return (
     <div className="max-w-xl mx-auto space-y-4 font-khmer pb-24 pt-2">
-      {(isEditingId || !matchedStudent) && (
-        <div className="bg-[#162033] text-white border border-slate-800 rounded-3xl p-5 shadow-xl space-y-3.5 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base sm:text-lg font-black flex items-center gap-2">
-              <Users className="h-5 w-5 text-orange-400" />
-              <span>ភ្ជាប់អត្តលេខសិស្ស (Student ID)</span>
-            </h2>
-            {matchedStudent && (
-              <button
+      <div className="bg-white dark:bg-[#162033] text-slate-900 dark:text-white rounded-3xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-lg space-y-4">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <Badge className="bg-[#eab308] hover:bg-[#eab308] text-slate-950 font-black text-xs px-3 py-0.5 rounded-lg">
+                {matchedStudent.student_code}
+              </Badge>
+              <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                {matchedStudent.full_name_km}
+              </h2>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              ជំនាញ៖ {matchedStudent.major_km || 'ព័ត៌មានវិទ្យា'} •{' '}
+              {matchedStudent.generation_km || 'សិស្សមណ្ឌល'}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowMyReceipt(true)}
+            className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[11px] font-extrabold flex items-center gap-1"
+          >
+            <Receipt className="h-3.5 w-3.5" />
+            <span>បង្កាន់ដៃអង្ករ</span>
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(e.target.value)}
+            className="h-9 rounded-xl px-3 bg-slate-100 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-xs font-extrabold text-slate-900 dark:text-white"
+          >
+            {['2025', '2026', '2027', '2028'].map((yr) => (
+              <option key={yr} value={yr}>
+                ឆ្នាំ {yr}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={loadData}
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+              title="Refresh"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+            {isAdmin && onSwitchToAdmin && (
+              <Button
                 type="button"
-                onClick={() => setIsEditingId(false)}
-                className="text-xs text-slate-400 hover:text-white"
+                size="sm"
+                onClick={onSwitchToAdmin}
+                className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold h-8 px-3 rounded-xl"
               >
-                បិទ
-              </button>
+                Admin
+              </Button>
             )}
           </div>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            បញ្ចូលអត្តលេខ (ID) របស់អ្នក ហើយចុច Save នោះប្រអប់នេះនឹងបាត់ ហើយបង្ហាញតែរបាយការណ៍បង់អង្កររបស់អ្នកប៉ុណ្ណោះ។
-          </p>
-          <div className="flex gap-2">
-            <Input
-              value={inputId}
-              onChange={(e) => setInputId(e.target.value.toUpperCase())}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSaveStudentId();
-              }}
-              placeholder="ឧ. BIPA-015"
-              className="text-xs font-black h-11 flex-1 bg-[#0f172a] border-slate-700 text-white rounded-xl"
-            />
-            <Button
-              type="button"
-              onClick={handleSaveStudentId}
-              className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-black h-11 px-5 rounded-xl shrink-0"
-            >
-              Save ID
-            </Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-[#0d332a]/85 border border-emerald-200 dark:border-emerald-500/30">
+            <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+              ខែបានបង់អង្ករ ({selectedYear})
+            </p>
+            <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5">
+              {paidMonthsList.length} ខែ
+            </p>
+            <p className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
+              សរុប៖ {formatKg(totalPaidKg)}
+            </p>
           </div>
-          {idError && <p className="text-xs font-bold text-rose-400">{idError}</p>}
+
+          <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-[#381624]/85 border border-rose-200 dark:border-rose-500/30">
+            <p className="text-[11px] font-bold text-rose-700 dark:text-rose-300">
+              ខែមិនទាន់បង់ / ជំពាក់អង្ករ
+            </p>
+            <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5">
+              {owedMonthsList.length} ខែ
+            </p>
+            <p className="text-xs font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">
+              ជំពាក់៖ {formatKg(totalOwedKg)}
+            </p>
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-2xl bg-orange-50 dark:bg-[#332211] border border-orange-200 dark:border-orange-500/35 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-bold text-orange-700 dark:text-orange-300">
+              ខែបច្ចុប្បន្ន (ខែ{KHMER_RICE_MONTHS[currentMonthNum - 1]?.nameKm})
+            </p>
+            <p className="text-sm sm:text-base font-black text-slate-900 dark:text-white mt-0.5">
+              {currentMonthData?.status === 'paid'
+                ? `✓ ខែ${KHMER_RICE_MONTHS[currentMonthNum - 1]?.nameKm} បានបង់អង្ករ (${currentMonthData.kgAmount} គីឡូ) រួចរាល់`
+                : `! ដល់ខែត្រូវបង់អង្ករ ${nextDueMonthObj?.kgAmount || currentMonthData?.kgAmount || 10} គីឡូ (ខែ${nextDueMonthObj?.nameKm || KHMER_RICE_MONTHS[currentMonthNum - 1]?.nameKm})`}
+            </p>
+            <p className="text-[11px] font-bold text-orange-600 dark:text-orange-300 mt-0.5">
+              កំណត់មណ្ឌលខែនេះ៖ {currentMonthData?.kgAmount || 10} គីឡូក្រាម / ខែ
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {myUnreadNotifications.length > 0 && (
+        <div className="bg-orange-50 dark:bg-orange-950/90 border border-orange-300 dark:border-orange-500/50 rounded-3xl p-4 text-slate-900 dark:text-white space-y-2.5 shadow-md">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bell className="h-4 w-4 text-amber-500 animate-bounce" />
+              <span className="text-xs font-black text-orange-800 dark:text-amber-300">
+                សារជូនដំណឹងអំពីអង្ករ ({myUnreadNotifications.length})
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleDismissNotifications}
+              className="px-2.5 py-1 rounded-full bg-orange-500 text-white text-[10px] font-extrabold flex items-center gap-1"
+            >
+              <CheckCheck className="h-3 w-3" />
+              <span>យល់ព្រម</span>
+            </button>
+          </div>
+          {myUnreadNotifications.slice(0, 2).map((n) => (
+            <div
+              key={n.id}
+              className="p-3 rounded-2xl bg-white dark:bg-[#0f172a]/90 border border-slate-200 dark:border-slate-800 text-xs space-y-1"
+            >
+              <p className="font-black text-slate-900 dark:text-white">{n.titleKm}</p>
+              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">{n.messageKm}</p>
+            </div>
+          ))}
         </div>
       )}
 
-      {matchedStudent && (
-        <>
-          <div className="bg-gradient-to-b from-[#162033] to-[#11192a] text-white rounded-3xl p-4 sm:p-5 border border-slate-800/90 shadow-xl space-y-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <Badge className="bg-[#eab308] hover:bg-[#eab308] text-slate-950 font-black text-xs px-3 py-0.5 rounded-lg">
-                    {matchedStudent.student_code}
-                  </Badge>
-                  <h2 className="text-lg sm:text-xl font-black text-white">
-                    {matchedStudent.full_name_km}
-                  </h2>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  ជំនាញ៖ {matchedStudent.major_km || 'ព័ត៌មានវិទ្យា'} •{' '}
-                  {matchedStudent.generation_km || 'សិស្សមណ្ឌល'}
-                </p>
-              </div>
+      <div className="bg-white dark:bg-[#162033] text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-lg space-y-3.5">
+        <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <Calendar className="h-5 w-5 text-orange-500" />
+          <h3 className="text-sm sm:text-base font-black">
+            តារាងតាមដានការបង់អង្ករទាំង ១២ ខែ របស់អ្នក (ឆ្នាំ {selectedYear})
+          </h3>
+        </div>
 
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setShowMyReceipt(true)}
-                  className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 text-[11px] font-extrabold flex items-center gap-1"
-                >
-                  <Receipt className="h-3.5 w-3.5" />
-                  <span>បង្កាន់ដៃអង្ករ</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEditingId(true)}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold"
-                >
-                  ប្តូរ ID
-                </button>
-              </div>
-            </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {myYearMonths.map((m) => {
+            const isPaid = m.status === 'paid';
+            const isOwed = m.status === 'owed';
+            const isCurrentMonth = m.num === currentMonthNum;
 
-            <div className="flex items-center justify-between gap-2 border-b border-slate-800/90 pb-3">
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-                className="h-9 rounded-xl px-3 bg-[#0f172a] border border-slate-700 text-xs font-extrabold text-white"
-              >
-                {['2025', '2026', '2027', '2028'].map((yr) => (
-                  <option key={yr} value={yr}>
-                    ឆ្នាំ {yr}
-                  </option>
-                ))}
-              </select>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={loadData}
-                  className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300"
-                  title="Refresh"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                </button>
-                {isAdmin && onSwitchToAdmin && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={onSwitchToAdmin}
-                    className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold h-8 px-3 rounded-xl"
-                  >
-                    Admin
-                  </Button>
+            return (
+              <div
+                key={m.num}
+                className={cn(
+                  'p-3.5 rounded-2xl border flex flex-col justify-between gap-2 transition-all',
+                  isPaid
+                    ? 'bg-emerald-50 dark:bg-[#0d332a]/90 border-emerald-300 dark:border-emerald-500/45'
+                    : isOwed
+                    ? 'bg-rose-50 dark:bg-[#381624]/90 border-rose-300 dark:border-rose-500/45'
+                    : isCurrentMonth
+                    ? 'bg-amber-50 dark:bg-[#2b2618] border-amber-400 dark:border-amber-500/50'
+                    : 'bg-slate-50 dark:bg-[#0f172a] border-slate-200 dark:border-slate-800'
                 )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3.5 rounded-2xl bg-[#0d332a]/85 border border-emerald-500/30">
-                <p className="text-[11px] font-bold text-emerald-300">
-                  ខែបានបង់អង្ករ ({selectedYear})
-                </p>
-                <p className="text-xl sm:text-2xl font-black text-white mt-0.5">
-                  {paidMonthsList.length} ខែ
-                </p>
-                <p className="text-xs font-extrabold text-emerald-400 mt-0.5">
-                  សរុប៖ {formatKg(totalPaidKg)}
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-[#381624]/85 border border-rose-500/30">
-                <p className="text-[11px] font-bold text-rose-300">ខែមិនទាន់បង់ / ជំពាក់អង្ករ</p>
-                <p className="text-xl sm:text-2xl font-black text-white mt-0.5">
-                  {owedMonthsList.length} ខែ
-                </p>
-                <p className="text-xs font-extrabold text-rose-400 mt-0.5">
-                  ជំពាក់៖ {formatKg(totalOwedKg)}
-                </p>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-[#332211] border border-orange-500/35 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-bold text-orange-300">
-                  ខែបច្ចុប្បន្ន (ខែ{KHMER_RICE_MONTHS[currentMonthNum - 1]?.nameKm})
-                </p>
-                <p className="text-sm sm:text-base font-black text-white mt-0.5">
-                  {currentMonthData?.status === 'paid'
-                    ? `✓ ខែ${KHMER_RICE_MONTHS[currentMonthNum - 1]?.nameKm} បានបង់អង្ករ (${currentMonthData.kgAmount} គីឡូ) រួចរាល់`
-                    : `! ដល់ខែត្រូវបង់អង្ករ ${nextDueMonthObj?.kgAmount || currentMonthData?.kgAmount || 10} គីឡូ (ខែ${nextDueMonthObj?.nameKm || KHMER_RICE_MONTHS[currentMonthNum - 1]?.nameKm})`}
-                </p>
-                <p className="text-[11px] font-bold text-orange-300 mt-0.5">
-                  កំណត់មណ្ឌលខែនេះ៖ {currentMonthData?.kgAmount || 10} គីឡូក្រាម / ខែ
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {myUnreadNotifications.length > 0 && (
-            <div className="bg-orange-950/90 border border-orange-500/50 rounded-3xl p-4 text-white space-y-2.5 shadow-lg animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Bell className="h-4 w-4 text-amber-400 animate-bounce" />
-                  <span className="text-xs font-black text-amber-300">
-                    សារជូនដំណឹងអំពីអង្ករ ({myUnreadNotifications.length})
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                    ខែ{m.nameKm}
                   </span>
+                  {isCurrentMonth && (
+                    <span className="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[9px] font-black">
+                      ខែនេះ
+                    </span>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={handleDismissNotifications}
-                  className="px-2.5 py-1 rounded-full bg-orange-500 text-white text-[10px] font-extrabold flex items-center gap-1"
-                >
-                  <CheckCheck className="h-3 w-3" />
-                  <span>យល់ព្រម</span>
-                </button>
-              </div>
-              {myUnreadNotifications.slice(0, 2).map((n) => (
-                <div
-                  key={n.id}
-                  className="p-3 rounded-2xl bg-[#0f172a]/90 border border-slate-800 text-xs space-y-1"
-                >
-                  <p className="font-black text-white">{n.titleKm}</p>
-                  <p className="text-slate-300 leading-relaxed">{n.messageKm}</p>
+
+                <div className="text-xs font-extrabold text-orange-600 dark:text-orange-300">
+                  {formatKg(m.kgAmount)}
                 </div>
-              ))}
-            </div>
-          )}
 
-          <div className="bg-[#162033] text-white border border-slate-800/90 rounded-3xl p-4 sm:p-5 shadow-xl space-y-3.5">
-            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-              <Calendar className="h-5 w-5 text-orange-400" />
-              <h3 className="text-sm sm:text-base font-black">
-                តារាងតាមដានការបង់អង្ករទាំង ១២ ខែ របស់អ្នក (ឆ្នាំ {selectedYear})
-              </h3>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {myYearMonths.map((m) => {
-                const isPaid = m.status === 'paid';
-                const isOwed = m.status === 'owed';
-                const isCurrentMonth = m.num === currentMonthNum;
-
-                return (
-                  <div
-                    key={m.num}
-                    className={cn(
-                      'p-3.5 rounded-2xl border flex flex-col justify-between gap-2 transition-all',
-                      isPaid
-                        ? 'bg-[#0d332a]/90 border-emerald-500/45'
-                        : isOwed
-                        ? 'bg-[#381624]/90 border-rose-500/45'
-                        : isCurrentMonth
-                        ? 'bg-[#2b2618] border-amber-500/50'
-                        : 'bg-[#0f172a] border-slate-800'
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs sm:text-sm font-black text-white">
-                        ខែ{m.nameKm}
-                      </span>
-                      {isCurrentMonth && (
-                        <span className="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[9px] font-black">
-                          ខែនេះ
-                        </span>
-                      )}
+                {isPaid ? (
+                  <div className="space-y-1">
+                    <div className="w-full py-1.5 rounded-xl bg-emerald-600 text-white text-[11px] font-black text-center">
+                      ✓ បានបង់ ({m.kgAmount}គីឡូ)
                     </div>
-
-                    <div className="text-xs font-extrabold text-orange-300">
-                      {formatKg(m.kgAmount)}
-                    </div>
-
-                    {isPaid ? (
-                      <div className="space-y-1">
-                        <div className="w-full py-1.5 rounded-xl bg-emerald-600 text-white text-[11px] font-black text-center">
-                          ✓ បានបង់ ({m.kgAmount}គីឡូ)
-                        </div>
-                        {m.paidDate && (
-                          <div className="text-[10px] font-bold text-emerald-300 text-center">
-                            {m.paidDate}
-                          </div>
-                        )}
-                      </div>
-                    ) : isOwed ? (
-                      <div className="w-full py-1.5 rounded-xl bg-rose-600 text-white text-[11px] font-black text-center">
-                        ! ជំពាក់ ({m.kgAmount}គីឡូ)
-                      </div>
-                    ) : (
-                      <div className="w-full py-1.5 rounded-xl bg-slate-800 text-slate-400 text-[11px] font-bold text-center">
-                        មិនទាន់បង់
+                    {m.paidDate && (
+                      <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 text-center">
+                        {m.paidDate}
                       </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                ) : isOwed ? (
+                  <div className="w-full py-1.5 rounded-xl bg-rose-600 text-white text-[11px] font-black text-center">
+                    ! ជំពាក់ ({m.kgAmount}គីឡូ)
+                  </div>
+                ) : (
+                  <div className="w-full py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[11px] font-bold text-center">
+                    មិនទាន់បង់
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-          {showMyReceipt && (
-            <RiceReceiptModal
-              student={matchedStudent}
-              year={selectedYear}
-              monthsData={myYearMonths}
-              onClose={() => setShowMyReceipt(false)}
-            />
-          )}
-        </>
+      {showMyReceipt && (
+        <RiceReceiptModal
+          student={matchedStudent}
+          year={selectedYear}
+          monthsData={myYearMonths}
+          onClose={() => setShowMyReceipt(false)}
+        />
       )}
     </div>
   );

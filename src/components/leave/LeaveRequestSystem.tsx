@@ -26,9 +26,9 @@ import {
 import { initialStudents } from '@/pages/admin/StudentListPage';
 import { normalizeStudentCodeInput, resolveStudentByIdOrName } from '@/components/layout/Header';
 import { cn } from '@/lib/utils';
+import { GoToDashboardPromptCard } from '@/components/security/StudentSecuritySystem';
 
 export type LeaveApprovalStatus = 'pending' | 'approved' | 'rejected';
-
 export interface BipaLeaveRequestItem {
   id: string;
   studentCode: string;
@@ -693,15 +693,8 @@ export function LeaveStudentView({
   const [linkedId, setLinkedId] = useState<string>(() =>
     normalizeStudentCodeInput(localStorage.getItem('bipa_linked_student_id') || '')
   );
-  const [inputId, setInputId] = useState<string>(() =>
-    normalizeStudentCodeInput(localStorage.getItem('bipa_linked_student_id') || '')
-  );
   const [studentNameKm, setStudentNameKm] = useState<string>('');
   const [genderKm, setGenderKm] = useState<string>('ប្រុស');
-  const [isEditingId, setIsEditingId] = useState<boolean>(
-    () => !localStorage.getItem('bipa_linked_student_id')
-  );
-  const [idError, setIdError] = useState('');
 
   const [studyYearKm, setStudyYearKm] = useState('២');
   const [academicYearKm, setAcademicYearKm] = useState('២០២៥-២០២៦');
@@ -730,13 +723,13 @@ export function LeaveStudentView({
   const syncLinkedStudentProfile = async (codeToLookup: string) => {
     const clean = normalizeStudentCodeInput(codeToLookup);
     if (!clean) {
+      setLinkedId('');
       setStudentNameKm('');
       return;
     }
     const resolved = await resolveStudentByIdOrName(clean);
     if (resolved) {
       setLinkedId(resolved.code);
-      setInputId(resolved.code);
       setStudentNameKm(resolved.nameKm);
       setGenderKm(resolved.genderKm);
       return;
@@ -746,7 +739,6 @@ export function LeaveStudentView({
     );
     if (fallback) {
       setLinkedId(fallback.student_code);
-      setInputId(fallback.student_code);
       setStudentNameKm(fallback.full_name_km);
       setGenderKm(fallback.gender_km);
     }
@@ -759,7 +751,6 @@ export function LeaveStudentView({
     const handleIdSync = () => {
       const latest = localStorage.getItem('bipa_linked_student_id') || '';
       syncLinkedStudentProfile(latest);
-      setIsEditingId(!latest);
     };
 
     const timer = setInterval(loadLeaveData, 3500);
@@ -836,29 +827,6 @@ export function LeaveStudentView({
     await saveLeavePayloadToDb(nextPayload);
   };
 
-  const handleSaveStudentId = async () => {
-    const clean = normalizeStudentCodeInput(inputId);
-    if (!clean) {
-      setIdError('សូមបញ្ចូលអត្តលេខសិស្សរបស់អ្នកជាមុនសិន');
-      return;
-    }
-    const resolved = await resolveStudentByIdOrName(clean);
-    if (!resolved) {
-      setIdError(`រកមិនឃើញអត្តលេខ "${clean}" ក្នុងបញ្ជីឈ្មោះនិស្សិតទេ!`);
-      return;
-    }
-    setIdError('');
-    localStorage.setItem('bipa_linked_student_id', resolved.code);
-    setLinkedId(resolved.code);
-    setInputId(resolved.code);
-    setStudentNameKm(resolved.nameKm);
-    setGenderKm(resolved.genderKm);
-    setIsEditingId(false);
-    window.dispatchEvent(new Event('student-id-linked'));
-    window.dispatchEvent(new Event('payment-system-updated'));
-    window.dispatchEvent(new Event('rice-system-updated'));
-  };
-
   const handleStartEditRequest = (req: BipaLeaveRequestItem) => {
     setEditingRequestId(req.id);
     setStudyYearKm(req.studyYearKm || '២');
@@ -896,10 +864,7 @@ export function LeaveStudentView({
 
   const handleSubmitLeaveRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!linkedId || !studentNameKm) {
-      setIsEditingId(true);
-      return;
-    }
+    if (!linkedId || !studentNameKm) return;
     if (!reasonKm.trim()) {
       alert('សូមបំពេញមូលហេតុនៃការសុំច្បាប់!');
       return;
@@ -1001,8 +966,29 @@ export function LeaveStudentView({
     await saveLeavePayloadToDb(nextPayload);
   };
 
+  if (!linkedId || !studentNameKm) {
+    return (
+      <div className="space-y-3 pt-2">
+        {isAdmin && (
+          <div className="max-w-md mx-auto flex justify-end px-2">
+            <button
+              type="button"
+              onClick={() =>
+                onSwitchToAdmin ? onSwitchToAdmin() : navigate('/admin/leave-requests')
+              }
+              className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-extrabold shadow-xs font-khmer"
+            >
+              ផ្ទាំង Admin & Print A4 →
+            </button>
+          </div>
+        )}
+        <GoToDashboardPromptCard titleKm="សូមភ្ជាប់កូដសម្ងាត់ ឬស្កេន QR នៅក្នុងផ្ទាំងគ្រប់គ្រង (Dashboard)" />
+      </div>
+    );
+  }
+
   return (
-    <div className="bipa-compact-leave-form w-full max-w-[460px] mx-auto space-y-3 font-khmer pb-24 pt-2 sm:pt-3">
+    <div className="bipa-compact-leave-form w-full max-w-[460px] mx-auto space-y-3 font-khmer pb-24 pt-2">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Moul&display=swap');
         .bipa-khmer-moul-ui {
@@ -1016,17 +1002,8 @@ export function LeaveStudentView({
         }
       `}</style>
 
-      <div className="flex items-center justify-between gap-2 px-0.5">
-        <button
-          type="button"
-          onClick={() => navigate('/')}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#162033] border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white text-[11px] font-extrabold shadow-xs active:scale-95"
-        >
-          <ArrowLeft className="h-3.5 w-3.5 text-purple-500" />
-          <span>ត្រឡប់ទៅវិញ</span>
-        </button>
-
-        {isAdmin && (
+      {isAdmin && (
+        <div className="flex justify-end px-0.5">
           <button
             type="button"
             onClick={() =>
@@ -1036,407 +1013,353 @@ export function LeaveStudentView({
           >
             ផ្ទាំង Admin & Print A4 →
           </button>
-        )}
-      </div>
-
-      {(isEditingId || !linkedId || !studentNameKm) && (
-        <div className="bg-[#162033] text-white border border-slate-800 rounded-2xl p-4 shadow-lg space-y-2.5 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs sm:text-sm font-black flex items-center gap-1.5">
-              <UserCheck className="h-4 w-4 text-purple-400" />
-              <span>ភ្ជាប់អត្តលេខសិស្ស (Student ID)</span>
-            </h2>
-            {linkedId && studentNameKm && (
-              <button
-                type="button"
-                onClick={() => setIsEditingId(false)}
-                className="text-[11px] text-slate-400 hover:text-white"
-              >
-                បិទ
-              </button>
-            )}
-          </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed">
-            បញ្ចូលអត្តលេខរបស់អ្នកតែម្តង ប្រើបានគ្រប់កាតទាំងអស់ក្នុងប្រព័ន្ធ។
-          </p>
-          <div className="flex gap-2">
-            <Input
-              value={inputId}
-              onChange={(e) => setInputId(e.target.value.toUpperCase())}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSaveStudentId();
-              }}
-              placeholder="បញ្ចូលអត្តលេខសិស្សរបស់អ្នក..."
-              className="h-9 flex-1 bg-[#0f172a] border-slate-700 text-white font-black rounded-xl"
-            />
-            <Button
-              type="button"
-              onClick={handleSaveStudentId}
-              className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-black h-9 px-4 rounded-xl shrink-0"
-            >
-              Save ID
-            </Button>
-          </div>
-          {idError && <p className="text-[11px] font-bold text-rose-400">{idError}</p>}
         </div>
       )}
 
-      {linkedId && studentNameKm && (
-        <>
-          <div className="bg-gradient-to-b from-[#162033] to-[#11192a] text-white rounded-2xl p-4 border border-slate-800/90 shadow-lg space-y-3">
-            <div className="flex items-center justify-between gap-2 border-b border-slate-800/90 pb-2.5">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-[#eab308] text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-md">
-                    {linkedId}
-                  </Badge>
-                  <h2 className="bipa-khmer-moul-ui text-xs sm:text-sm text-sky-400 truncate">
-                    {studentNameKm}
-                  </h2>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  ពាក្យស្នើសុំអនុញ្ញាតច្បាប់ស្នាក់នៅក្រៅមណ្ឌល
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsEditingId(true)}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold shrink-0"
-              >
-                ប្តូរ ID
-              </button>
+      <div className="bg-white dark:bg-[#162033] text-slate-900 dark:text-white rounded-2xl p-4 border border-slate-200 dark:border-slate-800/90 shadow-lg space-y-3">
+        <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/90 pb-2.5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Badge className="bg-[#eab308] text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-md">
+                {linkedId}
+              </Badge>
+              <h2 className="bipa-khmer-moul-ui text-xs sm:text-sm text-blue-600 dark:text-sky-400 truncate">
+                {studentNameKm}
+              </h2>
             </div>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+              ពាក្យស្នើសុំអនុញ្ញាតច្បាប់ស្នាក់នៅក្រៅមណ្ឌល
+            </p>
+          </div>
+        </div>
 
-            {editingRequestId && (
-              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[11px] font-bold flex items-center justify-between gap-2">
-                <span>កំពុងកែប្រែទិន្នន័យសំណើច្បាប់របស់អ្នក</span>
+        {editingRequestId && (
+          <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-[11px] font-bold flex items-center justify-between gap-2">
+            <span>កំពុងកែប្រែទិន្នន័យសំណើច្បាប់របស់អ្នក</span>
+            <button
+              type="button"
+              onClick={handleCancelEditMode}
+              className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-[10px]"
+            >
+              បោះបង់ការកែ
+            </button>
+          </div>
+        )}
+
+        {submitSuccess && (
+          <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/90 border border-emerald-500/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold flex items-center gap-2">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            <span>{submitSuccess}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmitLeaveRequest} className="space-y-2.5">
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <div className="flex items-center justify-between mb-0.5">
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                  និស្សិតឆ្នាំទី
+                </label>
                 <button
                   type="button"
-                  onClick={handleCancelEditMode}
-                  className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 text-[10px]"
+                  onClick={() => setShowAddYearBox((prev) => !prev)}
+                  className="text-[10px] font-bold text-blue-600 dark:text-sky-400 hover:underline flex items-center gap-0.5"
                 >
-                  បោះបង់ការកែ
+                  <Plus className="h-2.5 w-2.5" />
+                  បន្ថែមឆ្នាំ
                 </button>
               </div>
-            )}
-
-            {submitSuccess && (
-              <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-[11px] font-bold flex items-center gap-2">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                <span>{submitSuccess}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmitLeaveRequest} className="space-y-2.5">
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <div className="flex items-center justify-between mb-0.5">
-                    <label className="text-[10px] font-bold text-slate-400">
-                      និស្សិតឆ្នាំទី
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddYearBox((prev) => !prev)}
-                      className="text-[10px] font-bold text-sky-400 hover:underline flex items-center gap-0.5"
-                    >
-                      <Plus className="h-2.5 w-2.5" />
-                      បន្ថែមឆ្នាំ
-                    </button>
-                  </div>
-                  <select
-                    value={studyYearKm}
-                    onChange={(e) => setStudyYearKm(e.target.value)}
-                    className="w-full h-9 rounded-xl px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
-                  >
-                    {studyYearOptions.map((yr) => (
-                      <option key={yr} value={yr}>
-                        ឆ្នាំទី {yr}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                    ឆ្នាំសិក្សា
-                  </label>
-                  <input
-                    type="text"
-                    value={academicYearKm}
-                    onChange={(e) => setAcademicYearKm(e.target.value)}
-                    placeholder="បញ្ចូលឆ្នាំសិក្សា..."
-                    className="w-full h-9 rounded-xl px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
-                  />
-                </div>
-              </div>
-
-              {showAddYearBox && (
-                <div className="p-2.5 rounded-xl bg-[#0f172a] border border-slate-700 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newYearInput}
-                    onChange={(e) => setNewYearInput(e.target.value)}
-                    placeholder="បញ្ចូលលេខឆ្នាំថ្មី (ដូចជា ៥ ឬ ៦)..."
-                    className="flex-1 h-8 rounded-lg px-2.5 bg-[#162033] border border-slate-700 text-white"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleAddCustomStudyYear}
-                    className="h-8 px-3 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold"
-                  >
-                    បន្ថែម
-                  </Button>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                    តួនាទីក្នុងក្រុម
-                  </label>
-                  <select
-                    value={roleInGroupKm}
-                    onChange={(e) => setRoleInGroupKm(e.target.value)}
-                    className="w-full h-9 rounded-xl px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
-                  >
-                    <option value="សមាជិក">សមាជិក</option>
-                    <option value="ប្រធានក្រុម">ប្រធានក្រុម</option>
-                    <option value="អនុប្រធានក្រុម">អនុប្រធានក្រុម</option>
-                  </select>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-0.5">
-                    <label className="text-[10px] font-bold text-slate-400">
-                      ក្នុងក្រុមទី
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddGroupBox((prev) => !prev)}
-                      className="text-[10px] font-bold text-sky-400 hover:underline flex items-center gap-0.5"
-                    >
-                      <Plus className="h-2.5 w-2.5" />
-                      បន្ថែមក្រុម
-                    </button>
-                  </div>
-                  <select
-                    value={groupNumberKm}
-                    onChange={(e) => setGroupNumberKm(e.target.value)}
-                    className="w-full h-9 rounded-xl px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
-                  >
-                    {groupNumberOptions.map((grp) => (
-                      <option key={grp} value={grp}>
-                        ក្រុមទី {grp}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {showAddGroupBox && (
-                <div className="p-2.5 rounded-xl bg-[#0f172a] border border-slate-700 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newGroupInput}
-                    onChange={(e) => setNewGroupInput(e.target.value)}
-                    placeholder="បញ្ចូលលេខក្រុមថ្មី (ដូចជា ៦ ឬ ៧)..."
-                    className="flex-1 h-8 rounded-lg px-2.5 bg-[#162033] border border-slate-700 text-white"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleAddCustomGroupNumber}
-                    className="h-8 px-3 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold"
-                  >
-                    បន្ថែម
-                  </Button>
-                </div>
-              )}
-
-              <div className="grid grid-cols-12 gap-2">
-                <div className="col-span-5">
-                  <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                    ចាប់ពីថ្ងៃទី
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full h-9 rounded-xl px-2 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
-                  />
-                </div>
-
-                <div className="col-span-5">
-                  <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                    ដល់ថ្ងៃទី
-                  </label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full h-9 rounded-xl px-2 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
-                  />
-                </div>
-
-                <div className="col-span-2">
-                  <label className="text-[10px] font-bold text-amber-400 block mb-0.5 text-center">
-                    ចំនួនថ្ងៃ
-                  </label>
-                  <input
-                    type="text"
-                    value={durationDays}
-                    onChange={(e) => setDurationDays(e.target.value)}
-                    className="w-full h-9 rounded-xl bg-[#0f172a] border border-slate-700 font-black text-center text-amber-400"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                  មូលហេតុនៃការសុំច្បាប់ *
-                </label>
-                <textarea
-                  value={reasonKm}
-                  onChange={(e) => setReasonKm(e.target.value)}
-                  placeholder="សូមបញ្ជាក់មូលហេតុនៃការសុំច្បាប់ស្នាក់នៅក្រៅមណ្ឌល..."
-                  className="w-full h-16 rounded-xl bg-[#0f172a] border border-slate-700 p-2.5 font-bold text-sky-400 outline-none focus:border-purple-500 resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                    កិច្ចការប្រចាំថ្ងៃផ្ទេរជូន
-                  </label>
-                  <input
-                    type="text"
-                    value={transferredDutyToKm}
-                    onChange={(e) => setTransferredDutyToKm(e.target.value)}
-                    placeholder="បញ្ចូលឈ្មោះអ្នកទទួលជំនួស..."
-                    className="w-full h-9 rounded-xl px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                    ប្រធានក្រុម
-                  </label>
-                  <input
-                    type="text"
-                    value={groupLeaderNameKm}
-                    onChange={(e) => setGroupLeaderNameKm(e.target.value)}
-                    placeholder="បញ្ចូលឈ្មោះប្រធានក្រុម..."
-                    className="w-full h-9 rounded-xl px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
-                  />
-                </div>
-              </div>
-
-              <Button
-                type="submit"
-                disabled={submitting}
-                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-black text-xs h-10 rounded-xl shadow-md mt-1"
+              <select
+                value={studyYearKm}
+                onChange={(e) => setStudyYearKm(e.target.value)}
+                className="w-full h-9 rounded-xl px-2.5 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-bold text-blue-600 dark:text-sky-400"
               >
-                <Send className="h-3.5 w-3.5 mr-1.5" />
-                {submitting
-                  ? 'កំពុងរក្សាទុក...'
-                  : editingRequestId
-                  ? 'រក្សាទុកការកែប្រែសំណើច្បាប់'
-                  : 'ដាក់ពាក្យស្នើសុំច្បាប់'}
-              </Button>
-            </form>
-          </div>
-
-          <div
-            onClick={handleMarkMyUpdatesRead}
-            className="bg-[#162033] text-white border border-slate-800/90 rounded-2xl p-4 shadow-lg space-y-2.5"
-          >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-              <div className="flex items-center gap-1.5">
-                <Calendar className="h-4 w-4 text-purple-400" />
-                <h3 className="text-xs font-black">
-                  ប្រវត្តិសំណើច្បាប់របស់អ្នក ({myRequests.length})
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={loadLeaveData}
-                className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
-              >
-                <RefreshCw className="h-3 w-3" />
-              </button>
+                {studyYearOptions.map((yr) => (
+                  <option key={yr} value={yr}>
+                    ឆ្នាំទី {yr}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {myRequests.length > 0 ? (
-              <div className="space-y-2.5 max-h-60 overflow-y-auto pr-0.5 scrollbar-thin">
-                {myRequests.map((req) => (
-                  <div
-                    key={req.id}
-                    className="p-3 rounded-xl bg-[#0f172a] border border-slate-800 flex flex-col gap-2"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-black text-white">
-                        សុំច្បាប់ {toKhmerNum(req.durationDays)} ថ្ងៃ ({req.startDate} ដល់{' '}
-                        {req.endDate})
-                      </span>
-                      {req.status === 'approved' ? (
-                        <Badge className="bg-emerald-600 text-white text-[9px] font-black px-2 py-0.5">
-                          ✓ បានអនុញ្ញាតច្បាប់
-                        </Badge>
-                      ) : req.status === 'rejected' ? (
-                        <Badge className="bg-rose-600 text-white text-[9px] font-black px-2 py-0.5">
-                          ✕ មិនអនុញ្ញាត
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[9px] font-black px-2 py-0.5">
-                          ⏳ រង់ចាំអនុម័ត
-                        </Badge>
-                      )}
-                    </div>
-
-                    <p className="text-[11px] text-sky-400 font-bold">
-                      មូលហេតុ៖ {req.reasonKm}
-                    </p>
-
-                    <div className="flex items-center justify-between text-[10px] text-slate-400">
-                      <span>ផ្ទេរកិច្ចការជូន៖ {req.transferredDutyToKm}</span>
-                      <span>
-                        ឆ្នាំទី {toKhmerNum(req.studyYearKm)} • ក្រុមទី{' '}
-                        {toKhmerNum(req.groupNumberKm)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2 pt-1.5 border-t border-slate-800/80">
-                      <button
-                        type="button"
-                        onClick={() => handleStartEditRequest(req)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-400 text-[10px] font-extrabold transition-colors"
-                      >
-                        <Edit2 className="h-3 w-3" />
-                        <span>កែប្រែ</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleCancelLeaveRequest(req.id)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 text-[10px] font-extrabold transition-colors"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        <span>បោះបង់សំណើ</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-4 text-[11px] text-slate-400">
-                មិនទាន់មានប្រវត្តិស្នើសុំច្បាប់នៅឡើយទេ
-              </div>
-            )}
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">
+                ឆ្នាំសិក្សា
+              </label>
+              <input
+                type="text"
+                value={academicYearKm}
+                onChange={(e) => setAcademicYearKm(e.target.value)}
+                placeholder="ឧ.បញ្ចូលឆ្នាំសិក្សា..."
+                className="w-full h-9 rounded-xl px-2.5 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-bold text-blue-600 dark:text-sky-400"
+              />
+            </div>
           </div>
-        </>
-      )}
+
+          {showAddYearBox && (
+            <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 flex items-center gap-2">
+              <input
+                type="text"
+                value={newYearInput}
+                onChange={(e) => setNewYearInput(e.target.value)}
+                placeholder="ឧ.បញ្ចូលលេខឆ្នាំថ្មី (៥ ឬ ៦)..."
+                className="flex-1 h-8 rounded-lg px-2.5 bg-white dark:bg-[#162033] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAddCustomStudyYear}
+                className="h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold"
+              >
+                បន្ថែម
+              </Button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">
+                តួនាទីក្នុងក្រុម
+              </label>
+              <select
+                value={roleInGroupKm}
+                onChange={(e) => setRoleInGroupKm(e.target.value)}
+                className="w-full h-9 rounded-xl px-2.5 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-bold text-blue-600 dark:text-sky-400"
+              >
+                <option value="សមាជិក">សមាជិក</option>
+                <option value="ប្រធានក្រុម">ប្រធានក្រុម</option>
+                <option value="អនុប្រធានក្រុម">អនុប្រធានក្រុម</option>
+              </select>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-0.5">
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                  ក្នុងក្រុមទី
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowAddGroupBox((prev) => !prev)}
+                  className="text-[10px] font-bold text-blue-600 dark:text-sky-400 hover:underline flex items-center gap-0.5"
+                >
+                  <Plus className="h-2.5 w-2.5" />
+                  បន្ថែមក្រុម
+                </button>
+              </div>
+              <select
+                value={groupNumberKm}
+                onChange={(e) => setGroupNumberKm(e.target.value)}
+                className="w-full h-9 rounded-xl px-2.5 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-bold text-blue-600 dark:text-sky-400"
+              >
+                {groupNumberOptions.map((grp) => (
+                  <option key={grp} value={grp}>
+                    ក្រុមទី {grp}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {showAddGroupBox && (
+            <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 flex items-center gap-2">
+              <input
+                type="text"
+                value={newGroupInput}
+                onChange={(e) => setNewGroupInput(e.target.value)}
+                placeholder="ឧ.បញ្ចូលលេខក្រុមថ្មី (៦ ឬ ៧)..."
+                className="flex-1 h-8 rounded-lg px-2.5 bg-white dark:bg-[#162033] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAddCustomGroupNumber}
+                className="h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold"
+              >
+                បន្ថែម
+              </Button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-12 gap-2">
+            <div className="col-span-5">
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">
+                ចាប់ពីថ្ងៃទី
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full h-9 rounded-xl px-2 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-bold text-blue-600 dark:text-sky-400"
+              />
+            </div>
+
+            <div className="col-span-5">
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">
+                ដល់ថ្ងៃទី
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full h-9 rounded-xl px-2 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-bold text-blue-600 dark:text-sky-400"
+              />
+            </div>
+
+            <div className="col-span-2">
+              <label className="text-[10px] font-bold text-amber-600 dark:text-amber-400 block mb-0.5 text-center">
+                ចំនួនថ្ងៃ
+              </label>
+              <input
+                type="text"
+                value={durationDays}
+                onChange={(e) => setDurationDays(e.target.value)}
+                className="w-full h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-black text-center text-amber-600 dark:text-amber-400"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">
+              មូលហេតុនៃការសុំច្បាប់ *
+            </label>
+            <textarea
+              value={reasonKm}
+              onChange={(e) => setReasonKm(e.target.value)}
+              placeholder="ឧ.បញ្ជាក់មូលហេតុនៃការសុំច្បាប់ស្នាក់នៅក្រៅមណ្ឌល..."
+              className="w-full h-16 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 p-2.5 font-bold text-blue-600 dark:text-sky-400 outline-none focus:border-purple-500 resize-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">
+                កិច្ចការប្រចាំថ្ងៃផ្ទេរជូន
+              </label>
+              <input
+                type="text"
+                value={transferredDutyToKm}
+                onChange={(e) => setTransferredDutyToKm(e.target.value)}
+                placeholder="ឧ.បញ្ចូលតួនាទី ឬអ្នកទទួលជំនួស..."
+                className="w-full h-9 rounded-xl px-2.5 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-bold text-blue-600 dark:text-sky-400"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">
+                ប្រធានក្រុម
+              </label>
+              <input
+                type="text"
+                value={groupLeaderNameKm}
+                onChange={(e) => setGroupLeaderNameKm(e.target.value)}
+                placeholder="ឧ.បញ្ចូលឈ្មោះប្រធានក្រុម..."
+                className="w-full h-9 rounded-xl px-2.5 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-bold text-blue-600 dark:text-sky-400"
+              />
+            </div>
+          </div>
+
+          <Button
+            type="submit"
+            disabled={submitting}
+            className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-black text-xs h-10 rounded-xl shadow-md mt-1"
+          >
+            <Send className="h-3.5 w-3.5 mr-1.5" />
+            {submitting
+              ? 'កំពុងរក្សាទុក...'
+              : editingRequestId
+              ? 'រក្សាទុកការកែប្រែសំណើច្បាប់'
+              : 'ដាក់ពាក្យស្នើសុំច្បាប់'}
+          </Button>
+        </form>
+      </div>
+
+      <div
+        onClick={handleMarkMyUpdatesRead}
+        className="bg-white dark:bg-[#162033] text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800/90 rounded-2xl p-4 shadow-lg space-y-2.5"
+      >
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+          <div className="flex items-center gap-1.5">
+            <Calendar className="h-4 w-4 text-purple-500" />
+            <h3 className="text-xs font-black">
+              ប្រវត្តិសំណើច្បាប់របស់អ្នក ({myRequests.length})
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={loadLeaveData}
+            className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+          >
+            <RefreshCw className="h-3 w-3" />
+          </button>
+        </div>
+
+        {myRequests.length > 0 ? (
+          <div className="space-y-2.5 max-h-60 overflow-y-auto pr-0.5 scrollbar-thin">
+            {myRequests.map((req) => (
+              <div
+                key={req.id}
+                className="p-3 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 flex flex-col gap-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-black text-slate-900 dark:text-white">
+                    សុំច្បាប់ {toKhmerNum(req.durationDays)} ថ្ងៃ ({req.startDate} ដល់{' '}
+                    {req.endDate})
+                  </span>
+                  {req.status === 'approved' ? (
+                    <Badge className="bg-emerald-600 text-white text-[9px] font-black px-2 py-0.5">
+                      ✓ បានអនុញ្ញាតច្បាប់
+                    </Badge>
+                  ) : req.status === 'rejected' ? (
+                    <Badge className="bg-rose-600 text-white text-[9px] font-black px-2 py-0.5">
+                      ✕ មិនអនុញ្ញាត
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[9px] font-black px-2 py-0.5">
+                      ⏳ រង់ចាំអនុម័ត
+                    </Badge>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-blue-600 dark:text-sky-400 font-bold">
+                  មូលហេតុ៖ {req.reasonKm}
+                </p>
+
+                <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                  <span>ផ្ទេរកិច្ចការជូន៖ {req.transferredDutyToKm}</span>
+                  <span>
+                    ឆ្នាំទី {toKhmerNum(req.studyYearKm)} • ក្រុមទី{' '}
+                    {toKhmerNum(req.groupNumberKm)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1.5 border-t border-slate-200 dark:border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditRequest(req)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-600 dark:text-blue-400 text-[10px] font-extrabold transition-colors"
+                  >
+                    <Edit2 className="h-3 w-3" />
+                    <span>កែប្រែ</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleCancelLeaveRequest(req.id)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[10px] font-extrabold transition-colors"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    <span>បោះបង់សំណើ</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-4 text-[11px] text-slate-400">
+            មិនទាន់មានប្រវត្តិស្នើសុំច្បាប់នៅឡើយទេ
+          </div>
+        )}
+      </div>
     </div>
   );
 }

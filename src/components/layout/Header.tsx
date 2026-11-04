@@ -42,7 +42,8 @@ import {
   Check,
   DollarSign,
   Package,
-  CalendarClock
+  CalendarClock,
+  KeyRound
 } from 'lucide-react';
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
 import { DutyScheduleUserView, DutyRosterAdminPanel } from '@/components/duty/DutyScheduleSystem';
@@ -61,6 +62,13 @@ import {
   LeaveAdminDashboard,
   GlobalLeaveBadgeEnhancer
 } from '@/components/leave/LeaveRequestSystem';
+import {
+  StudentPersonalDashboard,
+  AdminStudentSecurityModal,
+  parseStudentQrToken,
+  fetchSecurityPayloadFromDb,
+  setVerifiedStudentSession
+} from '@/components/security/StudentSecuritySystem';
 import { cn } from '@/lib/utils';
 
 const ATT_STORAGE_KEY = 'bipa_attendance_sync_v4';
@@ -216,6 +224,22 @@ export async function resolveStudentByIdOrName(query: string): Promise<{
 
 export async function processAttendanceScan(scannedCode: string): Promise<ScanProcessResult> {
   const raw = scannedCode.trim();
+
+  const parsedPassQr = parseStudentQrToken(raw);
+  if (parsedPassQr) {
+    const secPayload = await fetchSecurityPayloadFromDb();
+    const prof = secPayload.profiles[parsedPassQr.studentCode];
+    if (prof && prof.secretCode === parsedPassQr.secretCode) {
+      setVerifiedStudentSession(prof);
+      return {
+        ok: true,
+        studentName: prof.fullNameKm,
+        shortTitle: 'ភ្ជាប់គណនីជោគជ័យ',
+        message: `បានបើកទិន្នន័យផ្ទាល់ខ្លួនរបស់ ${prof.fullNameKm} (${prof.studentCode})!`
+      };
+    }
+  }
+
   const linkedId = (localStorage.getItem('bipa_linked_student_id') || '').trim();
   const isStationQr =
     raw.toUpperCase().startsWith('BIPA-STATION') ||
@@ -401,6 +425,7 @@ export function Header() {
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [showAdminSecurityModal, setShowAdminSecurityModal] = useState(false);
   const [scanStage, setScanStage] = useState<'scanning' | 'processing' | 'success' | 'error'>(
     'scanning'
   );
@@ -438,6 +463,25 @@ export function Header() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
+    const hideBackButtons = () => {
+      const buttons = Array.from(document.querySelectorAll('button, a'));
+      buttons.forEach((btn) => {
+        const txt = (btn.textContent || '').trim();
+        if (
+          txt === 'ត្រឡប់ទៅវិញ' ||
+          txt === '← ត្រឡប់ទៅវិញ' ||
+          txt === 'ត្រឡប់ទៅទំព័រដើម'
+        ) {
+          (btn as HTMLElement).style.display = 'none';
+        }
+      });
+    };
+    hideBackButtons();
+    const timer = setInterval(hideBackButtons, 500);
+    return () => clearInterval(timer);
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
     if (mobileOpen || showScanner) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -462,45 +506,44 @@ export function Header() {
     {
       path: isAdminRoute ? '/admin/payments' : '/dashboard/payments',
       icon: DollarSign,
-      color: 'text-emerald-500',
+      color: 'text-emerald-400',
       labelKm: 'បង់ប្រាក់',
-      labelEn: 'Payments'
+      labelEn: 'Pay'
     },
     {
       path: isAdminRoute ? '/admin/assets' : '/?view=rice',
       icon: Package,
-      color: 'text-orange-500',
+      color: 'text-orange-400',
       labelKm: 'បង់អង្ករ',
-      labelEn: 'Rice Quota'
+      labelEn: 'Rice'
     },
     {
       path: isAdminRoute ? '/admin/duties' : '/dashboard/duties',
       icon: CalendarClock,
-      color: 'text-sky-500',
-      labelKm: 'វេន',
-      labelEn: 'Duty Roster'
+      color: 'text-sky-400',
+      labelKm: 'វេនប្រចាំថ្ងៃ',
+      labelEn: 'Duty'
     },
-    
     {
       path: '/residence-info',
       icon: Building2,
-      color: 'text-cyan-500',
-      labelKm: t('nav.residence'),
-      labelEn: t('nav.residence')
+      color: 'text-cyan-400',
+      labelKm: 'មណ្ឌល',
+      labelEn: 'Center'
     },
     {
       path: '/announcements',
       icon: Megaphone,
-      color: 'text-amber-500',
-      labelKm: t('nav.announcements'),
-      labelEn: t('nav.announcements')
+      color: 'text-amber-400',
+      labelKm: 'ប្រកាស',
+      labelEn: 'News'
     },
     {
       path: '/contact',
       icon: Phone,
       color: 'text-indigo-400',
-      labelKm: t('nav.contact'),
-      labelEn: t('nav.contact')
+      labelKm: 'ទំនាក់ទំនង',
+      labelEn: 'Contact'
     }
   ];
 
@@ -549,6 +592,8 @@ export function Header() {
           setScanStage('processing');
           setScanOverlayLabel('កំពុងដំណើរការ...');
 
+          const isPassToken = decodedText.trim().toUpperCase().startsWith('BIPA-PASS:');
+
           const [res] = await Promise.all([
             processAttendanceScan(decodedText),
             new Promise((resolve) => setTimeout(resolve, 420))
@@ -568,7 +613,7 @@ export function Header() {
               }
               if (isMounted) {
                 setShowScanner(false);
-                navigate('/attendance');
+                navigate(isPassToken ? '/dashboard' : '/attendance');
               }
             }, 900);
           } else {
@@ -813,6 +858,13 @@ export function Header() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 bg-[#1e293b] border-slate-700 text-white font-khmer">
+                  <DropdownMenuItem
+                    onClick={() => navigate('/dashboard')}
+                    className="hover:bg-slate-800 cursor-pointer"
+                  >
+                    <LayoutDashboard className="h-4 w-4 mr-3 text-blue-400" />
+                    <span>គ្រប់គ្រង</span>
+                  </DropdownMenuItem>
                   {menuFeatureItems.map((item) => (
                     <DropdownMenuItem
                       key={item.path}
@@ -823,11 +875,31 @@ export function Header() {
                       <span>{lang === 'km' ? item.labelKm : item.labelEn}</span>
                     </DropdownMenuItem>
                   ))}
+                  {isAdmin && (
+                    <DropdownMenuItem
+                      onClick={() => setShowAdminSecurityModal(true)}
+                      className="hover:bg-slate-800 cursor-pointer text-amber-400 font-bold"
+                    >
+                      <KeyRound className="h-4 w-4 mr-3 text-amber-400" />
+                      <span>កូដសម្ងាត់ & QR សិស្ស</span>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              {isAdmin && (
+                <Button
+                  type="button"
+                  onClick={() => setShowAdminSecurityModal(true)}
+                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl h-10 px-3 text-xs font-black font-khmer flex items-center gap-1.5 shadow-sm"
+                >
+                  <KeyRound className="h-4 w-4" />
+                  <span className="hidden sm:inline">កូដ & QR សិស្ស</span>
+                </Button>
+              )}
+
               <div className="flex items-center md:mr-2 md:border-r border-slate-700 md:pr-4">
                 <Button
                   onClick={() => setShowScanner(true)}
@@ -868,7 +940,7 @@ export function Header() {
                     <DropdownMenuSeparator className="bg-slate-700" />
                     <DropdownMenuItem onClick={() => navigate('/dashboard')} className="hover:bg-slate-800 cursor-pointer">
                       <LayoutDashboard className="h-4 w-4 mr-3 text-slate-400" />
-                      {t('nav.dashboard')}
+                      គ្រប់គ្រង
                     </DropdownMenuItem>
 
                     {isAdminRoute ? (
@@ -880,7 +952,7 @@ export function Header() {
                       isAdmin && (
                         <DropdownMenuItem onClick={() => navigate('/admin')} className="hover:bg-slate-800 cursor-pointer">
                           <Shield className="h-4 w-4 mr-3 text-slate-400" />
-                          {t('dashboard.adminDashboard')}
+                          Admin
                         </DropdownMenuItem>
                       )
                     )}
@@ -946,24 +1018,24 @@ export function Header() {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
-            className="fixed left-0 right-0 z-[96] mx-auto w-full max-w-md rounded-t-[28px] bg-white dark:bg-[#151e2e] border-t border-slate-200 dark:border-slate-700/80 shadow-[0_-12px_35px_rgba(0,0,0,0.3)] max-h-[75dvh] overflow-y-auto animate-bipa-sheet-up"
+            className="fixed left-0 right-0 z-[96] mx-auto w-full max-w-md rounded-t-[26px] bg-white dark:bg-[#151e2e] border-t border-slate-200 dark:border-slate-700/80 shadow-[0_-12px_35px_rgba(0,0,0,0.3)] max-h-[75dvh] overflow-y-auto animate-bipa-sheet-up"
           >
-            <div className="p-3.5 sm:p-4 pb-5 flex flex-col gap-3">
+            <div className="p-3.5 pb-4 flex flex-col gap-2.5">
               <div
                 onClick={() => setMobileOpen(false)}
-                className="w-11 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full mx-auto cursor-pointer"
+                className="w-10 h-1 bg-slate-300 dark:bg-slate-600 rounded-full mx-auto cursor-pointer"
               />
 
               {user ? (
-                <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-[#1e2a3f] p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/70">
+                <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-[#1e2a3f] p-2 rounded-2xl border border-slate-200/80 dark:border-slate-700/70">
                   <div
                     onClick={() => {
                       navigate('/profile');
                       setMobileOpen(false);
                     }}
-                    className="flex items-center gap-2.5 min-w-0 cursor-pointer"
+                    className="flex items-center gap-2 min-w-0 cursor-pointer"
                   >
-                    <Avatar className="h-9 w-9 border border-slate-300 dark:border-slate-600 shrink-0">
+                    <Avatar className="h-8 w-8 border border-slate-300 dark:border-slate-600 shrink-0">
                       <AvatarImage src={profile?.avatar_url ? profile.avatar_url : undefined} />
                       <AvatarFallback className="bg-[#3b82f6] text-white font-bold text-xs">
                         {profile?.display_name?.charAt(0).toUpperCase() || 'U'}
@@ -974,11 +1046,11 @@ export function Header() {
                         <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
                           {profile?.display_name || 'User'}
                         </span>
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
+                        <span className="px-1.5 py-0.2 rounded-full text-[8px] font-extrabold uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
                           {renderRole(profile?.role)}
                         </span>
                       </div>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                         {profile?.email || ''}
                       </span>
                     </div>
@@ -990,7 +1062,7 @@ export function Header() {
                       handleSignOut();
                       setMobileOpen(false);
                     }}
-                    className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[10px] font-bold transition-all active:scale-95"
+                    className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[10px] font-bold transition-all active:scale-95"
                   >
                     <LogOut className="h-3 w-3" />
                     <span>{t('nav.signOut')}</span>
@@ -1004,7 +1076,7 @@ export function Header() {
                       navigate('/signin');
                       setMobileOpen(false);
                     }}
-                    className="h-9 rounded-xl border-slate-300 dark:border-slate-700 text-xs font-bold bg-white dark:bg-transparent"
+                    className="h-8 rounded-xl border-slate-300 dark:border-slate-700 text-xs font-bold bg-white dark:bg-transparent"
                   >
                     <LogIn className="h-3.5 w-3.5 mr-1" /> {t('nav.signIn')}
                   </Button>
@@ -1013,7 +1085,7 @@ export function Header() {
                       navigate('/signup');
                       setMobileOpen(false);
                     }}
-                    className="h-9 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-bold"
+                    className="h-8 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-bold"
                   >
                     <UserPlus className="h-3.5 w-3.5 mr-1" /> {t('nav.createAccount')}
                   </Button>
@@ -1025,7 +1097,7 @@ export function Header() {
                   variant="outline"
                   size="sm"
                   onClick={() => setLang(lang === 'en' ? 'km' : 'en')}
-                  className="flex items-center justify-center gap-1.5 h-9 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold"
+                  className="flex items-center justify-center gap-1.5 h-8 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-[11px] font-bold"
                 >
                   <Languages className="h-3.5 w-3.5 text-blue-500" />
                   {lang === 'en' ? 'ខ្មែរ' : 'En'}
@@ -1034,74 +1106,56 @@ export function Header() {
                   variant="outline"
                   size="sm"
                   onClick={toggleTheme}
-                  className="flex items-center justify-center gap-1.5 h-9 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-xs font-bold"
+                  className="flex items-center justify-center gap-1.5 h-8 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-[11px] font-bold"
                 >
                   {theme === 'light' ? (
                     <Moon className="h-3.5 w-3.5 text-amber-500" />
                   ) : (
                     <Sun className="h-3.5 w-3.5 text-amber-400" />
                   )}
-                  {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
+                  {theme === 'light' ? 'Dark' : 'Light'}
                 </Button>
               </div>
 
-              <div>
-                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mb-2 px-1">
-                  Menu
-                </div>
+              <div className="pt-1">
+                <div className="grid grid-cols-4 gap-y-2.5 gap-x-1 py-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate('/dashboard');
+                      setMobileOpen(false);
+                    }}
+                    className={cn(
+                      'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-all active:scale-90',
+                      isActive('/dashboard')
+                        ? 'text-blue-500 font-black'
+                        : 'text-slate-700 dark:text-slate-200 hover:text-blue-400'
+                    )}
+                  >
+                    <LayoutDashboard className="h-5 w-5 text-[#3b82f6]" />
+                    <span className="text-[10px] font-bold leading-none">
+                      {lang === 'km' ? 'គ្រប់គ្រង' : 'Dashboard'}
+                    </span>
+                  </button>
 
-                <div className="grid grid-cols-3 gap-2">
-                  {user && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigate('/dashboard');
-                          setMobileOpen(false);
-                        }}
-                        className={cn(
-                          'flex flex-col items-center justify-center gap-1 py-2 px-1.5 rounded-xl border text-center transition-all active:scale-95',
-                          isActive('/dashboard')
-                            ? 'bg-blue-600/15 border-blue-500/60 text-blue-600 dark:text-white'
-                            : 'bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
-                        )}
-                      >
-                        <LayoutDashboard className="h-4 w-4 text-[#3b82f6]" />
-                        <span className="text-[10px] font-bold line-clamp-1">
-                          {t('nav.dashboard')}
-                        </span>
-                      </button>
-
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigate(isAdminRoute ? '/' : '/admin');
+                        setMobileOpen(false);
+                      }}
+                      className="flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl text-slate-700 dark:text-slate-200 hover:text-amber-400 transition-all active:scale-90"
+                    >
                       {isAdminRoute ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigate('/');
-                            setMobileOpen(false);
-                          }}
-                          className="flex flex-col items-center justify-center gap-1 py-2 px-1.5 rounded-xl border bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95"
-                        >
-                          <Eye className="h-4 w-4 text-emerald-500" />
-                          <span className="text-[10px] font-bold line-clamp-1">View Site</span>
-                        </button>
+                        <Eye className="h-5 w-5 text-emerald-400" />
                       ) : (
-                        isAdmin && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigate('/admin');
-                              setMobileOpen(false);
-                            }}
-                            className="flex flex-col items-center justify-center gap-1 py-2 px-1.5 rounded-xl border bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95"
-                          >
-                            <Shield className="h-4 w-4 text-[#eab308]" />
-                            <span className="text-[10px] font-bold line-clamp-1">
-                              {t('dashboard.adminDashboard')}
-                            </span>
-                          </button>
-                        )
+                        <Shield className="h-5 w-5 text-[#eab308]" />
                       )}
-                    </>
+                      <span className="text-[10px] font-bold leading-none">
+                        {isAdminRoute ? 'ទំព័រដើម' : 'Admin'}
+                      </span>
+                    </button>
                   )}
 
                   {menuFeatureItems.map((item) => (
@@ -1113,18 +1167,32 @@ export function Header() {
                         setMobileOpen(false);
                       }}
                       className={cn(
-                        'flex flex-col items-center justify-center gap-1 py-2 px-1.5 rounded-xl border text-center transition-all active:scale-95',
+                        'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-all active:scale-90',
                         isActive(item.path)
-                          ? 'bg-blue-600/15 border-blue-500/60 text-blue-600 dark:text-white'
-                          : 'bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
+                          ? 'text-blue-500 font-black'
+                          : 'text-slate-700 dark:text-slate-200 hover:text-blue-400'
                       )}
                     >
-                      <item.icon className={cn('h-4 w-4', item.color)} />
-                      <span className="text-[10px] font-bold line-clamp-1">
+                      <item.icon className={cn('h-5 w-5', item.color)} />
+                      <span className="text-[10px] font-bold leading-none">
                         {lang === 'km' ? item.labelKm : item.labelEn}
                       </span>
                     </button>
                   ))}
+
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileOpen(false);
+                        setShowAdminSecurityModal(true);
+                      }}
+                      className="flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl text-amber-500 hover:text-amber-400 transition-all active:scale-90"
+                    >
+                      <KeyRound className="h-5 w-5 text-amber-400" />
+                      <span className="text-[10px] font-bold leading-none">កូដសិស្ស</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1167,7 +1235,7 @@ export function Header() {
           >
             <UserCheck className="h-[20px] w-[20px]" />
           </div>
-          <span className="text-[10px] font-bold">{lang === 'km' ? 'វត្តមាន' : 'A-dance'}</span>
+          <span className="text-[10px] font-bold">{lang === 'km' ? 'វត្តមាន' : 'Attendance'}</span>
         </button>
 
         <button
@@ -1223,6 +1291,15 @@ export function Header() {
           <span className="text-[10px] font-medium">{lang === 'km' ? 'អំពីយើង' : 'About'}</span>
         </button>
       </div>
+
+      {location.pathname === '/dashboard' && (
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className="fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+        >
+          <StudentPersonalDashboard />
+        </div>
+      )}
 
       {(location.pathname.startsWith('/admin/duties') ||
         location.pathname.startsWith('/dashboard/duties') ||
@@ -1305,6 +1382,10 @@ export function Header() {
             />
           )}
         </div>
+      )}
+
+      {showAdminSecurityModal && (
+        <AdminStudentSecurityModal onClose={() => setShowAdminSecurityModal(false)} />
       )}
 
       <GlobalPaymentBadgeEnhancer />

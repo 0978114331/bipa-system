@@ -4,7 +4,22 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useI18n } from '@/contexts/I18nContext';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Users, Building2, QrCode, DollarSign, CalendarClock, FileText, Package, Megaphone, Settings, GraduationCap, ClipboardList, LayoutTemplate, Plus, Edit2,
+import {
+  LayoutDashboard,
+  Users,
+  Building2,
+  QrCode,
+  DollarSign,
+  CalendarClock,
+  FileText,
+  Package,
+  Megaphone,
+  Settings,
+  GraduationCap,
+  ClipboardList,
+  LayoutTemplate,
+  Plus,
+  Edit2,
   Trash2,
   Eye,
   Heart,
@@ -15,19 +30,30 @@ import { LayoutDashboard, Users, Building2, QrCode, DollarSign, CalendarClock, F
   ArrowRight,
   Copy,
   Check,
-  X
+  X,
+  KeyRound
 } from 'lucide-react';
 import { UserRole } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { HomeBannerItem, HomeNewsItem, fetchHomeContentFromDb, HOME_BANNERS_STORAGE_KEY, HOME_NEWS_STORAGE_KEY } from '@/pages/public/HomePage';
+import {
+  HomeBannerItem,
+  HomeNewsItem,
+  fetchHomeContentFromDb,
+  HOME_BANNERS_STORAGE_KEY,
+  HOME_NEWS_STORAGE_KEY
+} from '@/pages/public/HomePage';
 import { ResidenceManagerPanel } from '@/pages/public/ResidenceInfoPage';
 import { DutyRosterAdminPanel, DutyScheduleUserView } from '@/components/duty/DutyScheduleSystem';
-import { PaymentAdminDashboard, PaymentStudentView } from '@/components/payment/PaymentManagementSystem';
+import {
+  PaymentAdminDashboard,
+  PaymentStudentView
+} from '@/components/payment/PaymentManagementSystem';
 import { RiceAdminDashboard, RiceStudentView } from '@/components/rice/RiceContributionSystem';
 import { LeaveAdminDashboard } from '@/components/leave/LeaveRequestSystem';
+import { AdminUserPasswordDashboard } from '@/components/security/StudentSecuritySystem';
 
 interface NavItem {
   label: string;
@@ -58,6 +84,10 @@ export function Sidebar() {
     location.search.includes('page=home-manager') ||
     location.hash === '#home-manager' ||
     location.pathname === '/admin/home-manager';
+
+  const isUserPasswordsRoute =
+    location.search.includes('page=user-passwords') ||
+    location.pathname === '/admin/user-passwords';
 
   const isResidenceManagerRoute = location.pathname.startsWith('/admin/residences');
 
@@ -127,7 +157,7 @@ export function Sidebar() {
         name_en: sysNameEn
       });
       window.dispatchEvent(new Event('system-settings-updated'));
-      alert('បានរក្សាទុកជោគជ័យ!');
+      alert('បានរក្សាទុកការកំណត់ប្រព័ន្ធដោយជោគជ័យ!');
     } catch (error) {
       console.error(error);
     }
@@ -215,7 +245,7 @@ export function Sidebar() {
   };
 
   const handleDeleteNewsItem = async (id: string) => {
-    if (!window.confirm('តើអ្នកចង់លុបព័ត៌មាននេះមែនទេ?')) return;
+    if (!window.confirm('តើអ្នកពិតជាចង់លុបព័ត៌មាននេះមែនទេ?')) return;
     const nextList = newsList.filter((n) => n.id !== id);
     setNewsList(nextList);
     localStorage.setItem(HOME_NEWS_STORAGE_KEY, JSON.stringify(nextList));
@@ -298,7 +328,7 @@ export function Sidebar() {
       }
 
       localStorage.setItem(HOME_BANNERS_STORAGE_KEY, JSON.stringify(banners));
-      alert('រក្សាទុករូប Banner ជោគជ័យ!');
+      alert('បានរក្សាទុករូប Banner ដោយជោគជ័យ!');
       window.dispatchEvent(new Event('home-content-updated'));
     } catch (error) {
       console.error(error);
@@ -323,6 +353,12 @@ export function Sidebar() {
       path: '/admin/students',
       icon: Users,
       roles: ['super_admin', 'residence_admin']
+    },
+    {
+      label: isKhmer ? 'គ្រប់គ្រង User' : 'User Management',
+      path: '/admin?page=user-passwords',
+      icon: KeyRound,
+      roles: ['super_admin', 'residence_admin', 'finance_admin', 'duty_manager']
     },
     {
       label: t('feature.facilities'),
@@ -355,7 +391,7 @@ export function Sidebar() {
       roles: ['super_admin', 'residence_admin']
     },
     {
-      label: isKhmer ? 'របាយការណ៍បង់អង្ករ' : 'Student Rice Report',
+      label: isKhmer ? 'របាយការណ៍បង់អង្ករនិស្សិត' : 'Student Rice Report',
       path: '/admin/assets',
       icon: Package,
       roles: ['super_admin', 'residence_admin', 'finance_admin', 'duty_manager']
@@ -390,9 +426,14 @@ export function Sidebar() {
 
   const isActive = (path: string) => {
     if (path === '/admin?page=home-manager') return showHomeManager;
-    if (showHomeManager) return false;
+    if (path === '/admin?page=user-passwords') return isUserPasswordsRoute;
+    if (showHomeManager || isUserPasswordsRoute) return false;
     if (path === '/admin' || path === '/dashboard') {
-      return location.pathname === path && !location.search.includes('page=home-manager');
+      return (
+        location.pathname === path &&
+        !location.search.includes('page=home-manager') &&
+        !location.search.includes('page=user-passwords')
+      );
     }
     return location.pathname.startsWith(path);
   };
@@ -542,7 +583,16 @@ export function Sidebar() {
         </nav>
       </aside>
 
-      {isResidenceManagerRoute && isAdminRole && !showHomeManager && (
+      {isUserPasswordsRoute && isAdminRole && !showHomeManager && (
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+        >
+          <AdminUserPasswordDashboard />
+        </div>
+      )}
+
+      {isResidenceManagerRoute && isAdminRole && !showHomeManager && !isUserPasswordsRoute && (
         <div
           style={{ height: 'calc(100dvh - 4rem)' }}
           className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
@@ -614,10 +664,10 @@ export function Sidebar() {
                 <div>
                   <CardTitle className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
                     <TrendingUp className="h-5 w-5 text-cyan-400 shrink-0" />
-                    <span>ក្រាបសន្ទុះអ្នកមើល និងបេះដូង (Market Trend Analytics)</span>
+                    <span>ក្រាបសន្ទុះអ្នកមើល និងចុចបេះដូង (Market Trend Analytics)</span>
                   </CardTitle>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    ទិន្នន័យប្រៀបធៀបសន្ទុះ Views Likes តាមកាតព័ត៌មាននីមួយៗ
+                    ទិន្នន័យប្រៀបធៀបសន្ទុះ Views និង Likes តាមកាតព័ត៌មាននីមួយៗ
                   </p>
                 </div>
                 <div className="flex items-center gap-3 text-xs font-bold bg-[#0f172a] px-3.5 py-2 rounded-xl border border-slate-800 w-fit">
@@ -764,7 +814,7 @@ export function Sidebar() {
                   <span>ក្រាបរង្វង់មូលតាមពណ៌ (Engagement Share)</span>
                 </CardTitle>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  ភាគរយនៃការចាប់អារម្មណ៍សរុបតាមព័ត៌មាននីមួយៗ
+                  សមាមាត្រភាគរយនៃការចាប់អារម្មណ៍សរុបតាមព័ត៌មាននីមួយៗ
                 </p>
               </CardHeader>
               <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-5">
@@ -1070,7 +1120,7 @@ export function Sidebar() {
             <Card className="bg-[#1e293b] border-slate-800 shadow-md animate-in fade-in duration-300">
               <CardHeader className="pb-3 border-b border-slate-800">
                 <CardTitle className="text-white text-sm sm:text-base font-bold">
-                  គ្រប់គ្រង កែប្រែ Link ប្តូរទីតាំងរូបភាព Banner
+                  គ្រប់គ្រង កែប្រែ Link និងប្តូរទីតាំងរូបភាព Banner
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 sm:p-6 space-y-6">
@@ -1213,17 +1263,21 @@ export function Sidebar() {
         </div>
       )}
 
-      {location.pathname.startsWith('/admin/duties') && isAdminRole && !showHomeManager && (
-        <div
-          style={{ height: 'calc(100dvh - 4rem)' }}
-          className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
-        >
-          <DutyRosterAdminPanel />
-        </div>
-      )}
+      {location.pathname.startsWith('/admin/duties') &&
+        isAdminRole &&
+        !showHomeManager &&
+        !isUserPasswordsRoute && (
+          <div
+            style={{ height: 'calc(100dvh - 4rem)' }}
+            className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+          >
+            <DutyRosterAdminPanel />
+          </div>
+        )}
 
       {(location.pathname.startsWith('/dashboard/duties') || location.pathname === '/duties') &&
-        !showHomeManager && (
+        !showHomeManager &&
+        !isUserPasswordsRoute && (
           <div
             style={{ height: 'calc(100dvh - 4rem)' }}
             className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
@@ -1234,37 +1288,46 @@ export function Sidebar() {
           </div>
         )}
 
-        {location.pathname.startsWith('/admin/payments') && isAdminRole && !showHomeManager && (
-        <div
-          style={{ height: 'calc(100dvh - 4rem)' }}
-          className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
-        >
-          <PaymentAdminDashboard />
-        </div>
-      )}
+      {location.pathname.startsWith('/admin/payments') &&
+        isAdminRole &&
+        !showHomeManager &&
+        !isUserPasswordsRoute && (
+          <div
+            style={{ height: 'calc(100dvh - 4rem)' }}
+            className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+          >
+            <PaymentAdminDashboard />
+          </div>
+        )}
 
-      {location.pathname.startsWith('/dashboard/payments') && !showHomeManager && (
-        <div
-          style={{ height: 'calc(100dvh - 4rem)' }}
-          className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
-        >
-          <PaymentStudentView
-            onSwitchToAdmin={isAdminRole ? () => navigate('/admin/payments') : undefined}
-          />
-        </div>
-      )}
+      {location.pathname.startsWith('/dashboard/payments') &&
+        !showHomeManager &&
+        !isUserPasswordsRoute && (
+          <div
+            style={{ height: 'calc(100dvh - 4rem)' }}
+            className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+          >
+            <PaymentStudentView
+              onSwitchToAdmin={isAdminRole ? () => navigate('/admin/payments') : undefined}
+            />
+          </div>
+        )}
 
-      {location.pathname.startsWith('/admin/assets') && isAdminRole && !showHomeManager && (
-        <div
-          style={{ height: 'calc(100dvh - 4rem)' }}
-          className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
-        >
-          <RiceAdminDashboard />
-        </div>
-      )}
+      {location.pathname.startsWith('/admin/assets') &&
+        isAdminRole &&
+        !showHomeManager &&
+        !isUserPasswordsRoute && (
+          <div
+            style={{ height: 'calc(100dvh - 4rem)' }}
+            className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+          >
+            <RiceAdminDashboard />
+          </div>
+        )}
 
       {(location.pathname.startsWith('/dashboard/assets') || location.pathname === '/rice') &&
-        !showHomeManager && (
+        !showHomeManager &&
+        !isUserPasswordsRoute && (
           <div
             style={{ height: 'calc(100dvh - 4rem)' }}
             className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
@@ -1275,9 +1338,10 @@ export function Sidebar() {
           </div>
         )}
 
-        {location.pathname.startsWith('/admin/leave-requests') &&
+      {location.pathname.startsWith('/admin/leave-requests') &&
         isAdminRole &&
-        !showHomeManager && (
+        !showHomeManager &&
+        !isUserPasswordsRoute && (
           <div
             style={{ height: 'calc(100dvh - 4rem)' }}
             className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
@@ -1285,7 +1349,6 @@ export function Sidebar() {
             <LeaveAdminDashboard />
           </div>
         )}
-
     </>
   );
 }
