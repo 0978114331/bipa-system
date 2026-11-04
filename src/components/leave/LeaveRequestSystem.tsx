@@ -19,7 +19,9 @@ import {
   Calendar,
   ArrowLeft,
   X,
-  RefreshCw
+  RefreshCw,
+  Edit2,
+  Plus
 } from 'lucide-react';
 import { initialStudents } from '@/pages/admin/StudentListPage';
 import { normalizeStudentCodeInput, resolveStudentByIdOrName } from '@/components/layout/Header';
@@ -52,9 +54,14 @@ export interface BipaLeaveRequestItem {
 
 export interface LeaveSystemPayload {
   requests: BipaLeaveRequestItem[];
+  customStudyYears?: string[];
+  customGroupNumbers?: string[];
 }
 
 export const LEAVE_STORAGE_KEY = 'bipa_leave_requests_system_v1';
+
+const DEFAULT_STUDY_YEARS = ['១', '២', '៣', '៤', '៥'];
+const DEFAULT_GROUP_NUMBERS = ['១', '២', '៣', '៤', '៥'];
 
 const KHMER_DIGITS = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
 
@@ -108,21 +115,60 @@ export function parseIsoDateToKhmerParts(isoDate: string): {
   };
 }
 
+function getDutyRosterGroupNumbers(): string[] {
+  try {
+    const raw = localStorage.getItem('bipa_duty_roster_system_v1');
+    if (!raw) return DEFAULT_GROUP_NUMBERS;
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.groups) && parsed.groups.length > 0) {
+      return parsed.groups.map((g: any, idx: number) =>
+        toKhmerNum(g.groupNumber || idx + 1)
+      );
+    }
+    return DEFAULT_GROUP_NUMBERS;
+  } catch {
+    return DEFAULT_GROUP_NUMBERS;
+  }
+}
+
 export function loadCachedLeavePayload(): LeaveSystemPayload {
   try {
     const raw = localStorage.getItem(LEAVE_STORAGE_KEY);
-    if (!raw) return { requests: [] };
+    const dutyGroups = getDutyRosterGroupNumbers();
+    if (!raw) {
+      return {
+        requests: [],
+        customStudyYears: DEFAULT_STUDY_YEARS,
+        customGroupNumbers: Array.from(new Set([...DEFAULT_GROUP_NUMBERS, ...dutyGroups]))
+      };
+    }
     const parsed = JSON.parse(raw);
+    const savedYears = Array.isArray(parsed.customStudyYears)
+      ? parsed.customStudyYears
+      : DEFAULT_STUDY_YEARS;
+    const savedGroups = Array.isArray(parsed.customGroupNumbers)
+      ? parsed.customGroupNumbers
+      : DEFAULT_GROUP_NUMBERS;
+
     return {
-      requests: Array.isArray(parsed.requests) ? parsed.requests : []
+      requests: Array.isArray(parsed.requests) ? parsed.requests : [],
+      customStudyYears: Array.from(new Set([...DEFAULT_STUDY_YEARS, ...savedYears])),
+      customGroupNumbers: Array.from(
+        new Set([...DEFAULT_GROUP_NUMBERS, ...dutyGroups, ...savedGroups])
+      )
     };
   } catch {
-    return { requests: [] };
+    return {
+      requests: [],
+      customStudyYears: DEFAULT_STUDY_YEARS,
+      customGroupNumbers: DEFAULT_GROUP_NUMBERS
+    };
   }
 }
 
 export async function fetchLeavePayloadFromDb(): Promise<LeaveSystemPayload> {
   let current = loadCachedLeavePayload();
+  const dutyGroups = getDutyRosterGroupNumbers();
   try {
     const { data: setRow } = await supabase
       .from('bipa_settings')
@@ -133,7 +179,20 @@ export async function fetchLeavePayloadFromDb(): Promise<LeaveSystemPayload> {
     if (setRow && setRow.name_en) {
       const parsed = JSON.parse(setRow.name_en);
       if (parsed && Array.isArray(parsed.requests)) {
-        current = { requests: parsed.requests };
+        const savedYears = Array.isArray(parsed.customStudyYears)
+          ? parsed.customStudyYears
+          : current.customStudyYears || DEFAULT_STUDY_YEARS;
+        const savedGroups = Array.isArray(parsed.customGroupNumbers)
+          ? parsed.customGroupNumbers
+          : current.customGroupNumbers || DEFAULT_GROUP_NUMBERS;
+
+        current = {
+          requests: parsed.requests,
+          customStudyYears: Array.from(new Set([...DEFAULT_STUDY_YEARS, ...savedYears])),
+          customGroupNumbers: Array.from(
+            new Set([...DEFAULT_GROUP_NUMBERS, ...dutyGroups, ...savedGroups])
+          )
+        };
         localStorage.setItem(LEAVE_STORAGE_KEY, JSON.stringify(current));
       }
     }
@@ -651,11 +710,17 @@ export function LeaveStudentView({
   const [groupLeaderNameKm, setGroupLeaderNameKm] = useState('');
   const [startDate, setStartDate] = useState(todayIso);
   const [endDate, setEndDate] = useState(todayIso);
-  const [durationDays, setDurationDays] = useState('១');
+  const [durationDays, setDurationDays] = useState('1');
   const [reasonKm, setReasonKm] = useState('');
   const [transferredDutyToKm, setTransferredDutyToKm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState('');
+
+  const [editingRequestId, setEditingRequestId] = useState<string | null>(null);
+  const [showAddYearBox, setShowAddYearBox] = useState(false);
+  const [newYearInput, setNewYearInput] = useState('');
+  const [showAddGroupBox, setShowAddGroupBox] = useState(false);
+  const [newGroupInput, setNewGroupInput] = useState('');
 
   const loadLeaveData = async () => {
     const dbData = await fetchLeavePayloadFromDb();
@@ -730,10 +795,51 @@ export function LeaveStudentView({
     }
   }, [startDate, endDate]);
 
+  const studyYearOptions = useMemo(() => {
+    const list = payload.customStudyYears || DEFAULT_STUDY_YEARS;
+    return Array.from(new Set([...DEFAULT_STUDY_YEARS, ...list]));
+  }, [payload.customStudyYears]);
+
+  const groupNumberOptions = useMemo(() => {
+    const dutyGroups = getDutyRosterGroupNumbers();
+    const list = payload.customGroupNumbers || DEFAULT_GROUP_NUMBERS;
+    return Array.from(new Set([...DEFAULT_GROUP_NUMBERS, ...dutyGroups, ...list]));
+  }, [payload.customGroupNumbers]);
+
+  const handleAddCustomStudyYear = async () => {
+    const val = toKhmerNum(newYearInput.trim().replace(/ឆ្នាំទី/g, '').trim());
+    if (!val) return;
+    const nextYears = Array.from(new Set([...studyYearOptions, val]));
+    const nextPayload: LeaveSystemPayload = {
+      ...payload,
+      customStudyYears: nextYears
+    };
+    setPayload(nextPayload);
+    setStudyYearKm(val);
+    setNewYearInput('');
+    setShowAddYearBox(false);
+    await saveLeavePayloadToDb(nextPayload);
+  };
+
+  const handleAddCustomGroupNumber = async () => {
+    const val = toKhmerNum(newGroupInput.trim().replace(/ក្រុមទី/g, '').trim());
+    if (!val) return;
+    const nextGroups = Array.from(new Set([...groupNumberOptions, val]));
+    const nextPayload: LeaveSystemPayload = {
+      ...payload,
+      customGroupNumbers: nextGroups
+    };
+    setPayload(nextPayload);
+    setGroupNumberKm(val);
+    setNewGroupInput('');
+    setShowAddGroupBox(false);
+    await saveLeavePayloadToDb(nextPayload);
+  };
+
   const handleSaveStudentId = async () => {
     const clean = normalizeStudentCodeInput(inputId);
     if (!clean) {
-      setIdError('សូមបញ្ចូលអត្តលេខសិស្សរបស់អ្នក (ឧ. BIPA-015)');
+      setIdError('សូមបញ្ចូលអត្តលេខសិស្សរបស់អ្នកជាមុនសិន');
       return;
     }
     const resolved = await resolveStudentByIdOrName(clean);
@@ -753,6 +859,41 @@ export function LeaveStudentView({
     window.dispatchEvent(new Event('rice-system-updated'));
   };
 
+  const handleStartEditRequest = (req: BipaLeaveRequestItem) => {
+    setEditingRequestId(req.id);
+    setStudyYearKm(req.studyYearKm || '២');
+    setAcademicYearKm(req.academicYearKm || '២០២៥-២០២៦');
+    setRoleInGroupKm(req.roleInGroupKm || 'សមាជិក');
+    setGroupNumberKm(req.groupNumberKm || '១');
+    setStartDate(req.startDate || todayIso);
+    setEndDate(req.endDate || todayIso);
+    setDurationDays(req.durationDays || '1');
+    setReasonKm(req.reasonKm || '');
+    setTransferredDutyToKm(req.transferredDutyToKm || '');
+    setGroupLeaderNameKm(req.groupLeaderNameKm || '');
+  };
+
+  const handleCancelEditMode = () => {
+    setEditingRequestId(null);
+    setReasonKm('');
+    setTransferredDutyToKm('');
+  };
+
+  const handleCancelLeaveRequest = async (reqId: string) => {
+    if (!window.confirm('តើអ្នកពិតជាចង់បោះបង់សំណើច្បាប់នេះមែនទេ?')) return;
+    const nextPayload: LeaveSystemPayload = {
+      ...payload,
+      requests: payload.requests.filter((r) => r.id !== reqId)
+    };
+    if (editingRequestId === reqId) {
+      handleCancelEditMode();
+    }
+    setPayload(nextPayload);
+    await saveLeavePayloadToDb(nextPayload);
+    setSubmitSuccess('បានបោះបង់សំណើច្បាប់របស់អ្នករួចរាល់។');
+    setTimeout(() => setSubmitSuccess(''), 3000);
+  };
+
   const handleSubmitLeaveRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!linkedId || !studentNameKm) {
@@ -765,6 +906,42 @@ export function LeaveStudentView({
     }
 
     setSubmitting(true);
+
+    if (editingRequestId) {
+      const updatedList = payload.requests.map((r) =>
+        r.id === editingRequestId
+          ? {
+              ...r,
+              studyYearKm: studyYearKm.trim() || '១',
+              academicYearKm: academicYearKm.trim() || '២០២៥-២០២៦',
+              roleInGroupKm: roleInGroupKm.trim() || 'សមាជិក',
+              groupNumberKm: groupNumberKm.trim() || '១',
+              durationDays: durationDays.trim() || '1',
+              startDate,
+              endDate,
+              reasonKm: reasonKm.trim(),
+              transferredDutyToKm: transferredDutyToKm.trim() || 'សមាជិកក្នុងក្រុម',
+              groupLeaderNameKm: groupLeaderNameKm.trim(),
+              updatedAt: new Date().toISOString()
+            }
+          : r
+      );
+
+      const nextPayload: LeaveSystemPayload = {
+        ...payload,
+        requests: updatedList
+      };
+      setPayload(nextPayload);
+      await saveLeavePayloadToDb(nextPayload);
+      setSubmitting(false);
+      setEditingRequestId(null);
+      setReasonKm('');
+      setTransferredDutyToKm('');
+      setSubmitSuccess('បានកែប្រែសំណើច្បាប់របស់អ្នកដោយជោគជ័យ!');
+      setTimeout(() => setSubmitSuccess(''), 3500);
+      return;
+    }
+
     const newReq: BipaLeaveRequestItem = {
       id: `leave-${Date.now()}`,
       studentCode: linkedId,
@@ -774,7 +951,7 @@ export function LeaveStudentView({
       academicYearKm: academicYearKm.trim() || '២០២៥-២០២៦',
       roleInGroupKm: roleInGroupKm.trim() || 'សមាជិក',
       groupNumberKm: groupNumberKm.trim() || '១',
-      durationDays: durationDays.trim() || '១',
+      durationDays: durationDays.trim() || '1',
       startDate,
       endDate,
       reasonKm: reasonKm.trim(),
@@ -789,6 +966,7 @@ export function LeaveStudentView({
     };
 
     const nextPayload: LeaveSystemPayload = {
+      ...payload,
       requests: [newReq, ...payload.requests]
     };
 
@@ -818,13 +996,13 @@ export function LeaveStudentView({
     const nextReqs = payload.requests.map((r) =>
       normalizeStudentCodeInput(r.studentCode) === clean ? { ...r, studentRead: true } : r
     );
-    const nextPayload = { requests: nextReqs };
+    const nextPayload = { ...payload, requests: nextReqs };
     setPayload(nextPayload);
     await saveLeavePayloadToDb(nextPayload);
   };
 
   return (
-    <div className="bipa-compact-leave-form max-w-md mx-auto space-y-3 font-khmer pb-24 pt-1">
+    <div className="bipa-compact-leave-form w-full max-w-[460px] mx-auto space-y-3 font-khmer pb-24 pt-2 sm:pt-3">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Moul&display=swap');
         .bipa-khmer-moul-ui {
@@ -838,11 +1016,11 @@ export function LeaveStudentView({
         }
       `}</style>
 
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 px-0.5">
         <button
           type="button"
           onClick={() => navigate('/')}
-          className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-white dark:bg-[#162033] border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white text-[11px] font-extrabold shadow-xs active:scale-95"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#162033] border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white text-[11px] font-extrabold shadow-xs active:scale-95"
         >
           <ArrowLeft className="h-3.5 w-3.5 text-purple-500" />
           <span>ត្រឡប់ទៅវិញ</span>
@@ -854,7 +1032,7 @@ export function LeaveStudentView({
             onClick={() =>
               onSwitchToAdmin ? onSwitchToAdmin() : navigate('/admin/leave-requests')
             }
-            className="px-3 py-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-extrabold shadow-xs"
+            className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-extrabold shadow-xs"
           >
             ផ្ទាំង Admin & Print A4 →
           </button>
@@ -879,7 +1057,7 @@ export function LeaveStudentView({
             )}
           </div>
           <p className="text-[11px] text-slate-400 leading-relaxed">
-            បញ្ចូលអត្តលេខតែម្តង ប្រើបានគ្រប់កាតទាំងអស់ក្នុងប្រព័ន្ធ។
+            បញ្ចូលអត្តលេខរបស់អ្នកតែម្តង ប្រើបានគ្រប់កាតទាំងអស់ក្នុងប្រព័ន្ធ។
           </p>
           <div className="flex gap-2">
             <Input
@@ -888,7 +1066,7 @@ export function LeaveStudentView({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleSaveStudentId();
               }}
-              placeholder="ឧ. BIPA-015"
+              placeholder="បញ្ចូលអត្តលេខសិស្សរបស់អ្នក..."
               className="h-9 flex-1 bg-[#0f172a] border-slate-700 text-white font-black rounded-xl"
             />
             <Button
@@ -905,7 +1083,7 @@ export function LeaveStudentView({
 
       {linkedId && studentNameKm && (
         <>
-          <div className="bg-gradient-to-b from-[#162033] to-[#11192a] text-white rounded-2xl p-3.5 sm:p-4 border border-slate-800/90 shadow-lg space-y-3">
+          <div className="bg-gradient-to-b from-[#162033] to-[#11192a] text-white rounded-2xl p-4 border border-slate-800/90 shadow-lg space-y-3">
             <div className="flex items-center justify-between gap-2 border-b border-slate-800/90 pb-2.5">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -930,6 +1108,19 @@ export function LeaveStudentView({
               </button>
             </div>
 
+            {editingRequestId && (
+              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[11px] font-bold flex items-center justify-between gap-2">
+                <span>កំពុងកែប្រែទិន្នន័យសំណើច្បាប់របស់អ្នក</span>
+                <button
+                  type="button"
+                  onClick={handleCancelEditMode}
+                  className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 text-[10px]"
+                >
+                  បោះបង់ការកែ
+                </button>
+              </div>
+            )}
+
             {submitSuccess && (
               <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-[11px] font-bold flex items-center gap-2">
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
@@ -938,20 +1129,31 @@ export function LeaveStudentView({
             )}
 
             <form onSubmit={handleSubmitLeaveRequest} className="space-y-2.5">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                    និស្សិតឆ្នាំទី
-                  </label>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="text-[10px] font-bold text-slate-400">
+                      និស្សិតឆ្នាំទី
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddYearBox((prev) => !prev)}
+                      className="text-[10px] font-bold text-sky-400 hover:underline flex items-center gap-0.5"
+                    >
+                      <Plus className="h-2.5 w-2.5" />
+                      បន្ថែមឆ្នាំ
+                    </button>
+                  </div>
                   <select
                     value={studyYearKm}
                     onChange={(e) => setStudyYearKm(e.target.value)}
-                    className="w-full h-8 rounded-lg px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
+                    className="w-full h-9 rounded-xl px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
                   >
-                    <option value="១">ឆ្នាំទី ១</option>
-                    <option value="២">ឆ្នាំទី ២</option>
-                    <option value="៣">ឆ្នាំទី ៣</option>
-                    <option value="៤">ឆ្នាំទី ៤</option>
+                    {studyYearOptions.map((yr) => (
+                      <option key={yr} value={yr}>
+                        ឆ្នាំទី {yr}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -963,13 +1165,33 @@ export function LeaveStudentView({
                     type="text"
                     value={academicYearKm}
                     onChange={(e) => setAcademicYearKm(e.target.value)}
-                    placeholder="២០២៥-២០២៦"
-                    className="w-full h-8 rounded-lg px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
+                    placeholder="បញ្ចូលឆ្នាំសិក្សា..."
+                    className="w-full h-9 rounded-xl px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              {showAddYearBox && (
+                <div className="p-2.5 rounded-xl bg-[#0f172a] border border-slate-700 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newYearInput}
+                    onChange={(e) => setNewYearInput(e.target.value)}
+                    placeholder="បញ្ចូលលេខឆ្នាំថ្មី (ដូចជា ៥ ឬ ៦)..."
+                    className="flex-1 h-8 rounded-lg px-2.5 bg-[#162033] border border-slate-700 text-white"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleAddCustomStudyYear}
+                    className="h-8 px-3 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold"
+                  >
+                    បន្ថែម
+                  </Button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
                     តួនាទីក្នុងក្រុម
@@ -977,7 +1199,7 @@ export function LeaveStudentView({
                   <select
                     value={roleInGroupKm}
                     onChange={(e) => setRoleInGroupKm(e.target.value)}
-                    className="w-full h-8 rounded-lg px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
+                    className="w-full h-9 rounded-xl px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
                   >
                     <option value="សមាជិក">សមាជិក</option>
                     <option value="ប្រធានក្រុម">ប្រធានក្រុម</option>
@@ -986,22 +1208,52 @@ export function LeaveStudentView({
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                    ក្នុងក្រុមទី
-                  </label>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="text-[10px] font-bold text-slate-400">
+                      ក្នុងក្រុមទី
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddGroupBox((prev) => !prev)}
+                      className="text-[10px] font-bold text-sky-400 hover:underline flex items-center gap-0.5"
+                    >
+                      <Plus className="h-2.5 w-2.5" />
+                      បន្ថែមក្រុម
+                    </button>
+                  </div>
                   <select
                     value={groupNumberKm}
                     onChange={(e) => setGroupNumberKm(e.target.value)}
-                    className="w-full h-8 rounded-lg px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
+                    className="w-full h-9 rounded-xl px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
                   >
-                    <option value="១">ក្រុមទី ១</option>
-                    <option value="២">ក្រុមទី ២</option>
-                    <option value="៣">ក្រុមទី ៣</option>
-                    <option value="៤">ក្រុមទី ៤</option>
-                    <option value="៥">ក្រុមទី ៥</option>
+                    {groupNumberOptions.map((grp) => (
+                      <option key={grp} value={grp}>
+                        ក្រុមទី {grp}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
+
+              {showAddGroupBox && (
+                <div className="p-2.5 rounded-xl bg-[#0f172a] border border-slate-700 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newGroupInput}
+                    onChange={(e) => setNewGroupInput(e.target.value)}
+                    placeholder="បញ្ចូលលេខក្រុមថ្មី (ដូចជា ៦ ឬ ៧)..."
+                    className="flex-1 h-8 rounded-lg px-2.5 bg-[#162033] border border-slate-700 text-white"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleAddCustomGroupNumber}
+                    className="h-8 px-3 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold"
+                  >
+                    បន្ថែម
+                  </Button>
+                </div>
+              )}
 
               <div className="grid grid-cols-12 gap-2">
                 <div className="col-span-5">
@@ -1012,7 +1264,7 @@ export function LeaveStudentView({
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full h-8 rounded-lg px-2 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
+                    className="w-full h-9 rounded-xl px-2 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
                   />
                 </div>
 
@@ -1024,19 +1276,19 @@ export function LeaveStudentView({
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full h-8 rounded-lg px-2 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
+                    className="w-full h-9 rounded-xl px-2 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
                   />
                 </div>
 
                 <div className="col-span-2">
                   <label className="text-[10px] font-bold text-amber-400 block mb-0.5 text-center">
-                    ថ្ងៃ
+                    ចំនួនថ្ងៃ
                   </label>
                   <input
                     type="text"
                     value={durationDays}
                     onChange={(e) => setDurationDays(e.target.value)}
-                    className="w-full h-8 rounded-lg bg-[#0f172a] border border-slate-700 font-black text-center text-amber-400"
+                    className="w-full h-9 rounded-xl bg-[#0f172a] border border-slate-700 font-black text-center text-amber-400"
                   />
                 </div>
               </div>
@@ -1048,12 +1300,12 @@ export function LeaveStudentView({
                 <textarea
                   value={reasonKm}
                   onChange={(e) => setReasonKm(e.target.value)}
-                  placeholder="បញ្ជាក់មូលហេតុសង្ខេប..."
-                  className="w-full h-14 rounded-xl bg-[#0f172a] border border-slate-700 p-2 font-bold text-sky-400 outline-none focus:border-purple-500 resize-none"
+                  placeholder="សូមបញ្ជាក់មូលហេតុនៃការសុំច្បាប់ស្នាក់នៅក្រៅមណ្ឌល..."
+                  className="w-full h-16 rounded-xl bg-[#0f172a] border border-slate-700 p-2.5 font-bold text-sky-400 outline-none focus:border-purple-500 resize-none"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
                     កិច្ចការប្រចាំថ្ងៃផ្ទេរជូន
@@ -1062,21 +1314,21 @@ export function LeaveStudentView({
                     type="text"
                     value={transferredDutyToKm}
                     onChange={(e) => setTransferredDutyToKm(e.target.value)}
-                    placeholder="ឈ្មោះអ្នកទទួលជំនួស..."
-                    className="w-full h-8 rounded-lg px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
+                    placeholder="បញ្ចូលឈ្មោះអ្នកទទួលជំនួស..."
+                    className="w-full h-9 rounded-xl px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
                   />
                 </div>
 
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                    ឈ្មោះប្រធានក្រុម
+                    ប្រធានក្រុម
                   </label>
                   <input
                     type="text"
                     value={groupLeaderNameKm}
                     onChange={(e) => setGroupLeaderNameKm(e.target.value)}
-                    placeholder="ឧ. ផន ចាន់តារា..."
-                    className="w-full h-8 rounded-lg px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
+                    placeholder="បញ្ចូលឈ្មោះប្រធានក្រុម..."
+                    className="w-full h-9 rounded-xl px-2.5 bg-[#0f172a] border border-slate-700 font-bold text-sky-400"
                   />
                 </div>
               </div>
@@ -1084,19 +1336,23 @@ export function LeaveStudentView({
               <Button
                 type="submit"
                 disabled={submitting}
-                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-black text-xs h-9 rounded-xl shadow-md mt-1"
+                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-black text-xs h-10 rounded-xl shadow-md mt-1"
               >
                 <Send className="h-3.5 w-3.5 mr-1.5" />
-                {submitting ? 'កំពុងបញ្ជូន...' : 'ដាក់ពាក្យស្នើសុំច្បាប់'}
+                {submitting
+                  ? 'កំពុងរក្សាទុក...'
+                  : editingRequestId
+                  ? 'រក្សាទុកការកែប្រែសំណើច្បាប់'
+                  : 'ដាក់ពាក្យស្នើសុំច្បាប់'}
               </Button>
             </form>
           </div>
 
           <div
             onClick={handleMarkMyUpdatesRead}
-            className="bg-[#162033] text-white border border-slate-800/90 rounded-2xl p-3.5 shadow-lg space-y-2.5"
+            className="bg-[#162033] text-white border border-slate-800/90 rounded-2xl p-4 shadow-lg space-y-2.5"
           >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <div className="flex items-center gap-1.5">
                 <Calendar className="h-4 w-4 text-purple-400" />
                 <h3 className="text-xs font-black">
@@ -1106,18 +1362,18 @@ export function LeaveStudentView({
               <button
                 type="button"
                 onClick={loadLeaveData}
-                className="p-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
               >
                 <RefreshCw className="h-3 w-3" />
               </button>
             </div>
 
             {myRequests.length > 0 ? (
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-0.5 scrollbar-thin">
+              <div className="space-y-2.5 max-h-60 overflow-y-auto pr-0.5 scrollbar-thin">
                 {myRequests.map((req) => (
                   <div
                     key={req.id}
-                    className="p-2.5 rounded-xl bg-[#0f172a] border border-slate-800 flex flex-col gap-1"
+                    className="p-3 rounded-xl bg-[#0f172a] border border-slate-800 flex flex-col gap-2"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-black text-white">
@@ -1125,25 +1381,50 @@ export function LeaveStudentView({
                         {req.endDate})
                       </span>
                       {req.status === 'approved' ? (
-                        <Badge className="bg-emerald-600 text-white text-[9px] font-black px-2 py-0">
+                        <Badge className="bg-emerald-600 text-white text-[9px] font-black px-2 py-0.5">
                           ✓ បានអនុញ្ញាតច្បាប់
                         </Badge>
                       ) : req.status === 'rejected' ? (
-                        <Badge className="bg-rose-600 text-white text-[9px] font-black px-2 py-0">
+                        <Badge className="bg-rose-600 text-white text-[9px] font-black px-2 py-0.5">
                           ✕ មិនអនុញ្ញាត
                         </Badge>
                       ) : (
-                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[9px] font-black px-2 py-0">
+                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[9px] font-black px-2 py-0.5">
                           ⏳ រង់ចាំអនុម័ត
                         </Badge>
                       )}
                     </div>
+
                     <p className="text-[11px] text-sky-400 font-bold">
                       មូលហេតុ៖ {req.reasonKm}
                     </p>
+
                     <div className="flex items-center justify-between text-[10px] text-slate-400">
                       <span>ផ្ទេរកិច្ចការជូន៖ {req.transferredDutyToKm}</span>
-                      <span>ក្រុមទី {toKhmerNum(req.groupNumberKm)}</span>
+                      <span>
+                        ឆ្នាំទី {toKhmerNum(req.studyYearKm)} • ក្រុមទី{' '}
+                        {toKhmerNum(req.groupNumberKm)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-1.5 border-t border-slate-800/80">
+                      <button
+                        type="button"
+                        onClick={() => handleStartEditRequest(req)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-400 text-[10px] font-extrabold transition-colors"
+                      >
+                        <Edit2 className="h-3 w-3" />
+                        <span>កែប្រែ</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCancelLeaveRequest(req.id)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 text-[10px] font-extrabold transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        <span>បោះបង់សំណើ</span>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1220,7 +1501,7 @@ export function LeaveAdminDashboard() {
         : r
     );
 
-    const nextPayload = { requests: updatedList };
+    const nextPayload = { ...payload, requests: updatedList };
     setPayload(nextPayload);
     await saveLeavePayloadToDb(nextPayload);
     showNotice(
@@ -1233,6 +1514,7 @@ export function LeaveAdminDashboard() {
   const handleDeleteRequest = async (reqId: string) => {
     if (!window.confirm('តើអ្នកពិតជាចង់លុបសំណើច្បាប់នេះមែនទេ?')) return;
     const nextPayload = {
+      ...payload,
       requests: payload.requests.filter((r) => r.id !== reqId)
     };
     setPayload(nextPayload);
@@ -1289,6 +1571,7 @@ export function LeaveAdminDashboard() {
             <Input
               value={directorNameKm}
               onChange={(e) => setDirectorNameKm(e.target.value)}
+              placeholder="បញ្ចូលឈ្មោះអ្នកអនុញ្ញាត..."
               className="h-8 w-36 text-xs font-black bg-white dark:bg-[#162033]"
             />
           </div>
@@ -1405,7 +1688,7 @@ export function LeaveAdminDashboard() {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ស្វែងរកអត្តលេខ (BIPA-015) ឬឈ្មោះ..."
+              placeholder="ស្វែងរកតាមអត្តលេខ ឬឈ្មោះនិស្សិត..."
               className="pl-9 text-xs h-10 rounded-xl bg-slate-50 dark:bg-[#0f172a]"
             />
           </div>

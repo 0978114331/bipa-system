@@ -39,15 +39,29 @@ import {
   FileText,
   LayoutGrid,
   X,
-  Check
+  Check,
+  DollarSign,
+  Package,
+  CalendarClock
 } from 'lucide-react';
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
-import { TranslationKey } from '@/types';
-import { cn } from '@/lib/utils';
 import { DutyScheduleUserView, DutyRosterAdminPanel } from '@/components/duty/DutyScheduleSystem';
-import { GlobalPaymentBadgeEnhancer } from '@/components/payment/PaymentManagementSystem';
-import { GlobalRiceBadgeEnhancer, RiceAdminDashboard, RiceStudentView } from '@/components/rice/RiceContributionSystem';
-import { LeaveStudentView, LeaveAdminDashboard, GlobalLeaveBadgeEnhancer } from '@/components/leave/LeaveRequestSystem';
+import {
+  GlobalPaymentBadgeEnhancer,
+  PaymentAdminDashboard,
+  PaymentStudentView
+} from '@/components/payment/PaymentManagementSystem';
+import {
+  GlobalRiceBadgeEnhancer,
+  RiceAdminDashboard,
+  RiceStudentView
+} from '@/components/rice/RiceContributionSystem';
+import {
+  LeaveStudentView,
+  LeaveAdminDashboard,
+  GlobalLeaveBadgeEnhancer
+} from '@/components/leave/LeaveRequestSystem';
+import { cn } from '@/lib/utils';
 
 const ATT_STORAGE_KEY = 'bipa_attendance_sync_v4';
 
@@ -434,6 +448,9 @@ export function Header() {
     };
   }, [mobileOpen, showScanner]);
 
+  const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
+  const isAdminRoute = location.pathname.startsWith('/admin');
+
   const mainNavItems = [
     { key: 'nav.home', path: '/', icon: Home, labelKm: 'ផ្ទះ', labelEn: 'Home' },
     { key: 'nav.attendance', path: '/attendance', icon: UserCheck, labelKm: 'វត្តមាន', labelEn: 'Attendance' },
@@ -441,15 +458,58 @@ export function Header() {
     { key: 'nav.about', path: '/about', icon: Info, labelKm: 'អំពីយើង', labelEn: 'About' }
   ];
 
-  const extraNavItems: { key: TranslationKey; path: string; icon: typeof Home; color: string }[] = [
-    { key: 'nav.residence', path: '/residence-info', icon: Building2, color: 'text-cyan-500' },
-    { key: 'nav.announcements', path: '/announcements', icon: Megaphone, color: 'text-amber-500' },
-    { key: 'nav.contact', path: '/contact', icon: Phone, color: 'text-indigo-400' }
+  const menuFeatureItems = [
+    {
+      path: isAdminRoute ? '/admin/payments' : '/dashboard/payments',
+      icon: DollarSign,
+      color: 'text-emerald-500',
+      labelKm: 'បង់ប្រាក់',
+      labelEn: 'Payments'
+    },
+    {
+      path: isAdminRoute ? '/admin/assets' : '/?view=rice',
+      icon: Package,
+      color: 'text-orange-500',
+      labelKm: 'បង់អង្ករ',
+      labelEn: 'Rice Quota'
+    },
+    {
+      path: isAdminRoute ? '/admin/duties' : '/dashboard/duties',
+      icon: CalendarClock,
+      color: 'text-sky-500',
+      labelKm: 'វេន',
+      labelEn: 'Duty Roster'
+    },
+    
+    {
+      path: '/residence-info',
+      icon: Building2,
+      color: 'text-cyan-500',
+      labelKm: t('nav.residence'),
+      labelEn: t('nav.residence')
+    },
+    {
+      path: '/announcements',
+      icon: Megaphone,
+      color: 'text-amber-500',
+      labelKm: t('nav.announcements'),
+      labelEn: t('nav.announcements')
+    },
+    {
+      path: '/contact',
+      icon: Phone,
+      color: 'text-indigo-400',
+      labelKm: t('nav.contact'),
+      labelEn: t('nav.contact')
+    }
   ];
 
-  const isActive = (path: string) => location.pathname === path;
-  const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
-  const isAdminRoute = location.pathname.startsWith('/admin');
+  const isActive = (path: string) => {
+    if (path === '/?view=rice') {
+      return location.search.includes('view=rice') || location.pathname === '/rice';
+    }
+    return location.pathname === path && !location.search.includes('view=rice');
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -753,14 +813,14 @@ export function Header() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 bg-[#1e293b] border-slate-700 text-white font-khmer">
-                  {extraNavItems.map((item) => (
+                  {menuFeatureItems.map((item) => (
                     <DropdownMenuItem
                       key={item.path}
                       onClick={() => navigate(item.path)}
                       className="hover:bg-slate-800 cursor-pointer"
                     >
-                      <item.icon className="h-4 w-4 mr-3 text-slate-400" />
-                      {t(item.key)}
+                      <item.icon className={cn('h-4 w-4 mr-3', item.color)} />
+                      <span>{lang === 'km' ? item.labelKm : item.labelEn}</span>
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
@@ -1000,14 +1060,16 @@ export function Header() {
                           setMobileOpen(false);
                         }}
                         className={cn(
-                          'flex flex-col items-center justify-center gap-1.5 py-2.5 px-1.5 rounded-xl border text-center transition-all active:scale-95',
+                          'flex flex-col items-center justify-center gap-1 py-2 px-1.5 rounded-xl border text-center transition-all active:scale-95',
                           isActive('/dashboard')
                             ? 'bg-blue-600/15 border-blue-500/60 text-blue-600 dark:text-white'
                             : 'bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
                         )}
                       >
                         <LayoutDashboard className="h-4 w-4 text-[#3b82f6]" />
-                        <span className="text-[11px] font-bold line-clamp-1">{t('nav.dashboard')}</span>
+                        <span className="text-[10px] font-bold line-clamp-1">
+                          {t('nav.dashboard')}
+                        </span>
                       </button>
 
                       {isAdminRoute ? (
@@ -1017,10 +1079,10 @@ export function Header() {
                             navigate('/');
                             setMobileOpen(false);
                           }}
-                          className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-1.5 rounded-xl border bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95"
+                          className="flex flex-col items-center justify-center gap-1 py-2 px-1.5 rounded-xl border bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95"
                         >
                           <Eye className="h-4 w-4 text-emerald-500" />
-                          <span className="text-[11px] font-bold line-clamp-1">View Site</span>
+                          <span className="text-[10px] font-bold line-clamp-1">View Site</span>
                         </button>
                       ) : (
                         isAdmin && (
@@ -1030,10 +1092,10 @@ export function Header() {
                               navigate('/admin');
                               setMobileOpen(false);
                             }}
-                            className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-1.5 rounded-xl border bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95"
+                            className="flex flex-col items-center justify-center gap-1 py-2 px-1.5 rounded-xl border bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 text-center transition-all active:scale-95"
                           >
                             <Shield className="h-4 w-4 text-[#eab308]" />
-                            <span className="text-[11px] font-bold line-clamp-1">
+                            <span className="text-[10px] font-bold line-clamp-1">
                               {t('dashboard.adminDashboard')}
                             </span>
                           </button>
@@ -1042,7 +1104,7 @@ export function Header() {
                     </>
                   )}
 
-                  {extraNavItems.map((item) => (
+                  {menuFeatureItems.map((item) => (
                     <button
                       key={item.path}
                       type="button"
@@ -1051,14 +1113,16 @@ export function Header() {
                         setMobileOpen(false);
                       }}
                       className={cn(
-                        'flex flex-col items-center justify-center gap-1.5 py-2.5 px-1.5 rounded-xl border text-center transition-all active:scale-95',
+                        'flex flex-col items-center justify-center gap-1 py-2 px-1.5 rounded-xl border text-center transition-all active:scale-95',
                         isActive(item.path)
                           ? 'bg-blue-600/15 border-blue-500/60 text-blue-600 dark:text-white'
                           : 'bg-slate-50 dark:bg-[#1e2a3f]/90 hover:bg-slate-100 dark:hover:bg-[#25344d] border-slate-200/80 dark:border-slate-700/70 text-slate-700 dark:text-slate-200'
                       )}
                     >
                       <item.icon className={cn('h-4 w-4', item.color)} />
-                      <span className="text-[11px] font-bold line-clamp-1">{t(item.key)}</span>
+                      <span className="text-[10px] font-bold line-clamp-1">
+                        {lang === 'km' ? item.labelKm : item.labelEn}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -1103,7 +1167,7 @@ export function Header() {
           >
             <UserCheck className="h-[20px] w-[20px]" />
           </div>
-          <span className="text-[10px] font-bold">{lang === 'km' ? 'វត្តមាន' : 'Attendance'}</span>
+          <span className="text-[10px] font-bold">{lang === 'km' ? 'វត្តមាន' : 'A-dance'}</span>
         </button>
 
         <button
@@ -1179,7 +1243,26 @@ export function Header() {
           )}
         </div>
       )}
-      <GlobalPaymentBadgeEnhancer />
+
+      {(location.pathname.startsWith('/admin/payments') ||
+        location.pathname.startsWith('/dashboard/payments') ||
+        location.pathname === '/payments') && (
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className={cn(
+            'fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin',
+            isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
+          )}
+        >
+          {isAdmin && location.pathname.startsWith('/admin/payments') ? (
+            <PaymentAdminDashboard />
+          ) : (
+            <PaymentStudentView
+              onSwitchToAdmin={isAdmin ? () => navigate('/admin/payments') : undefined}
+            />
+          )}
+        </div>
+      )}
 
       {(location.pathname.startsWith('/admin/assets') ||
         location.pathname.startsWith('/dashboard/assets') ||
@@ -1201,7 +1284,6 @@ export function Header() {
           )}
         </div>
       )}
-      <GlobalRiceBadgeEnhancer />
 
       {(location.pathname === '/leave' ||
         location.pathname.startsWith('/dashboard/leave') ||
@@ -1224,8 +1306,10 @@ export function Header() {
           )}
         </div>
       )}
+
+      <GlobalPaymentBadgeEnhancer />
+      <GlobalRiceBadgeEnhancer />
       <GlobalLeaveBadgeEnhancer />
-      
     </>
   );
 }
