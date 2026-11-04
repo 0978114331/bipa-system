@@ -33,7 +33,21 @@ import {
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
 import { normalizeStudentCodeInput } from '@/components/layout/Header';
 import { cn } from '@/lib/utils';
-import { GoToDashboardPromptCard } from '@/components/security/StudentSecuritySystem';
+import {
+  fetchRicePayloadFromDb,
+  saveRicePayloadToDb
+} from '@/components/rice/RiceContributionSystem';
+import {
+  GoToDashboardPromptCard,
+  fetchSecurityPayloadFromDb,
+  saveSecurityPayloadToDb,
+  splitKhmerFullName,
+  generateDefaultPhone,
+  generateEncryptedCodeFromId,
+  getLocalDeletedCodes,
+  saveLocalDeletedCodes
+} from '@/components/security/StudentSecuritySystem';
+
 export type MonthPaymentStatus = 'paid' | 'owed' | 'unpaid';
 
 export interface StudentMonthRecord {
@@ -105,6 +119,7 @@ export const KHMER_MONTHS = [
 ];
 
 function mapInitialResidentStudents(): PaymentResidentStudent[] {
+  const deletedSet = new Set(getLocalDeletedCodes().map((c) => normalizeStudentCodeInput(c)));
   let baseList: BipaStudent[] = initialStudents;
   const cached =
     localStorage.getItem('bipa_students_directory_v2') ||
@@ -115,15 +130,17 @@ function mapInitialResidentStudents(): PaymentResidentStudent[] {
       if (Array.isArray(parsed) && parsed.length > 0) baseList = parsed;
     } catch {}
   }
-  return baseList.map((s) => ({
-    id: String(s.id || s.student_code),
-    student_code: String(s.student_code || '').trim().toUpperCase(),
-    full_name_km: s.full_name_km || s.full_name_en || '',
-    full_name_en: s.full_name_en || s.full_name_km || '',
-    gender_km: s.gender_km || 'ប្រុស',
-    major_km: s.major_km || 'ព័ត៌មានវិទ្យា',
-    generation_km: s.generation_km || 'ជំនាន់ទី ១'
-  }));
+  return baseList
+    .filter((s) => !deletedSet.has(normalizeStudentCodeInput(s.student_code)))
+    .map((s) => ({
+      id: String(s.id || s.student_code),
+      student_code: String(s.student_code || '').trim().toUpperCase(),
+      full_name_km: s.full_name_km || s.full_name_en || '',
+      full_name_en: s.full_name_en || s.full_name_km || '',
+      gender_km: s.gender_km || 'ប្រុស',
+      major_km: s.major_km || 'ព័ត៌មានវិទ្យា',
+      generation_km: s.generation_km || 'ជំនាន់ទី ១'
+    }));
 }
 
 export const defaultPaymentPayload: PaymentSystemPayload = {
@@ -139,6 +156,7 @@ export function formatRiel(amount: number): string {
 }
 
 export function loadCachedPaymentPayload(): PaymentSystemPayload {
+  const deletedSet = new Set(getLocalDeletedCodes().map((c) => normalizeStudentCodeInput(c)));
   try {
     const raw =
       localStorage.getItem(PAYMENT_STORAGE_KEY) ||
@@ -151,15 +169,19 @@ export function loadCachedPaymentPayload(): PaymentSystemPayload {
       };
     }
     const parsed = JSON.parse(raw);
+    const rawStudents: PaymentResidentStudent[] =
+      Array.isArray(parsed.residentStudents) && parsed.residentStudents.length > 0
+        ? parsed.residentStudents
+        : fallbackResidents;
+
     return {
       monthlyFeeRiel: Number(parsed.monthlyFeeRiel || DEFAULT_MONTHLY_FEE),
       customColumns: Array.isArray(parsed.customColumns)
         ? parsed.customColumns
         : defaultPaymentPayload.customColumns,
-      residentStudents:
-        Array.isArray(parsed.residentStudents) && parsed.residentStudents.length > 0
-          ? parsed.residentStudents
-          : fallbackResidents,
+      residentStudents: rawStudents.filter(
+        (s) => !deletedSet.has(normalizeStudentCodeInput(s.student_code))
+      ),
       recordsByYear: parsed.recordsByYear || {},
       notifications: Array.isArray(parsed.notifications) ? parsed.notifications : []
     };
@@ -173,32 +195,7 @@ export function loadCachedPaymentPayload(): PaymentSystemPayload {
 
 export async function fetchPaymentPayloadFromDb(): Promise<PaymentSystemPayload> {
   let current = loadCachedPaymentPayload();
-
-  try {
-    const { data, error } = await supabase
-      .from('bipa_payments_data')
-      .select('payload')
-      .eq('id', '1')
-      .maybeSingle();
-
-    if (!error && data && data.payload) {
-      const p = data.payload;
-      current = {
-        monthlyFeeRiel: Number(p.monthlyFeeRiel || DEFAULT_MONTHLY_FEE),
-        customColumns: Array.isArray(p.customColumns)
-          ? p.customColumns
-          : defaultPaymentPayload.customColumns,
-        residentStudents:
-          Array.isArray(p.residentStudents) && p.residentStudents.length > 0
-            ? p.residentStudents
-            : current.residentStudents,
-        recordsByYear: p.recordsByYear || {},
-        notifications: Array.isArray(p.notifications) ? p.notifications : []
-      };
-      localStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify(current));
-      return current;
-    }
-  } catch {}
+  const deletedSet = new Set(getLocalDeletedCodes().map((c) => normalizeStudentCodeInput(c)));
 
   try {
     const { data: setRow } = await supabase
@@ -209,15 +206,19 @@ export async function fetchPaymentPayloadFromDb(): Promise<PaymentSystemPayload>
 
     if (setRow && setRow.name_en) {
       const p = JSON.parse(setRow.name_en);
+      const rawStudents: PaymentResidentStudent[] =
+        Array.isArray(p.residentStudents) && p.residentStudents.length > 0
+          ? p.residentStudents
+          : current.residentStudents;
+
       current = {
         monthlyFeeRiel: Number(p.monthlyFeeRiel || DEFAULT_MONTHLY_FEE),
         customColumns: Array.isArray(p.customColumns)
           ? p.customColumns
           : defaultPaymentPayload.customColumns,
-        residentStudents:
-          Array.isArray(p.residentStudents) && p.residentStudents.length > 0
-            ? p.residentStudents
-            : current.residentStudents,
+        residentStudents: rawStudents.filter(
+          (s) => !deletedSet.has(normalizeStudentCodeInput(s.student_code))
+        ),
         recordsByYear: p.recordsByYear || {},
         notifications: Array.isArray(p.notifications) ? p.notifications : []
       };
@@ -235,15 +236,6 @@ export async function savePaymentPayloadToDb(
   localStorage.setItem(PAYMENT_STORAGE_KEY, jsonStr);
 
   let syncedCloud = false;
-
-  try {
-    const { error } = await supabase.from('bipa_payments_data').upsert({
-      id: '1',
-      payload,
-      updated_at: new Date().toISOString()
-    });
-    if (!error) syncedCloud = true;
-  } catch {}
 
   try {
     const { error: fallbackErr } = await supabase.from('bipa_settings').upsert({
@@ -727,6 +719,98 @@ export function PaymentAdminDashboard() {
     );
   };
 
+  const handleLocalChangeStudentField = (
+    studentId: string,
+    patch: Partial<PaymentResidentStudent>
+  ) => {
+    const updatedStudents = students.map((s) =>
+      s.id === studentId ? { ...s, ...patch } : s
+    );
+    const nextPayload: PaymentSystemPayload = {
+      ...payload,
+      residentStudents: updatedStudents
+    };
+    setPayload(nextPayload);
+    localStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify(nextPayload));
+  };
+
+  const handleCommitStudentRowSync = async (student: PaymentResidentStudent) => {
+    const cleanCode = normalizeStudentCodeInput(student.student_code);
+    const normalizedList = students.map((s) =>
+      s.id === student.id ? { ...s, student_code: cleanCode } : s
+    );
+    const nextPayload: PaymentSystemPayload = {
+      ...payload,
+      residentStudents: normalizedList
+    };
+    setPayload(nextPayload);
+    await savePaymentPayloadToDb(nextPayload);
+
+    try {
+      const riceDb = await fetchRicePayloadFromDb();
+      const existsInRice = (riceDb.residentStudents || []).some(
+        (rs) =>
+          rs.id === student.id ||
+          normalizeStudentCodeInput(rs.student_code) === cleanCode
+      );
+      const nextRiceStudents = existsInRice
+        ? (riceDb.residentStudents || []).map((rs) =>
+            rs.id === student.id ||
+            normalizeStudentCodeInput(rs.student_code) === cleanCode
+              ? {
+                  ...rs,
+                  student_code: cleanCode,
+                  full_name_km: student.full_name_km,
+                  full_name_en: student.full_name_km,
+                  gender_km: student.gender_km
+                }
+              : rs
+          )
+        : [
+            ...(riceDb.residentStudents || []),
+            {
+              ...student,
+              student_code: cleanCode
+            }
+          ];
+
+      await saveRicePayloadToDb({
+        ...riceDb,
+        residentStudents: nextRiceStudents
+      });
+    } catch {}
+
+    try {
+      const secDb = await fetchSecurityPayloadFromDb();
+      const split = splitKhmerFullName(student.full_name_km);
+      const existingProf = secDb.profiles[cleanCode];
+      const seed = existingProf?.saltSeed || 2026;
+      await saveSecurityPayloadToDb({
+        ...secDb,
+        profiles: {
+          ...secDb.profiles,
+          [cleanCode]: {
+            ...(existingProf || {
+              studentCode: cleanCode,
+              userTypeKm: 'សិស្ស',
+              phoneNumber: generateDefaultPhone(cleanCode),
+              majorKm: student.major_km || 'ព័ត៌មានវិទ្យា',
+              generationKm: student.generation_km || 'សិស្សមណ្ឌល',
+              saltSeed: seed,
+              secretCode: generateEncryptedCodeFromId(cleanCode, seed),
+              avatarDataUrl: ''
+            }),
+            studentCode: cleanCode,
+            fullNameKm: student.full_name_km,
+            lastNameKm: split.lastName,
+            firstNameKm: split.firstName,
+            genderKm: student.gender_km
+          }
+        }
+      });
+    } catch {}
+  };
+
   const handleAddResidentStudent = async () => {
     const cleanCode = normalizeStudentCodeInput(newStCode);
     if (!cleanCode || !newStNameKm.trim()) {
@@ -741,6 +825,11 @@ export function PaymentAdminDashboard() {
       showToast(`អត្តលេខ "${cleanCode}" មានក្នុងតារាងរួចហើយ!`, 'error');
       return;
     }
+
+    const updatedDeleted = getLocalDeletedCodes().filter(
+      (c) => normalizeStudentCodeInput(c) !== cleanCode
+    );
+    saveLocalDeletedCodes(updatedDeleted);
 
     const newSt: PaymentResidentStudent = {
       id: `res-st-${Date.now()}`,
@@ -761,24 +850,96 @@ export function PaymentAdminDashboard() {
     setNewStNameKm('');
     setShowAddStudentBox(false);
     await savePaymentPayloadToDb(nextPayload);
-    showToast(`បានបន្ថែមសិស្ស "${newSt.full_name_km}" (${cleanCode}) ចូលតារាងបង់ប្រាក់!`);
+
+    try {
+      const riceDb = await fetchRicePayloadFromDb();
+      if (
+        !(riceDb.residentStudents || []).some(
+          (rs) => normalizeStudentCodeInput(rs.student_code) === cleanCode
+        )
+      ) {
+        await saveRicePayloadToDb({
+          ...riceDb,
+          residentStudents: [...(riceDb.residentStudents || []), newSt]
+        });
+      }
+    } catch {}
+
+    try {
+      const secDb = await fetchSecurityPayloadFromDb();
+      const split = splitKhmerFullName(newSt.full_name_km);
+      const seed = Math.floor(1000 + Math.random() * 9000);
+      await saveSecurityPayloadToDb({
+        ...secDb,
+        deletedCodes: updatedDeleted,
+        profiles: {
+          ...secDb.profiles,
+          [cleanCode]: {
+            studentCode: cleanCode,
+            lastNameKm: split.lastName,
+            firstNameKm: split.firstName,
+            fullNameKm: newSt.full_name_km,
+            genderKm: newSt.gender_km,
+            userTypeKm: 'សិស្ស',
+            phoneNumber: generateDefaultPhone(cleanCode),
+            majorKm: newSt.major_km,
+            generationKm: newSt.generation_km,
+            saltSeed: seed,
+            secretCode: generateEncryptedCodeFromId(cleanCode, seed),
+            avatarDataUrl: ''
+          }
+        }
+      });
+    } catch {}
+
+    showToast(
+      `បានបន្ថែមសិស្ស "${newSt.full_name_km}" (${cleanCode}) ចូលទាំងតារាងបង់ប្រាក់ និងតារាងបង់អង្ករ!`
+    );
   };
 
   const handleRemoveResidentStudent = async (st: PaymentResidentStudent) => {
+    const cleanCode = normalizeStudentCodeInput(st.student_code);
     if (
       !window.confirm(
-        `តើអ្នកពិតជាចង់ដកឈ្មោះ "${st.full_name_km} (${st.student_code})" ចេញពីតារាងបង់ប្រាក់មណ្ឌលមែនទេ?`
+        `តើអ្នកពិតជាចង់ដកឈ្មោះ "${st.full_name_km} (${cleanCode})" ចេញពីតារាងបង់ប្រាក់ និងតារាងអង្ករមែនទេ?`
       )
     ) {
       return;
     }
+
+    const updatedDeleted = Array.from(new Set([...getLocalDeletedCodes(), cleanCode]));
+    saveLocalDeletedCodes(updatedDeleted);
+
     const nextPayload: PaymentSystemPayload = {
       ...payload,
-      residentStudents: students.filter((s) => s.student_code !== st.student_code)
+      residentStudents: students.filter(
+        (s) => normalizeStudentCodeInput(s.student_code) !== cleanCode
+      )
     };
     setPayload(nextPayload);
     await savePaymentPayloadToDb(nextPayload);
-    showToast(`បានដកឈ្មោះ "${st.full_name_km}" ចេញពីតារាងបង់ប្រាក់រួចរាល់!`);
+
+    try {
+      const riceDb = await fetchRicePayloadFromDb();
+      await saveRicePayloadToDb({
+        ...riceDb,
+        residentStudents: (riceDb.residentStudents || []).filter(
+          (rs) => normalizeStudentCodeInput(rs.student_code) !== cleanCode
+        )
+      });
+    } catch {}
+
+    try {
+      const secDb = await fetchSecurityPayloadFromDb();
+      const copyProfiles = { ...secDb.profiles };
+      delete copyProfiles[cleanCode];
+      await saveSecurityPayloadToDb({
+        profiles: copyProfiles,
+        deletedCodes: updatedDeleted
+      });
+    } catch {}
+
+    showToast(`បានដកឈ្មោះ "${st.full_name_km}" ចេញពីគ្រប់តារាងរួចរាល់!`);
   };
 
   const handleUpdateCustomCell = (studentCode: string, colName: string, val: string) => {
@@ -901,10 +1062,17 @@ export function PaymentAdminDashboard() {
   const handleSaveAllChanges = async () => {
     setSaving(true);
     const res = await savePaymentPayloadToDb(payload);
+    try {
+      const riceDb = await fetchRicePayloadFromDb();
+      await saveRicePayloadToDb({
+        ...riceDb,
+        residentStudents: payload.residentStudents
+      });
+    } catch {}
     setSaving(false);
     showToast(
       res.syncedCloud
-        ? 'បានរក្សាទុក និង Sync ទិន្នន័យទៅគ្រប់ទូរស័ព្ទដោយជោគជ័យ!'
+        ? 'បានរក្សាទុក និង Sync ទិន្នន័យទៅគ្រប់តារាងដោយជោគជ័យ!'
         : 'បានរក្សាទុកទិន្នន័យការបង់ប្រាក់ជោគជ័យ!'
     );
   };
@@ -1110,7 +1278,7 @@ export function PaymentAdminDashboard() {
             <span>គ្រប់គ្រងការបង់ប្រាក់ប្រចាំខែ និងចំណូលមណ្ឌល</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            តាមដានសិស្សបង់ប្រាក់ ចេញវិក្កយបត្រ បញ្ជូនសារជូនដំណឹងតាម ID និងមើលក្រាបផ្សារភាគហ៊ុនចំណូលប្រចាំខែ/ឆ្នាំ
+            តាមដានសិស្សបង់ប្រាក់ កែប្រែឈ្មោះនិស្សិតផ្ទាល់លើតារាង ចេញវិក្កយបត្រ និងមើលក្រាបចំណូលប្រចាំខែ/ឆ្នាំ
           </p>
         </div>
 
@@ -1160,7 +1328,7 @@ export function PaymentAdminDashboard() {
           <div className="flex items-center justify-between">
             <h4 className="text-xs sm:text-sm font-black text-blue-500 flex items-center gap-1.5">
               <UserPlus className="h-4 w-4" />
-              បន្ថែមឈ្មោះសិស្សថ្មីដែលកំពុងស្នាក់នៅមណ្ឌលចូលក្នុងតារាងបង់ប្រាក់
+              បន្ថែមឈ្មោះសិស្សថ្មី (នឹងបញ្ចូលទៅតារាងបង់អង្ករ និងតារាង User ដោយស្វ័យប្រវត្តិ)
             </h4>
             <button
               type="button"
@@ -1326,7 +1494,7 @@ export function PaymentAdminDashboard() {
                 <span>ក្រាបសន្ទុះចំណូលបង់ប្រាក់ និងការជំពាក់ប្រចាំខែ (ឆ្នាំ {selectedYear})</span>
               </CardTitle>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                បង្ហាញការឡើងចុះនៃទឹកប្រាក់បង់រួច និងទឹកប្រាក់ជំពាក់/បង់យឺតតាមខែទាំង ១២ (ចុចលើចំណុចខែដើម្បីមើលតម្លៃលេខ)
+                បង្ហាញការឡើងចុះនៃទឹកប្រាក់បង់រួច និងទឹកប្រាក់ជំពាក់/បង់យឺតតាមខែទាំង ១២
               </p>
             </div>
             <div className="flex items-center gap-3 text-[11px] font-extrabold bg-slate-100 dark:bg-[#0f172a] px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 w-fit">
@@ -1668,13 +1836,13 @@ export function PaymentAdminDashboard() {
         </div>
 
         <div className="w-full max-h-[480px] overflow-x-auto overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 scrollbar-thin">
-          <table className="w-full text-xs text-left border-collapse min-w-[1000px]">
+          <table className="w-full text-xs text-left border-collapse min-w-[1040px]">
             <thead className="sticky top-0 z-20">
               <tr className="bg-amber-400 text-slate-950 font-black shadow-xs">
                 <th className="py-3.5 px-3 border border-amber-500/40 text-center w-12">ល.រ</th>
-                <th className="py-3.5 px-3 border border-amber-500/40">អត្តលេខ (ID)</th>
+                <th className="py-3.5 px-3 border border-amber-500/40">អត្តលេខ (កែបាន)</th>
                 <th className="py-3.5 px-3 border border-amber-500/40">
-                  គោត្តនាម និងនាម (ចុចមើលខែ)
+                  គោត្តនាម និងនាម (កែបាន)
                 </th>
                 <th className="py-3.5 px-2.5 border border-amber-500/40 text-center">ភេទ</th>
                 <th className="py-3.5 px-3 border border-amber-500/40 text-center">
@@ -1719,27 +1887,67 @@ export function PaymentAdminDashboard() {
 
                 return (
                   <tr
-                    key={row.student.student_code}
+                    key={row.student.id}
                     className="bg-white dark:bg-[#162033] hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
                   >
-                    <td className="py-2.5 px-3 border border-slate-200/70 dark:border-slate-800 text-center font-black">
+                    <td className="py-2 px-3 border border-slate-200/70 dark:border-slate-800 text-center font-black">
                       {row.index}
                     </td>
-                    <td className="py-2.5 px-3 border border-slate-200/70 dark:border-slate-800 font-black text-blue-600 dark:text-blue-400 whitespace-nowrap">
-                      {row.student.student_code}
+                    <td className="py-2 px-2 border border-slate-200/70 dark:border-slate-800 whitespace-nowrap">
+                      <input
+                        type="text"
+                        value={row.student.student_code}
+                        onChange={(e) =>
+                          handleLocalChangeStudentField(row.student.id, {
+                            student_code: e.target.value.toUpperCase()
+                          })
+                        }
+                        onBlur={() => handleCommitStudentRowSync(row.student)}
+                        className="w-24 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-black text-blue-600 dark:text-blue-400 text-xs"
+                      />
                     </td>
-                    <td className="py-2.5 px-3 border border-slate-200/70 dark:border-slate-800 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => setActiveStudentModal(row.student)}
-                        className="font-black text-slate-900 dark:text-white hover:text-blue-500 flex items-center gap-1.5 text-left"
+                    <td className="py-2 px-2 border border-slate-200/70 dark:border-slate-800 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={row.student.full_name_km}
+                          onChange={(e) =>
+                            handleLocalChangeStudentField(row.student.id, {
+                              full_name_km: e.target.value,
+                              full_name_en: e.target.value
+                            })
+                          }
+                          onBlur={() => handleCommitStudentRowSync(row.student)}
+                          className="w-36 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-black text-slate-900 dark:text-white text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setActiveStudentModal(row.student)}
+                          className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 shrink-0"
+                          title="ចុចមើលខែបង់ប្រាក់"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 border border-slate-200/70 dark:border-slate-800 text-center whitespace-nowrap">
+                      <select
+                        value={row.student.gender_km}
+                        onChange={(e) => {
+                          const nextVal = e.target.value;
+                          handleLocalChangeStudentField(row.student.id, {
+                            gender_km: nextVal
+                          });
+                          handleCommitStudentRowSync({
+                            ...row.student,
+                            gender_km: nextVal
+                          });
+                        }}
+                        className="h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-bold text-xs text-slate-900 dark:text-white"
                       >
-                        <span>{row.student.full_name_km}</span>
-                        <Eye className="h-3.5 w-3.5 text-blue-500 opacity-75" />
-                      </button>
-                    </td>
-                    <td className="py-2.5 px-2.5 border border-slate-200/70 dark:border-slate-800 text-center font-bold whitespace-nowrap">
-                      {row.student.gender_km}
+                        <option value="ប្រុស">ប្រុស</option>
+                        <option value="ស្រី">ស្រី</option>
+                      </select>
                     </td>
                     <td className="py-2.5 px-3 border border-slate-200/70 dark:border-slate-800 text-center whitespace-nowrap">
                       {isPaid ? (

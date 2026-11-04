@@ -91,7 +91,7 @@ function normalizeCode(raw: string): string {
   return cleaned;
 }
 
-function getLocalDeletedCodes(): string[] {
+export function getLocalDeletedCodes(): string[] {
   try {
     const raw = localStorage.getItem(DELETED_USERS_STORAGE_KEY);
     if (!raw) return [];
@@ -102,12 +102,12 @@ function getLocalDeletedCodes(): string[] {
   }
 }
 
-function saveLocalDeletedCodes(codes: string[]) {
+export function saveLocalDeletedCodes(codes: string[]) {
   const unique = Array.from(new Set(codes.map((c) => normalizeCode(c)).filter(Boolean)));
   localStorage.setItem(DELETED_USERS_STORAGE_KEY, JSON.stringify(unique));
 }
 
-function splitKhmerFullName(fullName: string): { lastName: string; firstName: string } {
+export function splitKhmerFullName(fullName: string): { lastName: string; firstName: string } {
   const parts = String(fullName || '').trim().split(/\s+/);
   if (parts.length <= 1) {
     return { lastName: parts[0] || '', firstName: '' };
@@ -118,7 +118,7 @@ function splitKhmerFullName(fullName: string): { lastName: string; firstName: st
   };
 }
 
-function generateDefaultPhone(studentCode: string): string {
+export function generateDefaultPhone(studentCode: string): string {
   const digits = studentCode.replace(/\D/g, '') || '1';
   const num = Number(digits);
   if (num === 15) return '0978114331';
@@ -168,9 +168,9 @@ export function parseStudentQrToken(rawText: string): {
       };
     }
   }
-  if (clean.includes(':BP-')) {
+  if (clean.includes(':BP-') || clean.includes(':')) {
     const parts = clean.split(':');
-    if (parts.length >= 2) {
+    if (parts.length >= 2 && parts[0].toUpperCase().includes('BIPA')) {
       return {
         studentCode: normalizeCode(parts[0]),
         secretCode: parts[1].trim().toUpperCase()
@@ -273,10 +273,12 @@ export function loadCachedSecurityPayload(): StudentSecurityPayload {
 
     const parsed = JSON.parse(raw);
     const combinedDeleted = Array.from(
-      new Set([
-        ...localDeleted,
-        ...(Array.isArray(parsed?.deletedCodes) ? parsed.deletedCodes : [])
-      ].map((c: string) => normalizeCode(c)))
+      new Set(
+        [
+          ...localDeleted,
+          ...(Array.isArray(parsed?.deletedCodes) ? parsed.deletedCodes : [])
+        ].map((c: string) => normalizeCode(c))
+      )
     );
     saveLocalDeletedCodes(combinedDeleted);
 
@@ -342,11 +344,13 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
       const parsed = JSON.parse(setRow.name_en);
       if (parsed && parsed.profiles) {
         const combinedDeleted = Array.from(
-          new Set([
-            ...getLocalDeletedCodes(),
-            ...(current.deletedCodes || []),
-            ...(Array.isArray(parsed.deletedCodes) ? parsed.deletedCodes : [])
-          ].map((c: string) => normalizeCode(c)))
+          new Set(
+            [
+              ...getLocalDeletedCodes(),
+              ...(current.deletedCodes || []),
+              ...(Array.isArray(parsed.deletedCodes) ? parsed.deletedCodes : [])
+            ].map((c: string) => normalizeCode(c))
+          )
         );
         saveLocalDeletedCodes(combinedDeleted);
         const deletedSet = new Set(combinedDeleted);
@@ -519,7 +523,7 @@ export function BarcodeSvg({
     <div className="flex flex-col items-center bg-white px-2.5 py-1.5 rounded-xl border border-slate-200">
       <svg
         viewBox={`0 0 ${totalUnits} ${height}`}
-        className="w-full max-w-[220px]"
+        className="w-full max-w-[240px]"
         style={{ height: `${height}px` }}
         preserveAspectRatio="none"
       >
@@ -531,7 +535,7 @@ export function BarcodeSvg({
         })}
       </svg>
       {!hideText && (
-        <span className="text-[9px] font-mono font-black tracking-[0.18em] text-slate-800 mt-1">
+        <span className="text-[9.5px] font-mono font-black tracking-[0.18em] text-slate-800 mt-1">
           {value}
         </span>
       )}
@@ -883,7 +887,7 @@ export function StudentVerificationGate({
                     verifyByQrOrCredentials(passwordInput, phoneOrIdInput);
                   }
                 }}
-                placeholder={isKh ? 'ពាក្យសម្ងាត់' : 'Password (BP-XXXX-XXXX)'}
+                placeholder={isKh ? 'ពាក្យសម្ងាត់' : 'Password'}
                 style={{ fontSize: '13px' }}
                 className="flex-1 h-12 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 outline-none font-semibold"
               />
@@ -1062,60 +1066,60 @@ export function AdminA4BarcodeSheetModal({
             id="bipa-a4-multi-barcode-sheet"
             className="w-full max-w-[210mm] bg-white text-slate-900 p-4 sm:p-6 shadow-2xl rounded-sm"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {profiles.map((st) => {
                 const token = buildStudentQrToken(st.studentCode, st.secretCode);
                 return (
                   <div
                     key={st.studentCode}
-                    className="bipa-cut-card border-2 border-dashed border-slate-400 rounded-2xl p-3.5 bg-white flex flex-col justify-between gap-2.5"
+                    className="bipa-cut-card border-2 border-dashed border-slate-400 rounded-2xl p-4 bg-white flex flex-col justify-between gap-3"
                   >
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                       <div className="flex items-center gap-2">
                         <img
                           src={logoUrl}
                           alt="BIPA"
-                          className="w-8 h-8 rounded-full object-contain border border-slate-200 p-0.5"
+                          className="w-9 h-9 rounded-full object-contain border border-slate-200 p-0.5"
                         />
                         <div>
-                          <div className="text-[11px] font-black text-slate-900 leading-tight">
+                          <div className="text-xs font-black text-slate-900 leading-tight">
                             សមាគមជនជាតិដើមភាគតិចព្នង (BIPA)
                           </div>
-                          <div className="text-[9px] font-bold text-amber-600">
+                          <div className="text-[10px] font-bold text-amber-600">
                             បណ្ណស្កេនព័ត៌មានផ្ទាល់ខ្លួននិស្សិត
                           </div>
                         </div>
                       </div>
-                      <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-black text-[10px]">
+                      <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-slate-950 font-black text-xs">
                         {st.studentCode}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
-                      <div className="space-y-1 text-[11px] flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                      <div className="space-y-1.5 text-xs flex-1 min-w-0">
+                        <div className="flex items-center gap-2.5">
                           {st.avatarDataUrl ? (
                             <img
                               src={st.avatarDataUrl}
                               alt=""
-                              className="w-10 h-10 rounded-full object-cover border border-slate-300 shrink-0"
+                              className="w-12 h-12 rounded-full object-cover border border-slate-300 shrink-0"
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded-full bg-amber-500 text-white font-black text-sm flex items-center justify-center shrink-0">
+                            <div className="w-12 h-12 rounded-full bg-amber-500 text-white font-black text-base flex items-center justify-center shrink-0">
                               {st.fullNameKm.charAt(0)}
                             </div>
                           )}
                           <div className="min-w-0">
-                            <div className="font-black text-sm text-slate-900 truncate">
+                            <div className="font-black text-base text-slate-900 truncate">
                               {st.fullNameKm}
                             </div>
-                            <div className="text-[10px] font-bold text-slate-500">
+                            <div className="text-[11px] font-bold text-slate-500">
                               ប្រភេទ៖ {st.userTypeKm || 'សិស្ស'}
                             </div>
                           </div>
                         </div>
 
-                        <div className="pt-1 space-y-0.5 text-[10.5px]">
+                        <div className="pt-1.5 space-y-1 text-[11px]">
                           <div>
                             <span className="text-slate-500 font-semibold">លេខទូរស័ព្ទ៖ </span>
                             <span className="font-black text-slate-900">{st.phoneNumber}</span>
@@ -1131,11 +1135,12 @@ export function AdminA4BarcodeSheetModal({
 
                       <div className="shrink-0 flex flex-col items-center">
                         <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=4&data=${encodeURIComponent(
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=6&data=${encodeURIComponent(
                             token
                           )}`}
                           alt="QR"
-                          className="w-20 h-20 rounded-lg border border-slate-200 p-0.5 bg-white"
+                          style={{ width: '116px', height: '116px' }}
+                          className="rounded-xl border-2 border-slate-200 p-1 bg-white shadow-2xs"
                         />
                       </div>
                     </div>
@@ -1144,7 +1149,7 @@ export function AdminA4BarcodeSheetModal({
                       <BarcodeSvg
                         value={`${st.studentCode}:${st.secretCode}`}
                         hideText={false}
-                        height={26}
+                        height={28}
                       />
                     </div>
                   </div>
@@ -1199,10 +1204,11 @@ export function AdminUserPasswordDashboard() {
     } catch {}
 
     const combinedDeleted = Array.from(
-      new Set([
-        ...getLocalDeletedCodes(),
-        ...(secDb.deletedCodes || [])
-      ].map((c) => normalizeCode(c)))
+      new Set(
+        [...getLocalDeletedCodes(), ...(secDb.deletedCodes || [])].map((c) =>
+          normalizeCode(c)
+        )
+      )
     );
     const deletedSet = new Set(combinedDeleted);
 
@@ -1325,7 +1331,7 @@ export function AdminUserPasswordDashboard() {
       const img = new Image();
       img.onload = async () => {
         const canvas = document.createElement('canvas');
-        const maxDim = 260;
+        const maxDim = 720;
         let w = img.width;
         let h = img.height;
         if (w > h && w > maxDim) {
@@ -1338,10 +1344,10 @@ export function AdminUserPasswordDashboard() {
         canvas.width = w;
         canvas.height = h;
         canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.84);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
         localStorage.setItem(`bipa_avatar_${targetCode}`, dataUrl);
         await handleUpdateProfileField(targetCode, { avatarDataUrl: dataUrl });
-        showNotice(`បានរក្សាទុករូបភាពសម្រាប់ ${targetCode} រួចរាល់!`);
+        showNotice(`បានរក្សាទុករូបភាពច្បាស់សម្រាប់ ${targetCode} រួចរាល់!`);
       };
       img.src = String(reader.result);
     };
@@ -1456,7 +1462,7 @@ export function AdminUserPasswordDashboard() {
     setNewFirstName('');
     setNewPhone('');
     setShowAddBox(false);
-    showNotice(`បានបន្ថែម "${newProfile.fullNameKm}" (${cleanCode}) រួចរាល់!`);
+    showNotice(`បានបន្ថែម "${newProfile.fullNameKm}" (${cleanCode}) ចូលគ្រប់តារាងរួចរាល់!`);
   };
 
   const handleDeleteStudentProfile = async (studentCode: string, nameKm: string) => {
@@ -1637,7 +1643,7 @@ export function AdminUserPasswordDashboard() {
                 className="h-9 rounded-xl px-2.5 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold flex-1"
               >
                 <option value="សិស្ស">សិស្ស</option>
-                <option value="និស្សិត">និស្សិត</option>
+                <option value="និស្សិត">និស្សតិ</option>
                 <option value="ពិសេស">ពិសេស</option>
               </select>
               <Button
@@ -1710,8 +1716,8 @@ export function AdminUserPasswordDashboard() {
                           setUploadingForCode(st.studentCode);
                           rowAvatarInputRef.current?.click();
                         }}
-                        className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-[#0f172a] mx-auto flex items-center justify-center group"
-                        title="ចុចប្តូររូបភាព"
+                        className="relative w-10 h-10 rounded-full overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-[#0f172a] mx-auto flex items-center justify-center group"
+                        title="ចុចប្តូររូបភាពនិស្សិត"
                       >
                         {st.avatarDataUrl ? (
                           <img
@@ -1916,9 +1922,6 @@ export function StudentPersonalDashboard() {
 
   const currentYearStr = String(new Date().getFullYear());
 
-  const [securityPayload, setSecurityPayload] = useState<StudentSecurityPayload>(() =>
-    loadCachedSecurityPayload()
-  );
   const [paymentPayload, setPaymentPayload] = useState(() => loadCachedPaymentPayload());
   const [ricePayload, setRicePayload] = useState(() => loadCachedRicePayload());
 
@@ -1926,10 +1929,10 @@ export function StudentPersonalDashboard() {
     isStudentSessionVerified(loadCachedSecurityPayload())
   );
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showProfileDetailModal, setShowProfileDetailModal] = useState(false);
   const [scrolledCompact, setScrolledCompact] = useState(false);
 
-  const avatarFileRef = useRef<HTMLInputElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const heroBannerRef = useRef<HTMLDivElement>(null);
 
   const loadAllDashboardData = async () => {
     const [secData, payData, rData] = await Promise.all([
@@ -1937,7 +1940,6 @@ export function StudentPersonalDashboard() {
       fetchPaymentPayloadFromDb(),
       fetchRicePayloadFromDb()
     ]);
-    setSecurityPayload(secData);
     setPaymentPayload(payData);
     setRicePayload(rData);
     setVerifiedProfile(isStudentSessionVerified(secData));
@@ -1958,53 +1960,18 @@ export function StudentPersonalDashboard() {
     };
   }, []);
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !verifiedProfile) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = async () => {
-        const canvas = document.createElement('canvas');
-        const maxDim = 480;
-        let w = img.width;
-        let h = img.height;
-        if (w > h && w > maxDim) {
-          h = Math.round((h * maxDim) / w);
-          w = maxDim;
-        } else if (h > maxDim) {
-          w = Math.round((w * maxDim) / h);
-          h = maxDim;
-        }
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-
-        const code = normalizeCode(verifiedProfile.studentCode);
-        localStorage.setItem(`bipa_avatar_${code}`, dataUrl);
-
-        const updatedProfile: StudentSecurityProfile = {
-          ...verifiedProfile,
-          avatarDataUrl: dataUrl
-        };
-        const nextPayload: StudentSecurityPayload = {
-          ...securityPayload,
-          profiles: {
-            ...securityPayload.profiles,
-            [code]: updatedProfile
-          }
-        };
-        setVerifiedProfile(updatedProfile);
-        setSecurityPayload(nextPayload);
-        await saveSecurityPayloadToDb(nextPayload);
-      };
-      img.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
+  useEffect(() => {
+    const el = heroBannerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setScrolledCompact(!entry.isIntersecting);
+      },
+      { threshold: 0.15 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [verifiedProfile]);
 
   const myPaySummary = useMemo(() => {
     if (!verifiedProfile) return { paidCount: 0, owedCount: 0, paidRiel: 0, owedRiel: 0 };
@@ -2064,14 +2031,7 @@ export function StudentPersonalDashboard() {
       : '');
 
   return (
-    <div
-      ref={scrollContainerRef}
-      onScroll={(e) => {
-        const top = (e.currentTarget as HTMLElement).scrollTop;
-        setScrolledCompact(top > 180);
-      }}
-      className="w-full max-w-xl mx-auto min-h-full bg-[#f5f6f8] dark:bg-[#0b1120] text-slate-900 dark:text-white font-khmer pb-28 overflow-x-hidden"
-    >
+    <div className="w-full max-w-xl mx-auto min-h-full bg-[#f5f6f8] dark:bg-[#0b1120] text-slate-900 dark:text-white font-khmer pb-28 overflow-x-hidden">
       {showLoginModal && (
         <StudentVerificationGate
           onVerified={(prof) => {
@@ -2083,31 +2043,54 @@ export function StudentPersonalDashboard() {
       )}
 
       {verifiedProfile && scrolledCompact && (
-        <div className="sticky top-0 z-40 bg-white/95 dark:bg-[#162033]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex items-center gap-3 shadow-xs animate-in fade-in duration-150">
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="p-1 text-slate-800 dark:text-white"
-          >
-            <ChevronLeft className="h-6 w-6" />
-          </button>
-          <div className="w-9 h-9 rounded-full overflow-hidden border border-slate-300 bg-slate-200 shrink-0">
-            {currentAvatar ? (
-              <img src={currentAvatar} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white font-black text-sm">
-                {verifiedProfile.fullNameKm.charAt(0)}
+        <div
+          onClick={() => setShowProfileDetailModal(true)}
+          className="fixed top-16 sm:top-20 left-0 right-0 z-50 max-w-xl mx-auto bg-white/95 dark:bg-[#162033]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex items-center justify-between shadow-md cursor-pointer animate-in slide-in-from-top-2 duration-150"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate('/');
+              }}
+              className="p-1 text-slate-800 dark:text-white"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-amber-400 bg-slate-200 shrink-0 shadow-xs">
+              {currentAvatar ? (
+                <img src={currentAvatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white font-black text-sm">
+                  {verifiedProfile.fullNameKm.charAt(0)}
+                </div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white truncate">
+                  {verifiedProfile.fullNameKm}
+                </span>
+                <Badge className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0">
+                  {verifiedProfile.studentCode}
+                </Badge>
               </div>
-            )}
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">
+                {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
+                {verifiedProfile.phoneNumber}
+              </p>
+            </div>
           </div>
-          <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white truncate">
-            {verifiedProfile.fullNameKm}
-          </span>
+          <Eye className="h-4 w-4 text-amber-500 shrink-0" />
         </div>
       )}
 
       {!verifiedProfile ? (
-        <div className="relative w-full h-64 sm:h-72 bg-[#c57c14] flex flex-col justify-between p-4 sm:p-5 text-white select-none">
+        <div
+          ref={heroBannerRef}
+          className="relative w-full h-64 sm:h-72 bg-[#c57c14] flex flex-col justify-between p-4 sm:p-5 text-white select-none"
+        >
           <div className="flex items-center justify-between z-10">
             <button
               type="button"
@@ -2136,7 +2119,7 @@ export function StudentPersonalDashboard() {
               onClick={() => setShowLoginModal(true)}
               className="w-20 h-20 rounded-full bg-amber-200/30 border-2 border-amber-200/40 flex items-center justify-center cursor-pointer shrink-0"
             >
-              <Camera className="h-8 w-8 text-[#935907]" />
+              <User className="h-9 w-9 text-[#935907]" />
             </div>
             <div className="space-y-0.5">
               <h1 className="text-xl sm:text-2xl font-black text-white leading-tight">
@@ -2152,54 +2135,63 @@ export function StudentPersonalDashboard() {
           </div>
         </div>
       ) : (
-        <div className="relative w-full h-72 sm:h-80 bg-slate-800 overflow-hidden flex flex-col justify-between p-4 sm:p-5 text-white">
+        <div
+          ref={heroBannerRef}
+          onClick={() => setShowProfileDetailModal(true)}
+          className="relative w-full h-72 sm:h-80 bg-[#0f172a] overflow-hidden flex flex-col justify-between p-4 sm:p-5 text-white cursor-pointer group"
+        >
           {currentAvatar ? (
-            <img
-              src={currentAvatar}
-              alt={verifiedProfile.fullNameKm}
-              className="absolute inset-0 w-full h-full object-cover object-top"
-            />
+            <>
+              <img
+                src={currentAvatar}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-55"
+              />
+              <img
+                src={currentAvatar}
+                alt={verifiedProfile.fullNameKm}
+                style={{ objectPosition: 'center 15%' }}
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+            </>
           ) : (
             <div className="absolute inset-0 bg-gradient-to-br from-[#1e293b] via-[#0f172a] to-[#334155]" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/20" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
 
           <div className="relative z-10 flex items-center justify-between">
             <button
               type="button"
-              onClick={() => navigate('/')}
-              className="p-1.5 rounded-full bg-black/25 hover:bg-black/40 text-white transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate('/');
+              }}
+              className="p-1.5 rounded-full bg-black/30 hover:bg-black/50 text-white transition-colors"
             >
               <ChevronLeft className="h-6 w-6 stroke-[2.4]" />
             </button>
 
-            <button
-              type="button"
-              onClick={() => avatarFileRef.current?.click()}
-              className="px-3 py-1.5 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-xs text-white text-[11px] font-bold flex items-center gap-1.5 border border-white/20"
-            >
-              <Camera className="h-3.5 w-3.5" />
-              <span>{isKh ? 'ប្តូររូបភាព' : 'Change Photo'}</span>
-            </button>
-            <input
-              ref={avatarFileRef}
-              type="file"
-              accept="image/*"
-              onChange={handleAvatarUpload}
-              className="hidden"
-            />
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate('/admin?page=user-passwords');
+                }}
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-xs text-amber-300 text-[11px] font-black border border-white/15"
+              >
+                {isKh ? 'កែរូបក្នុង Admin' : 'Edit in Admin'}
+              </button>
+            )}
           </div>
 
           <div className="relative z-10 flex items-center gap-4 pb-1">
-            <div
-              onClick={() => avatarFileRef.current?.click()}
-              className="w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-xl bg-slate-900 cursor-pointer shrink-0"
-            >
+            <div className="w-20 h-20 rounded-full overflow-hidden border-[2.5px] border-white shadow-2xl bg-slate-900 shrink-0 group-hover:scale-105 transition-transform">
               {currentAvatar ? (
                 <img
                   src={currentAvatar}
                   alt={verifiedProfile.fullNameKm}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover object-top"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-2xl font-black">
@@ -2208,19 +2200,19 @@ export function StudentPersonalDashboard() {
               )}
             </div>
 
-            <div className="space-y-0.5 drop-shadow">
-              <div className="flex items-center gap-2">
+            <div className="space-y-0.5 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl sm:text-2xl font-black text-white leading-tight">
                   {verifiedProfile.fullNameKm}
                 </h1>
-                <Badge className="bg-amber-400 text-slate-950 font-black text-[10px] px-2 py-0">
+                <Badge className="bg-amber-400 hover:bg-amber-400 text-slate-950 font-black text-[10px] px-2.5 py-0.5">
                   {verifiedProfile.studentCode}
                 </Badge>
               </div>
-              <p className="text-xs sm:text-sm font-bold text-white/90">
+              <p className="text-xs sm:text-sm font-bold text-white/95">
                 {renderTranslatedUserType(verifiedProfile.userTypeKm)}
               </p>
-              <p className="text-xs sm:text-sm font-semibold text-white/90 tracking-wide">
+              <p className="text-xs sm:text-sm font-semibold text-white/95 tracking-wide">
                 {verifiedProfile.phoneNumber}
               </p>
             </div>
@@ -2251,7 +2243,10 @@ export function StudentPersonalDashboard() {
             </div>
           ) : (
             <>
-              <div className="bg-white dark:bg-[#162033] rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+              <div
+                onClick={() => setShowProfileDetailModal(true)}
+                className="bg-white dark:bg-[#162033] rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden cursor-pointer hover:border-amber-500/50 transition-colors"
+              >
                 <div className="p-3.5 sm:p-4 flex items-center gap-3.5">
                   <div className="w-10 h-10 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                     <Contact className="h-5 w-5" />
@@ -2559,6 +2554,104 @@ export function StudentPersonalDashboard() {
           </div>
         )}
       </div>
+
+      {verifiedProfile && showProfileDetailModal && (
+        <div
+          onClick={() => setShowProfileDetailModal(false)}
+          className="fixed inset-0 z-[240] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 font-khmer animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-white dark:bg-[#162033] text-slate-900 dark:text-white rounded-3xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-200"
+          >
+            <div className="relative w-full h-80 bg-slate-950 flex items-center justify-center overflow-hidden">
+              {currentAvatar ? (
+                <img
+                  src={currentAvatar}
+                  alt={verifiedProfile.fullNameKm}
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <div className="w-28 h-28 rounded-full bg-amber-500 text-white font-black text-4xl flex items-center justify-center">
+                  {verifiedProfile.fullNameKm.charAt(0)}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowProfileDetailModal(false)}
+                className="absolute top-3.5 right-3.5 w-9 h-9 rounded-full bg-black/50 hover:bg-black/75 text-white flex items-center justify-center"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                    {verifiedProfile.fullNameKm}
+                  </h3>
+                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                    {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
+                    {verifiedProfile.majorKm}
+                  </p>
+                </div>
+                <Badge className="bg-amber-400 text-slate-950 font-black text-xs px-3 py-1">
+                  {verifiedProfile.studentCode}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
+                  <span className="text-slate-400 block mb-0.5">
+                    {isKh ? 'នាមត្រកូល' : 'Last Name'}
+                  </span>
+                  <span className="font-black text-sm text-slate-900 dark:text-white">
+                    {verifiedProfile.lastNameKm ||
+                      splitKhmerFullName(verifiedProfile.fullNameKm).lastName}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
+                  <span className="text-slate-400 block mb-0.5">
+                    {isKh ? 'នាមខ្លួន' : 'First Name'}
+                  </span>
+                  <span className="font-black text-sm text-slate-900 dark:text-white">
+                    {verifiedProfile.firstNameKm ||
+                      splitKhmerFullName(verifiedProfile.fullNameKm).firstName}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
+                  <span className="text-slate-400 block mb-0.5">
+                    {isKh ? 'ប្រភេទ' : 'Category'}
+                  </span>
+                  <span className="font-black text-sm text-slate-900 dark:text-white">
+                    {renderTranslatedUserType(verifiedProfile.userTypeKm)}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
+                  <span className="text-slate-400 block mb-0.5">
+                    {isKh ? 'លេខទូរស័ព្ទ' : 'Phone Number'}
+                  </span>
+                  <span className="font-black text-sm text-blue-600 dark:text-amber-400">
+                    {verifiedProfile.phoneNumber}
+                  </span>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                onClick={() => setShowProfileDetailModal(false)}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs h-10 rounded-xl"
+              >
+                {isKh ? 'បិទផ្ទាំង' : 'Close'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
