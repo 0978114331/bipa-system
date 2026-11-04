@@ -875,31 +875,13 @@ export function Header() {
                       <span>{lang === 'km' ? item.labelKm : item.labelEn}</span>
                     </DropdownMenuItem>
                   ))}
-                  {isAdmin && (
-                    <DropdownMenuItem
-                      onClick={() => setShowAdminSecurityModal(true)}
-                      className="hover:bg-slate-800 cursor-pointer text-amber-400 font-bold"
-                    >
-                      <KeyRound className="h-4 w-4 mr-3 text-amber-400" />
-                      <span>កូដសម្ងាត់ & QR សិស្ស</span>
-                    </DropdownMenuItem>
-                  )}
+                  
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
-              {isAdmin && (
-                <Button
-                  type="button"
-                  onClick={() => setShowAdminSecurityModal(true)}
-                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl h-10 px-3 text-xs font-black font-khmer flex items-center gap-1.5 shadow-sm"
-                >
-                  <KeyRound className="h-4 w-4" />
-                  <span className="hidden sm:inline">កូដ & QR សិស្ស</span>
-                </Button>
-              )}
-
+        
               <div className="flex items-center md:mr-2 md:border-r border-slate-700 md:pr-4">
                 <Button
                   onClick={() => setShowScanner(true)}
@@ -1292,10 +1274,10 @@ export function Header() {
         </button>
       </div>
 
-      {location.pathname === '/dashboard' && (
+      {(location.pathname === '/dashboard' || location.pathname === '/profile') && (
         <div
           style={{ height: 'calc(100dvh - 4rem)' }}
-          className="fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
+          className="fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f5f6f8] dark:bg-[#0b1120] overflow-y-auto pb-24 scrollbar-thin"
         >
           <StudentPersonalDashboard />
         </div>

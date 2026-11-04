@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   DollarSign,
-  Users,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -32,7 +31,8 @@ import {
   Eye
 } from 'lucide-react';
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
-import { normalizeStudentCodeInput, resolveStudentByIdOrName } from '@/components/layout/Header';import { cn } from '@/lib/utils';
+import { normalizeStudentCodeInput } from '@/components/layout/Header';
+import { cn } from '@/lib/utils';
 import { GoToDashboardPromptCard } from '@/components/security/StudentSecuritySystem';
 export type MonthPaymentStatus = 'paid' | 'owed' | 'unpaid';
 

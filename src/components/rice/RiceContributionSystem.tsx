@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   Package,
-  Users,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -35,7 +34,7 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
-import { normalizeStudentCodeInput, resolveStudentByIdOrName } from '@/components/layout/Header';
+import { normalizeStudentCodeInput } from '@/components/layout/Header';
 import { cn } from '@/lib/utils';
 import { GoToDashboardPromptCard } from '@/components/security/StudentSecuritySystem';
 
