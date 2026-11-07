@@ -568,12 +568,16 @@ export function Header() {
       setScanStage('scanning');
       setScanOverlayLabel('');
 
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 180));
       if (!isMounted || !document.getElementById('global-qr-reader')) return;
 
       try {
         const html5QrCode = new Html5Qrcode('global-qr-reader', {
-          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39
+          ],
           useBarCodeDetectorIfSupported: true,
           verbose: false
         });
@@ -592,11 +596,13 @@ export function Header() {
           setScanStage('processing');
           setScanOverlayLabel('កំពុងដំណើរការ...');
 
-          const isPassToken = decodedText.trim().toUpperCase().startsWith('BIPA-PASS:');
+          const isPassToken =
+            decodedText.trim().toUpperCase().startsWith('BIPA-PASS:') ||
+            decodedText.trim().toUpperCase().includes(':BP-');
 
           const [res] = await Promise.all([
             processAttendanceScan(decodedText),
-            new Promise((resolve) => setTimeout(resolve, 420))
+            new Promise((resolve) => setTimeout(resolve, 350))
           ]);
 
           if (!isMounted) return;
@@ -615,36 +621,28 @@ export function Header() {
                 setShowScanner(false);
                 navigate(isPassToken ? '/dashboard' : '/attendance');
               }
-            }, 900);
+            }, 800);
           } else {
             setScanStage('error');
-            setScanOverlayLabel(res.shortTitle || 'ស្កេនរួចរាល់ហើយ');
+            setScanOverlayLabel(res.shortTitle || 'សូមភ្ជាប់កូដសិស្សសិន');
             setTimeout(() => {
               if (!isMounted) return;
               setScanStage('scanning');
               setScanOverlayLabel('');
               processingLockRef.current = false;
-            }, 1500);
+            }, 1800);
           }
         };
 
-        const scanConfig = {
-          fps: 30,
-          aspectRatio: 1.0,
+        const iosCompatibleConfig = {
+          fps: 24,
           disableFlip: false
         };
 
         try {
           await html5QrCode.start(
             { facingMode: 'environment' },
-            {
-              ...scanConfig,
-              videoConstraints: {
-                facingMode: { ideal: 'environment' },
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-              }
-            },
+            iosCompatibleConfig,
             onScanSuccess,
             () => {}
           );
@@ -663,7 +661,7 @@ export function Header() {
                 d.label.toLowerCase().includes('rear')
             ) || devices[devices.length - 1];
 
-          await html5QrCode.start(backCam.id, scanConfig, onScanSuccess, () => {});
+          await html5QrCode.start(backCam.id, iosCompatibleConfig, onScanSuccess, () => {});
         }
       } catch {
         if (isMounted) {
@@ -693,6 +691,38 @@ export function Header() {
     };
   }, [showScanner, navigate]);
 
+  const handleFallbackPhotoScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScanStage('processing');
+    setScanOverlayLabel('កំពុងអានរូបភាព QR...');
+    try {
+      const tempScanner = new Html5Qrcode('global-qr-file-hidden');
+      const decoded = await tempScanner.scanFile(file, true);
+      const isPassToken =
+        decoded.trim().toUpperCase().startsWith('BIPA-PASS:') ||
+        decoded.trim().toUpperCase().includes(':BP-');
+      const res = await processAttendanceScan(decoded);
+      if (res.ok) {
+        setScanStage('success');
+        setScanOverlayLabel(res.shortTitle || 'ស្កេនជោគជ័យ');
+        setTimeout(() => {
+          setShowScanner(false);
+          navigate(isPassToken ? '/dashboard' : '/attendance');
+        }, 800);
+      } else {
+        setScanStage('error');
+        setScanOverlayLabel(res.shortTitle || 'សូមភ្ជាប់កូដសិស្សសិន');
+        setTimeout(() => setScanStage('scanning'), 1800);
+      }
+    } catch {
+      setScanStage('error');
+      setScanOverlayLabel('រកមិនឃើញកូដ QR ក្នុងរូបទេ');
+      setTimeout(() => setScanStage('scanning'), 1800);
+    }
+    e.target.value = '';
+  };
+
   const renderRole = (role?: string) => {
     if (!role) return 'STUDENT';
     return role.replace(/_/g, ' ').toUpperCase();
@@ -700,6 +730,7 @@ export function Header() {
 
   return (
     <>
+      <div id="global-qr-file-hidden" className="hidden" />
       <style>{`
         @keyframes bipaSheetSlideUp {
           0% {
@@ -731,6 +762,7 @@ export function Header() {
               border: none !important;
               width: 100% !important;
               height: 100% !important;
+              position: relative !important;
             }
             #global-qr-reader video {
               width: 100% !important;
@@ -738,8 +770,12 @@ export function Header() {
               object-fit: cover !important;
               border-radius: 1.5rem !important;
             }
+            #global-qr-reader canvas {
+              opacity: 0 !important;
+              position: absolute !important;
+              pointer-events: none !important;
+            }
             #global-qr-reader img,
-            #global-qr-reader canvas,
             #global-qr-reader__dashboard,
             #global-qr-reader__header_message,
             #global-qr-reader__scan_region > div {
@@ -797,18 +833,31 @@ export function Header() {
             )}
           </div>
 
-          <p className="text-slate-500 text-xs sm:text-sm font-medium mt-8 mb-5 tracking-wide">
-            ដាក់កូដ QR ឱ្យចំកណ្តាល
+          <p className="text-slate-400 text-xs sm:text-sm font-medium mt-6 mb-4 text-center">
+            ដាក់កូដ QR ឱ្យចំកណ្តាល (កាន់ទូរស័ព្ទឃ្លាតប្រហែល ១៥-២០ សង់ទីម៉ែត្រ)
           </p>
 
-          <button
-            type="button"
-            onClick={() => setShowScanner(false)}
-            className="flex items-center justify-center gap-2.5 px-7 py-3 rounded-2xl bg-[#111622] hover:bg-[#1a2234] text-white border border-white/10 shadow-lg text-xs sm:text-sm font-bold active:scale-95 transition-all"
-          >
-            <X className="h-4 w-4 text-slate-300" />
-            <span>បិទកាមេរ៉ា</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <label className="cursor-pointer flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg text-xs sm:text-sm font-bold active:scale-95 transition-all">
+              <QrCode className="h-4 w-4" />
+              <span>ថត ឬជ្រើសរើសរូប QR</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFallbackPhotoScan}
+                className="hidden"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={() => setShowScanner(false)}
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-[#111622] hover:bg-[#1a2234] text-white border border-white/10 shadow-lg text-xs sm:text-sm font-bold active:scale-95 transition-all"
+            >
+              <X className="h-4 w-4 text-slate-300" />
+              <span>បិទកាមេរ៉ា</span>
+            </button>
+          </div>
         </div>
       )}
 

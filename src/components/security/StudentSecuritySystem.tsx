@@ -709,15 +709,18 @@ export function StudentVerificationGate({
 
     const startQrCam = async () => {
       if (!scanningCamera) return;
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 180));
       if (!mounted || !document.getElementById('bipa-login-qr-reader')) return;
 
       try {
-        const qr = new Html5Qrcode('bipa-login-qr-reader');
+        const qr = new Html5Qrcode('bipa-login-qr-reader', {
+          useBarCodeDetectorIfSupported: true,
+          verbose: false
+        });
         scannerRef.current = qr;
         await qr.start(
           { facingMode: 'environment' },
-          { fps: 28, aspectRatio: 1.0 },
+          { fps: 24, disableFlip: false },
           (decoded) => {
             const ok = verifyByQrOrCredentials(decoded);
             if (ok && scannerRef.current?.isScanning) {
