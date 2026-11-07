@@ -2201,14 +2201,9 @@ export function StudentPersonalDashboard() {
             </div>
 
             <div className="space-y-0.5 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-black text-white leading-tight">
-                  {verifiedProfile.fullNameKm}
-                </h1>
-                <Badge className="bg-amber-400 hover:bg-amber-400 text-slate-950 font-black text-[10px] px-2.5 py-0.5">
-                  {verifiedProfile.studentCode}
-                </Badge>
-              </div>
+              <h1 className="text-xl sm:text-2xl font-black text-white leading-tight">
+                {verifiedProfile.fullNameKm}
+              </h1>
               <p className="text-xs sm:text-sm font-bold text-white/95">
                 {renderTranslatedUserType(verifiedProfile.userTypeKm)}
               </p>

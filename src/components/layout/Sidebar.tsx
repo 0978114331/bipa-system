@@ -31,7 +31,10 @@ import {
   Copy,
   Check,
   X,
-  KeyRound
+  KeyRound,
+  Mail,
+  CheckCircle2,
+  Link2
 } from 'lucide-react';
 import { UserRole } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -62,6 +65,56 @@ interface NavItem {
   roles: UserRole[];
 }
 
+export interface ContactMessageItem {
+  id: string;
+  senderName: string;
+  senderEmail: string;
+  subject: string;
+  message: string;
+  createdAt: string;
+  isRead: boolean;
+}
+
+export interface BipaContactConfig {
+  email: string;
+  phoneDisplayKm: string;
+  phoneDial: string;
+  addressKm: string;
+  addressEn: string;
+  websiteDisplay: string;
+  websiteUrl: string;
+  facebookPageName: string;
+  facebookUrl: string;
+  youtubeName: string;
+  youtubeUrl: string;
+  telegramName: string;
+  telegramUrl: string;
+  mapUrl: string;
+}
+
+export const CONTACT_MESSAGES_STORAGE_KEY = 'bipa_contact_messages_v1';
+export const CONTACT_CONFIG_STORAGE_KEY = 'bipa_contact_config_v1';
+
+export const defaultBipaContactConfig: BipaContactConfig = {
+  email: 'info@bunong.org',
+  phoneDisplayKm: '(៨៥៥) ៩៩ ៩៨៧ ៤៥១',
+  phoneDial: '+85599987451',
+  addressKm:
+    'ផ្ទះលេខBE0E1E2 ភូមិត្នោតជ្រុំ សង្កាត់បឹងទំពុនទី២, ខណ្ឌមានជ័យ, រាជធានីភ្នំពេញ',
+  addressEn:
+    'House #BE0E1E2, Tnaot Chrum Village, Sangkat Boeng Tumpun 2, Khan Meanchey, Phnom Penh',
+  websiteDisplay: 'www.bunong.org',
+  websiteUrl: 'https://www.bunong.org',
+  facebookPageName: 'The Bunong Indigenous People Association',
+  facebookUrl: 'https://www.facebook.com/search/top?q=The%20Bunong%20Indigenous%20People%20Association',
+  youtubeName: 'BIPA Official Channel',
+  youtubeUrl: 'https://www.youtube.com',
+  telegramName: 'BIPA Telegram',
+  telegramUrl: 'https://t.me/+85599987451',
+  mapUrl:
+    'https://www.google.com/maps/search/?api=1&query=Boeng+Tumpun+2+Meanchey+Phnom+Penh'
+};
+
 const CHART_COLORS = [
   '#3b82f6',
   '#10b981',
@@ -72,6 +125,145 @@ const CHART_COLORS = [
   '#f97316',
   '#14b8a6'
 ];
+
+export function loadCachedContactConfig(): BipaContactConfig {
+  try {
+    const raw = localStorage.getItem(CONTACT_CONFIG_STORAGE_KEY);
+    if (!raw) return defaultBipaContactConfig;
+    const parsed = JSON.parse(raw);
+    return {
+      ...defaultBipaContactConfig,
+      ...parsed
+    };
+  } catch {
+    return defaultBipaContactConfig;
+  }
+}
+
+export async function fetchContactConfigFromDb(): Promise<BipaContactConfig> {
+  let current = loadCachedContactConfig();
+  try {
+    const { data: setRow } = await supabase
+      .from('bipa_settings')
+      .select('name_en')
+      .eq('id', 'contact_config_v1')
+      .maybeSingle();
+
+    if (setRow && setRow.name_en) {
+      const parsed = JSON.parse(setRow.name_en);
+      if (parsed && typeof parsed === 'object') {
+        current = {
+          ...defaultBipaContactConfig,
+          ...parsed
+        };
+        localStorage.setItem(CONTACT_CONFIG_STORAGE_KEY, JSON.stringify(current));
+      }
+    }
+  } catch {}
+  return current;
+}
+
+export async function saveContactConfigToDb(config: BipaContactConfig): Promise<void> {
+  const jsonStr = JSON.stringify(config);
+  localStorage.setItem(CONTACT_CONFIG_STORAGE_KEY, jsonStr);
+  try {
+    await supabase.from('bipa_settings').upsert({
+      id: 'contact_config_v1',
+      logo_url: 'CONTACT_CONFIG',
+      name_km: 'ការកំណត់ព័ត៌មានទំនាក់ទំនង BIPA',
+      name_en: jsonStr
+    });
+  } catch {}
+  window.dispatchEvent(new Event('contact-config-updated'));
+}
+
+export async function fetchContactMessagesFromDb(): Promise<ContactMessageItem[]> {
+  let list: ContactMessageItem[] = [];
+  try {
+    const raw = localStorage.getItem(CONTACT_MESSAGES_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) list = parsed;
+    }
+  } catch {}
+
+  try {
+    const { data: setRow } = await supabase
+      .from('bipa_settings')
+      .select('name_en')
+      .eq('id', 'contact_messages_v1')
+      .maybeSingle();
+
+    if (setRow && setRow.name_en) {
+      const parsed = JSON.parse(setRow.name_en);
+      if (Array.isArray(parsed)) {
+        list = parsed;
+        localStorage.setItem(CONTACT_MESSAGES_STORAGE_KEY, JSON.stringify(list));
+      }
+    }
+  } catch {}
+
+  return list;
+}
+
+export async function saveContactMessagesToDb(list: ContactMessageItem[]): Promise<void> {
+  const jsonStr = JSON.stringify(list);
+  localStorage.setItem(CONTACT_MESSAGES_STORAGE_KEY, jsonStr);
+  try {
+    await supabase.from('bipa_settings').upsert({
+      id: 'contact_messages_v1',
+      logo_url: 'CONTACT_INBOX',
+      name_km: 'ប្រអប់សារទំនាក់ទំនង',
+      name_en: jsonStr
+    });
+  } catch {}
+  window.dispatchEvent(new Event('contact-messages-updated'));
+}
+
+export function GlobalFooterContactEnhancer() {
+  const [cfg, setCfg] = useState<BipaContactConfig>(() => loadCachedContactConfig());
+
+  useEffect(() => {
+    const load = () => {
+      fetchContactConfigFromDb().then(setCfg);
+    };
+    load();
+    window.addEventListener('contact-config-updated', load);
+    return () => window.removeEventListener('contact-config-updated', load);
+  }, []);
+
+  useEffect(() => {
+    const syncFooterNodes = () => {
+      const footerNodes = Array.from(
+        document.querySelectorAll('footer *, main *')
+      ) as HTMLElement[];
+
+      footerNodes.forEach((el) => {
+        if (el.children.length > 0) return;
+        const txt = (el.textContent || '').trim();
+        if (
+          txt === 'Khouvchvea123@gmail.com' ||
+          txt === 'residence@example.edu'
+        ) {
+          el.textContent = cfg.email;
+        } else if (
+          txt === '+855 978114331' ||
+          txt === '+855 00 000 000'
+        ) {
+          el.textContent = cfg.phoneDisplayKm;
+        } else if (txt === 'Phnom Penh, Cambodia') {
+          el.textContent = cfg.addressKm;
+        }
+      });
+    };
+
+    syncFooterNodes();
+    const timer = setInterval(syncFooterNodes, 1200);
+    return () => clearInterval(timer);
+  }, [cfg]);
+
+  return null;
+}
 
 export function Sidebar() {
   const { profile } = useAuth();
@@ -90,12 +282,23 @@ export function Sidebar() {
     location.pathname === '/admin/user-passwords';
 
   const isResidenceManagerRoute = location.pathname.startsWith('/admin/residences');
+  const isSettingsRoute = location.pathname.startsWith('/admin/settings');
 
   const [showHomeManager, setShowHomeManager] = useState(isHomeManagerRoute);
   const [manageTab, setManageTab] = useState<'news' | 'banners' | 'settings'>('news');
+  const [settingsSectionTab, setSettingsSectionTab] = useState<'inbox' | 'contact' | 'system'>(
+    'inbox'
+  );
+
   const [banners, setBanners] = useState<HomeBannerItem[]>([]);
   const [newsList, setNewsList] = useState<HomeNewsItem[]>([]);
+  const [inboxMessages, setInboxMessages] = useState<ContactMessageItem[]>([]);
+  const [contactCfg, setContactCfg] = useState<BipaContactConfig>(() =>
+    loadCachedContactConfig()
+  );
+
   const [hoveredPointIdx, setHoveredPointIdx] = useState<number | null>(null);
+  const [bannerToast, setBannerToast] = useState('');
 
   const [editingNews, setEditingNews] = useState<HomeNewsItem | null>(null);
   const [formTitleKm, setFormTitleKm] = useState('');
@@ -121,9 +324,32 @@ export function Sidebar() {
     setShowHomeManager(isHomeManagerRoute);
   }, [isHomeManagerRoute]);
 
+  const showBannerFeedback = (msg: string) => {
+    setBannerToast(msg);
+    setTimeout(() => setBannerToast(''), 3000);
+  };
+
   const loadHomeData = async () => {
     const data = await fetchHomeContentFromDb();
-    setBanners(data.banners);
+    let finalBanners = data.banners;
+
+    try {
+      const { data: backupRow } = await supabase
+        .from('bipa_settings')
+        .select('name_en')
+        .eq('id', 'home_banners_override_v1')
+        .maybeSingle();
+
+      if (backupRow && backupRow.name_en) {
+        const parsedBanners = JSON.parse(backupRow.name_en);
+        if (Array.isArray(parsedBanners)) {
+          finalBanners = parsedBanners;
+          localStorage.setItem(HOME_BANNERS_STORAGE_KEY, JSON.stringify(finalBanners));
+        }
+      }
+    } catch {}
+
+    setBanners(finalBanners);
     setNewsList(data.news);
 
     try {
@@ -140,13 +366,64 @@ export function Sidebar() {
     } catch {}
   };
 
+  const loadSettingsAndInboxData = async () => {
+    const [msgs, cfgData] = await Promise.all([
+      fetchContactMessagesFromDb(),
+      fetchContactConfigFromDb()
+    ]);
+    setInboxMessages(msgs);
+    setContactCfg(cfgData);
+
+    try {
+      const { data: setDb } = await supabase
+        .from('bipa_settings')
+        .select('*')
+        .eq('id', '1')
+        .single();
+      if (setDb) {
+        setSysLogo(setDb.logo_url || '');
+        setSysNameKm(setDb.name_km || '');
+        setSysNameEn(setDb.name_en || '');
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadSettingsAndInboxData();
+    const syncCustomBannersOnMount = async () => {
+      try {
+        const { data: backupRow } = await supabase
+          .from('bipa_settings')
+          .select('name_en')
+          .eq('id', 'home_banners_override_v1')
+          .maybeSingle();
+
+        if (backupRow && backupRow.name_en) {
+          localStorage.setItem(HOME_BANNERS_STORAGE_KEY, backupRow.name_en);
+          window.dispatchEvent(new Event('home-content-updated'));
+        }
+      } catch {}
+    };
+    syncCustomBannersOnMount();
+
+    const handleInboxUpdate = () => {
+      fetchContactMessagesFromDb().then(setInboxMessages);
+    };
+    window.addEventListener('contact-messages-updated', handleInboxUpdate);
+    return () => window.removeEventListener('contact-messages-updated', handleInboxUpdate);
+  }, []);
+
   useEffect(() => {
     if (showHomeManager) {
       loadHomeData();
-      const timer = setInterval(loadHomeData, 4000);
-      return () => clearInterval(timer);
     }
   }, [showHomeManager]);
+
+  useEffect(() => {
+    if (isSettingsRoute) {
+      loadSettingsAndInboxData();
+    }
+  }, [isSettingsRoute]);
 
   const handleSaveSettings = async () => {
     try {
@@ -157,10 +434,16 @@ export function Sidebar() {
         name_en: sysNameEn
       });
       window.dispatchEvent(new Event('system-settings-updated'));
-      alert('បានរក្សាទុកការកំណត់ប្រព័ន្ធដោយជោគជ័យ!');
+      showBannerFeedback('បានរក្សាទុកការកំណត់ប្រព័ន្ធដោយជោគជ័យ!');
     } catch (error) {
       console.error(error);
     }
+  };
+
+  const handleSaveContactConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await saveContactConfigToDb(contactCfg);
+    showBannerFeedback('បានរក្សាទុកព័ត៌មានទំនាក់ទំនង និងលីងបណ្តាញសង្គមដោយជោគជ័យ!');
   };
 
   const openEditNewsForm = (item?: HomeNewsItem) => {
@@ -242,6 +525,7 @@ export function Sidebar() {
 
     openEditNewsForm(undefined);
     window.dispatchEvent(new Event('home-content-updated'));
+    showBannerFeedback('បានរក្សាទុកព័ត៌មានដោយជោគជ័យ!');
   };
 
   const handleDeleteNewsItem = async (id: string) => {
@@ -253,18 +537,68 @@ export function Sidebar() {
       await supabase.from('bipa_home_news').delete().eq('id', id);
     } catch {}
     window.dispatchEvent(new Event('home-content-updated'));
+    showBannerFeedback('បានលុបព័ត៌មានដោយជោគជ័យ!');
   };
 
-  const handleAddOrUpdateBanner = () => {
+  const persistBannersPermanently = async (
+    nextBanners: HomeBannerItem[],
+    feedbackText?: string
+  ) => {
+    setBanners(nextBanners);
+    const jsonStr = JSON.stringify(nextBanners);
+    localStorage.setItem(HOME_BANNERS_STORAGE_KEY, jsonStr);
+
+    try {
+      await supabase.from('bipa_settings').upsert({
+        id: 'home_banners_override_v1',
+        logo_url: 'HOME_BANNERS_OVERRIDE',
+        name_km: 'BIPA Home Banners',
+        name_en: jsonStr
+      });
+    } catch {}
+
+    try {
+      const { data: existingRows } = await supabase.from('bipa_home_banners').select('id');
+      if (existingRows && existingRows.length > 0) {
+        const keepIds = new Set(nextBanners.map((b) => b.id));
+        const idsToDelete = existingRows
+          .map((r: any) => String(r.id))
+          .filter((id) => !keepIds.has(id));
+
+        if (idsToDelete.length > 0) {
+          await supabase.from('bipa_home_banners').delete().in('id', idsToDelete);
+        }
+      }
+
+      if (nextBanners.length > 0) {
+        const toUpsert = nextBanners.map((b, idx) => ({
+          id: b.id,
+          image_url: b.image_url,
+          title_km: b.title_km || '',
+          title_en: b.title_en || '',
+          link_url: b.link_url || '',
+          sort_order: idx
+        }));
+        await supabase.from('bipa_home_banners').upsert(toUpsert);
+      }
+    } catch {}
+
+    window.dispatchEvent(new Event('home-content-updated'));
+    if (feedbackText) {
+      showBannerFeedback(feedbackText);
+    }
+  };
+
+  const handleAddOrUpdateBanner = async () => {
     if (!newBannerUrl.trim()) return;
 
     if (editingBannerId) {
       const updated = banners.map((b) =>
         b.id === editingBannerId ? { ...b, image_url: newBannerUrl.trim() } : b
       );
-      setBanners(updated);
       setEditingBannerId(null);
       setNewBannerUrl('');
+      await persistBannersPermanently(updated, 'បានកែប្រែ Link រូប Banner ដោយជោគជ័យ!');
       return;
     }
 
@@ -272,8 +606,9 @@ export function Sidebar() {
       id: `banner-${Date.now()}`,
       image_url: newBannerUrl.trim()
     };
-    setBanners([...banners, newB]);
+    const nextBanners = [...banners, newB];
     setNewBannerUrl('');
+    await persistBannersPermanently(nextBanners, 'បានបន្ថែមរូប Banner ថ្មីដោយជោគជ័យ!');
   };
 
   const handleStartEditBanner = (banner: HomeBannerItem) => {
@@ -286,14 +621,14 @@ export function Sidebar() {
     setNewBannerUrl('');
   };
 
-  const handleMoveBanner = (index: number, direction: 'left' | 'right') => {
+  const handleMoveBanner = async (index: number, direction: 'left' | 'right') => {
     const targetIdx = direction === 'left' ? index - 1 : index + 1;
     if (targetIdx < 0 || targetIdx >= banners.length) return;
     const nextBanners = [...banners];
     const temp = nextBanners[index];
     nextBanners[index] = nextBanners[targetIdx];
     nextBanners[targetIdx] = temp;
-    setBanners(nextBanners);
+    await persistBannersPermanently(nextBanners, 'បានប្តូរទីតាំងរូប Banner រួចរាល់!');
   };
 
   const handleCopyBannerUrl = (banner: HomeBannerItem) => {
@@ -303,36 +638,32 @@ export function Sidebar() {
     });
   };
 
-  const handleDeleteBanner = (id: string) => {
-    setBanners(banners.filter((b) => b.id !== id));
+  const handleDeleteBanner = async (id: string) => {
+    if (!window.confirm('តើអ្នកពិតជាចង់លុបរូប Banner នេះមែនទេ?')) return;
+    const nextBanners = banners.filter((b) => b.id !== id);
     if (editingBannerId === id) {
       setEditingBannerId(null);
       setNewBannerUrl('');
     }
+    await persistBannersPermanently(nextBanners, 'បានលុបរូប Banner ចេញជាអចិន្ត្រៃយ៍!');
   };
 
   const handleSaveBanners = async () => {
-    try {
-      await supabase.from('bipa_home_banners').delete().neq('id', 'dummy_value');
+    await persistBannersPermanently(banners, 'បានរក្សាទុករូប Banner ទាំងអស់ដោយជោគជ័យ!');
+  };
 
-      if (banners.length > 0) {
-        const toInsert = banners.map((b, idx) => ({
-          id: b.id,
-          image_url: b.image_url,
-          title_km: b.title_km || '',
-          title_en: b.title_en || '',
-          link_url: b.link_url || '',
-          sort_order: idx
-        }));
-        await supabase.from('bipa_home_banners').insert(toInsert);
-      }
+  const handleMarkMessageRead = async (msgId: string) => {
+    const next = inboxMessages.map((m) => (m.id === msgId ? { ...m, isRead: true } : m));
+    setInboxMessages(next);
+    await saveContactMessagesToDb(next);
+  };
 
-      localStorage.setItem(HOME_BANNERS_STORAGE_KEY, JSON.stringify(banners));
-      alert('បានរក្សាទុករូប Banner ដោយជោគជ័យ!');
-      window.dispatchEvent(new Event('home-content-updated'));
-    } catch (error) {
-      console.error(error);
-    }
+  const handleDeleteContactMessage = async (msgId: string) => {
+    if (!window.confirm('តើអ្នកពិតជាចង់លុបសារនេះមែនទេ?')) return;
+    const next = inboxMessages.filter((m) => m.id !== msgId);
+    setInboxMessages(next);
+    await saveContactMessagesToDb(next);
+    showBannerFeedback('បានលុបសារទំនាក់ទំនងរួចរាល់!');
   };
 
   const adminItems: NavItem[] = [
@@ -406,7 +737,7 @@ export function Sidebar() {
       label: t('settings.title'),
       path: '/admin/settings',
       icon: Settings,
-      roles: ['super_admin']
+      roles: ['super_admin', 'residence_admin', 'finance_admin', 'duty_manager']
     }
   ];
 
@@ -503,10 +834,20 @@ export function Sidebar() {
     };
   });
 
+  const unreadInboxCount = inboxMessages.filter((m) => !m.isRead).length;
   const activeTabIndex = manageTab === 'news' ? 0 : manageTab === 'banners' ? 1 : 2;
 
   return (
     <>
+      <GlobalFooterContactEnhancer />
+
+      {bannerToast && (
+        <div className="fixed top-20 right-4 z-[250] px-4 py-3 rounded-2xl bg-emerald-950/95 border border-emerald-500 text-emerald-300 shadow-2xl flex items-center gap-2 text-xs sm:text-sm font-black animate-in slide-in-from-top-3 duration-200 font-khmer">
+          <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+          <span>{bannerToast}</span>
+        </div>
+      )}
+
       {location.pathname.startsWith('/admin/students') && (
         <style>{`
           @media screen and (max-width: 768px) {
@@ -570,18 +911,412 @@ export function Sidebar() {
                 }
               }}
               className={cn(
-                'w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors text-left',
+                'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors text-left',
                 isActive(item.path)
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
             >
-              <item.icon className="h-4 w-4 shrink-0" />
-              <span className="truncate">{item.label}</span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <item.icon className="h-4 w-4 shrink-0" />
+                <span className="truncate">{item.label}</span>
+              </div>
+              {item.path === '/admin/settings' && unreadInboxCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black shrink-0">
+                  {unreadInboxCount}
+                </span>
+              )}
             </button>
           ))}
         </nav>
       </aside>
+
+      {isSettingsRoute && isAdminRole && !showHomeManager && !isUserPasswordsRoute && (
+        <div
+          style={{ height: 'calc(100dvh - 4rem)' }}
+          className="fixed top-16 sm:top-20 left-0 lg:left-64 right-0 z-30 bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 font-khmer space-y-5 scrollbar-thin"
+        >
+          <div className="bg-white dark:bg-[#162033] rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Badge className="bg-amber-500 text-slate-950 font-extrabold px-2.5 py-0.5 text-[10px] sm:text-xs">
+                SYSTEM SETTINGS, INBOX & CONTACT LINKS
+              </Badge>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2 pt-1">
+                <Settings className="h-6 w-6 text-amber-500 shrink-0" />
+                <span>ការកំណត់ប្រព័ន្ធ ប្រអប់សារទំនាក់ទំនង និងលីងបណ្តាញសង្គម</span>
+              </h1>
+              <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm">
+                ទទួលសារពីអ្នកប្រើប្រាស់ និងកែប្រែអ៊ីមែល លេខទូរស័ព្ទ អាសយដ្ឋាន គេហទំព័រ និងលីង Facebook / YouTube / Telegram
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 bg-slate-100 dark:bg-[#0f172a] p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 w-fit">
+              <button
+                type="button"
+                onClick={() => setSettingsSectionTab('inbox')}
+                className={cn(
+                  'px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all',
+                  settingsSectionTab === 'inbox'
+                    ? 'bg-blue-600 text-white shadow'
+                    : 'text-slate-600 dark:text-slate-300'
+                )}
+              >
+                <Mail className="h-3.5 w-3.5" />
+                <span>ប្រអប់សារទទួលបាន ({inboxMessages.length})</span>
+                {unreadInboxCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-black">
+                    {unreadInboxCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSettingsSectionTab('contact')}
+                className={cn(
+                  'px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all',
+                  settingsSectionTab === 'contact'
+                    ? 'bg-blue-600 text-white shadow'
+                    : 'text-slate-600 dark:text-slate-300'
+                )}
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                <span>កែប្រែព័ត៌មានទំនាក់ទំនង & លីង</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSettingsSectionTab('system')}
+                className={cn(
+                  'px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all',
+                  settingsSectionTab === 'system'
+                    ? 'bg-blue-600 text-white shadow'
+                    : 'text-slate-600 dark:text-slate-300'
+                )}
+              >
+                <Settings className="h-3.5 w-3.5" />
+                <span>Logo & ឈ្មោះប្រព័ន្ធ</span>
+              </button>
+            </div>
+          </div>
+
+          {settingsSectionTab === 'inbox' && (
+            <Card className="bg-white dark:bg-[#162033] border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm">
+              <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
+                <CardTitle className="text-slate-900 dark:text-white text-sm sm:text-base font-black flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-blue-500" />
+                  <span>សារដែលបានផ្ញើមកពីទំព័រទំនាក់ទំនង ({inboxMessages.length})</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6 space-y-3 max-h-[560px] overflow-y-auto scrollbar-thin">
+                {inboxMessages.length > 0 ? (
+                  inboxMessages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      onClick={() => handleMarkMessageRead(msg.id)}
+                      className={cn(
+                        'p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer',
+                        !msg.isRead
+                          ? 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-400 dark:border-blue-500/60'
+                          : 'bg-slate-50 dark:bg-[#0f172a] border-slate-200 dark:border-slate-800'
+                      )}
+                    >
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {!msg.isRead && (
+                            <Badge className="bg-rose-600 text-white text-[10px] font-black px-2 py-0">
+                              សារថ្មី
+                            </Badge>
+                          )}
+                          <span className="text-sm font-black text-slate-900 dark:text-white">
+                            {msg.senderName}
+                          </span>
+                          <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                            ({msg.senderEmail})
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            • {new Date(msg.createdAt).toLocaleString('km-KH')}
+                          </span>
+                        </div>
+                        <div className="text-xs font-black text-amber-600 dark:text-amber-400">
+                          ប្រធានបទ៖ {msg.subject || 'មិនបញ្ជាក់'}
+                        </div>
+                        <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+                          {msg.message}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        <a
+                          href={`mailto:${msg.senderEmail}?subject=Re: ${encodeURIComponent(
+                            msg.subject || 'BIPA Support'
+                          )}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold"
+                        >
+                          ឆ្លើយតប Email
+                        </a>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteContactMessage(msg.id);
+                          }}
+                          className="p-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/30 text-rose-500"
+                          title="លុបសារ"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12 text-slate-400 text-xs font-bold">
+                    មិនទាន់មានសារផ្ញើចូលនៅឡើយទេ
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {settingsSectionTab === 'contact' && (
+            <Card className="bg-white dark:bg-[#162033] border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm">
+              <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                <CardTitle className="text-slate-900 dark:text-white text-sm sm:text-base font-black flex items-center gap-2">
+                  <Link2 className="h-5 w-5 text-amber-500" />
+                  <span>កែប្រែព័ត៌មានទំនាក់ទំនង អាសយដ្ឋាន អ៊ីមែល និងលីងបណ្តាញសង្គម</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 sm:p-6">
+                <form onSubmit={handleSaveContactConfig} className="space-y-4 max-w-4xl">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-1.5">
+                        អ៊ីមែលផ្លូវការ (Email)
+                      </label>
+                      <Input
+                        value={contactCfg.email}
+                        onChange={(e) =>
+                          setContactCfg({ ...contactCfg, email: e.target.value })
+                        }
+                        className="h-10 rounded-xl bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-1.5">
+                        លេខទូរស័ព្ទបង្ហាញលើអេក្រង់
+                      </label>
+                      <Input
+                        value={contactCfg.phoneDisplayKm}
+                        onChange={(e) =>
+                          setContactCfg({ ...contactCfg, phoneDisplayKm: e.target.value })
+                        }
+                        className="h-10 rounded-xl bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-1.5">
+                        លេខទូរស័ព្ទពេលចុចខល (Dial Number)
+                      </label>
+                      <Input
+                        value={contactCfg.phoneDial}
+                        onChange={(e) =>
+                          setContactCfg({ ...contactCfg, phoneDial: e.target.value })
+                        }
+                        placeholder="+85599987451"
+                        className="h-10 rounded-xl bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-1.5">
+                        អាសយដ្ឋាន (ភាសាខ្មែរ)
+                      </label>
+                      <Input
+                        value={contactCfg.addressKm}
+                        onChange={(e) =>
+                          setContactCfg({ ...contactCfg, addressKm: e.target.value })
+                        }
+                        className="h-10 rounded-xl bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-1.5">
+                        Link ផែនទី Google Maps (ពេលចុចលើអាសយដ្ឋាន)
+                      </label>
+                      <Input
+                        value={contactCfg.mapUrl}
+                        onChange={(e) =>
+                          setContactCfg({ ...contactCfg, mapUrl: e.target.value })
+                        }
+                        className="h-10 rounded-xl bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-1.5">
+                        ឈ្មោះគេហទំព័រ (Website)
+                      </label>
+                      <Input
+                        value={contactCfg.websiteDisplay}
+                        onChange={(e) =>
+                          setContactCfg({ ...contactCfg, websiteDisplay: e.target.value })
+                        }
+                        className="h-10 rounded-xl bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-1.5">
+                        Link គេហទំព័រ (Website URL)
+                      </label>
+                      <Input
+                        value={contactCfg.websiteUrl}
+                        onChange={(e) =>
+                          setContactCfg({ ...contactCfg, websiteUrl: e.target.value })
+                        }
+                        className="h-10 rounded-xl bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-1.5">
+                        ឈ្មោះ Facebook Page
+                      </label>
+                      <Input
+                        value={contactCfg.facebookPageName}
+                        onChange={(e) =>
+                          setContactCfg({ ...contactCfg, facebookPageName: e.target.value })
+                        }
+                        className="h-10 rounded-xl bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-1.5">
+                        Link Facebook Page (URL)
+                      </label>
+                      <Input
+                        value={contactCfg.facebookUrl}
+                        onChange={(e) =>
+                          setContactCfg({ ...contactCfg, facebookUrl: e.target.value })
+                        }
+                        className="h-10 rounded-xl bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-1.5">
+                        Link YouTube Channel (URL)
+                      </label>
+                      <Input
+                        value={contactCfg.youtubeUrl}
+                        onChange={(e) =>
+                          setContactCfg({ ...contactCfg, youtubeUrl: e.target.value })
+                        }
+                        className="h-10 rounded-xl bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-1.5">
+                        Link Telegram (URL)
+                      </label>
+                      <Input
+                        value={contactCfg.telegramUrl}
+                        onChange={(e) =>
+                          setContactCfg({ ...contactCfg, telegramUrl: e.target.value })
+                        }
+                        className="h-10 rounded-xl bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs h-10 px-6 rounded-xl shadow-md"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    រក្សាទុកព័ត៌មានទំនាក់ទំនង និងលីងទាំងអស់
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {settingsSectionTab === 'system' && (
+            <Card className="bg-white dark:bg-[#162033] border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm">
+              <CardHeader className="border-b border-slate-100 dark:border-slate-800">
+                <CardTitle className="text-amber-500 text-sm sm:text-base font-black flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  <span>កំណត់ Logo និងឈ្មោះប្រព័ន្ធ BIPA</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-5 max-w-2xl">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-2">
+                    Logo ប្រព័ន្ធ (URL)
+                  </label>
+                  <div className="flex gap-4 items-center">
+                    {sysLogo && (
+                      <img
+                        src={sysLogo}
+                        alt="Logo"
+                        className="w-16 h-16 rounded-xl object-contain bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 p-1 shrink-0"
+                      />
+                    )}
+                    <Input
+                      value={sysLogo}
+                      onChange={(e) => setSysLogo(e.target.value)}
+                      placeholder="https://..."
+                      className="bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-2">
+                      ឈ្មោះប្រព័ន្ធ (ភាសាខ្មែរ)
+                    </label>
+                    <Input
+                      value={sysNameKm}
+                      onChange={(e) => setSysNameKm(e.target.value)}
+                      className="bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 dark:text-slate-300 block mb-2">
+                      System Name (English)
+                    </label>
+                    <Input
+                      value={sysNameEn}
+                      onChange={(e) => setSysNameEn(e.target.value)}
+                      className="bg-slate-50 dark:bg-[#0f172a] text-xs font-bold"
+                    />
+                  </div>
+                </div>
+                <Button
+                  onClick={handleSaveSettings}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs h-10 px-6 rounded-xl shadow-md"
+                >
+                  <Save className="h-4 w-4 mr-2" /> រក្សាទុកការផ្លាស់ប្តូរ
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       {isUserPasswordsRoute && isAdminRole && !showHomeManager && (
         <div
@@ -1120,7 +1855,7 @@ export function Sidebar() {
             <Card className="bg-[#1e293b] border-slate-800 shadow-md animate-in fade-in duration-300">
               <CardHeader className="pb-3 border-b border-slate-800">
                 <CardTitle className="text-white text-sm sm:text-base font-bold">
-                  គ្រប់គ្រង កែប្រែ Link និងប្តូរទីតាំងរូបភាព Banner
+                  គ្រប់គ្រង កែប្រែ Link និងប្តូរទីតាំងរូបភាព Banner (រក្សាទុកស្វ័យប្រវត្តិ)
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 sm:p-6 space-y-6">
@@ -1128,6 +1863,9 @@ export function Sidebar() {
                   <Input
                     value={newBannerUrl}
                     onChange={(e) => setNewBannerUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddOrUpdateBanner();
+                    }}
                     placeholder={
                       editingBannerId
                         ? 'កែប្រែ Link រូបភាព Banner នៅទីនេះ...'
@@ -1161,7 +1899,7 @@ export function Sidebar() {
                     >
                       {editingBannerId ? (
                         <>
-                          <Edit2 className="h-4 w-4 mr-1.5" /> កែប្រែ Link Banner
+                          <Edit2 className="h-4 w-4 mr-1.5" /> រក្សាទុក Link ថ្មី
                         </>
                       ) : (
                         <>

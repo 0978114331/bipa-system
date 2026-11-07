@@ -23,10 +23,14 @@ import {
 } from 'lucide-react';
 import { initialStudents } from '@/pages/admin/StudentListPage';
 import { normalizeStudentCodeInput, resolveStudentByIdOrName } from '@/components/layout/Header';
+import {
+  GoToDashboardPromptCard,
+  loadCachedSecurityPayload
+} from '@/components/security/StudentSecuritySystem';
 import { cn } from '@/lib/utils';
-import { GoToDashboardPromptCard } from '@/components/security/StudentSecuritySystem';
 
 export type LeaveApprovalStatus = 'pending' | 'approved' | 'rejected';
+
 export interface BipaLeaveRequestItem {
   id: string;
   studentCode: string;
@@ -110,6 +114,66 @@ export function parseIsoDateToKhmerParts(isoDate: string): {
     dayKm: '......',
     monthKm: '............',
     yearKm: '២០២៦'
+  };
+}
+
+function getInstantStudentInfoSync(rawCode: string): {
+  code: string;
+  nameKm: string;
+  genderKm: string;
+} | null {
+  const clean = normalizeStudentCodeInput(rawCode);
+  if (!clean) return null;
+
+  try {
+    const secPayload = loadCachedSecurityPayload();
+    if (secPayload.profiles && secPayload.profiles[clean]) {
+      const p = secPayload.profiles[clean];
+      return {
+        code: clean,
+        nameKm: p.fullNameKm || clean,
+        genderKm: p.genderKm || 'ប្រុស'
+      };
+    }
+  } catch {}
+
+  const initMatch = initialStudents.find(
+    (s) => normalizeStudentCodeInput(s.student_code).toLowerCase() === clean.toLowerCase()
+  );
+  if (initMatch) {
+    return {
+      code: normalizeStudentCodeInput(initMatch.student_code),
+      nameKm: initMatch.full_name_km || initMatch.full_name_en || clean,
+      genderKm: initMatch.gender_km || 'ប្រុស'
+    };
+  }
+
+  try {
+    const rawDir =
+      localStorage.getItem('bipa_students_directory_v2') ||
+      localStorage.getItem('bipa_students_directory');
+    if (rawDir) {
+      const parsed = JSON.parse(rawDir);
+      if (Array.isArray(parsed)) {
+        const found = parsed.find(
+          (s: any) =>
+            normalizeStudentCodeInput(s.student_code).toLowerCase() === clean.toLowerCase()
+        );
+        if (found) {
+          return {
+            code: clean,
+            nameKm: found.full_name_km || found.full_name_en || clean,
+            genderKm: found.gender_km || 'ប្រុស'
+          };
+        }
+      }
+    }
+  } catch {}
+
+  return {
+    code: clean,
+    nameKm: clean,
+    genderKm: 'ប្រុស'
   };
 }
 
@@ -688,11 +752,19 @@ export function LeaveStudentView({
   const todayIso = new Date().toISOString().split('T')[0];
 
   const [payload, setPayload] = useState<LeaveSystemPayload>(() => loadCachedLeavePayload());
-  const [linkedId, setLinkedId] = useState<string>(() =>
-    normalizeStudentCodeInput(localStorage.getItem('bipa_linked_student_id') || '')
+
+  const initialStudentSync = useMemo(
+    () => getInstantStudentInfoSync(localStorage.getItem('bipa_linked_student_id') || ''),
+    []
   );
-  const [studentNameKm, setStudentNameKm] = useState<string>('');
-  const [genderKm, setGenderKm] = useState<string>('ប្រុស');
+
+  const [linkedId, setLinkedId] = useState<string>(() => initialStudentSync?.code || '');
+  const [studentNameKm, setStudentNameKm] = useState<string>(
+    () => initialStudentSync?.nameKm || ''
+  );
+  const [genderKm, setGenderKm] = useState<string>(
+    () => initialStudentSync?.genderKm || 'ប្រុស'
+  );
 
   const [studyYearKm, setStudyYearKm] = useState('២');
   const [academicYearKm, setAcademicYearKm] = useState('២០២៥-២០២៦');
@@ -725,26 +797,28 @@ export function LeaveStudentView({
       setStudentNameKm('');
       return;
     }
+
+    const syncInfo = getInstantStudentInfoSync(clean);
+    if (syncInfo) {
+      setLinkedId(syncInfo.code);
+      setStudentNameKm(syncInfo.nameKm);
+      setGenderKm(syncInfo.genderKm);
+    }
+
     const resolved = await resolveStudentByIdOrName(clean);
     if (resolved) {
       setLinkedId(resolved.code);
       setStudentNameKm(resolved.nameKm);
       setGenderKm(resolved.genderKm);
-      return;
-    }
-    const fallback = initialStudents.find(
-      (s) => normalizeStudentCodeInput(s.student_code) === clean
-    );
-    if (fallback) {
-      setLinkedId(fallback.student_code);
-      setStudentNameKm(fallback.full_name_km);
-      setGenderKm(fallback.gender_km);
     }
   };
 
   useEffect(() => {
     loadLeaveData();
-    syncLinkedStudentProfile(localStorage.getItem('bipa_linked_student_id') || '');
+    const currentStored = localStorage.getItem('bipa_linked_student_id') || '';
+    if (currentStored) {
+      syncLinkedStudentProfile(currentStored);
+    }
 
     const handleIdSync = () => {
       const latest = localStorage.getItem('bipa_linked_student_id') || '';
@@ -754,6 +828,7 @@ export function LeaveStudentView({
     const timer = setInterval(loadLeaveData, 3500);
     window.addEventListener('leave-system-updated', loadLeaveData);
     window.addEventListener('student-id-linked', handleIdSync);
+    window.addEventListener('student-security-updated', handleIdSync);
     window.addEventListener('storage', handleIdSync);
 
     let bc: BroadcastChannel | null = null;
@@ -768,6 +843,7 @@ export function LeaveStudentView({
       clearInterval(timer);
       window.removeEventListener('leave-system-updated', loadLeaveData);
       window.removeEventListener('student-id-linked', handleIdSync);
+      window.removeEventListener('student-security-updated', handleIdSync);
       window.removeEventListener('storage', handleIdSync);
       if (bc) bc.close();
     };
@@ -964,7 +1040,7 @@ export function LeaveStudentView({
     await saveLeavePayloadToDb(nextPayload);
   };
 
-  if (!linkedId || !studentNameKm) {
+  if (!linkedId) {
     return (
       <div className="space-y-3 pt-2">
         {isAdmin && (
@@ -1022,7 +1098,7 @@ export function LeaveStudentView({
                 {linkedId}
               </Badge>
               <h2 className="bipa-khmer-moul-ui text-xs sm:text-sm text-blue-600 dark:text-sky-400 truncate">
-                {studentNameKm}
+                {studentNameKm || linkedId}
               </h2>
             </div>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
