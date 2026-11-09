@@ -246,7 +246,7 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
     return {
       ok: false,
       shortTitle: 'សូមស្កេនកាតសិស្សសិន',
-      message: 'សូមចូលគណនី និងស្កេនកាត QR សិស្សរបស់អ្នកជាមុនសិន!'
+      message: 'សូមចូលគណនី ស្កេនកាត QR របស់អ្នកជាមុនសិន!'
     };
   }
 
@@ -507,7 +507,7 @@ export function Header() {
             directTxt.startsWith('✓ បានភ្ជាប់ ID រួចរាល់៖') &&
             el.children.length === 0
           ) {
-            el.textContent = 'សូមចូលគណនី និងស្កេនកាត QR របស់អ្នកជាមុនសិន';
+            el.textContent = 'សូមចូលគណនី ស្កេនកាត QR របស់អ្នកជាមុនសិន';
           }
         });
 
@@ -518,7 +518,7 @@ export function Header() {
             txt === 'ផ្លាស់ប្តូរ ID' ||
             txt === 'ភ្ជាប់ ID' ||
             txt === 'Save ID' ||
-            txt === 'សូមចូលគណនី & ស្កេនកាត QR ក្នុងផ្ទាំងគ្រប់គ្រង'
+            txt === 'សូមចូលគណនី'
           ) {
             btn.onclick = (ev) => {
               ev.preventDefault();
@@ -526,7 +526,7 @@ export function Header() {
               navigate(user ? '/dashboard' : '/signin');
             };
             if (!isAllowed) {
-              btn.textContent = 'សូមចូលគណនី & ស្កេនកាត QR ក្នុងផ្ទាំងគ្រប់គ្រង';
+              btn.textContent = 'សូមចូលគណនី ';
               btn.style.display = '';
             } else {
               btn.style.display = 'none';

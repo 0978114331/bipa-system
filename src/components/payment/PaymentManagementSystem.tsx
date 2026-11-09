@@ -2475,7 +2475,7 @@ export function PaymentStudentView({
 
   if (!user || !isQrVerified || !matchedStudent) {
     return (
-      <GoToDashboardPromptCard titleKm="សូមចូលគណនី និងស្កេនកាត QR ដែលអ្នកគ្រប់គ្រងផ្តល់ជូន ដើម្បីមើលទិន្នន័យបង់ប្រាក់" />
+      <GoToDashboardPromptCard titleKm="សូមចូលគណនី ស្កេនកាត QR ដែលអ្នកគ្រប់គ្រងផ្តល់ជូន" />
     );
   }
 

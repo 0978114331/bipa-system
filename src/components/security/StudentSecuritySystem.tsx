@@ -573,8 +573,8 @@ export function GoToDashboardPromptCard({ titleKm }: { titleKm: string }) {
         <div className="space-y-1.5">
           <h2 className="text-base sm:text-lg font-black">
             {isKh
-              ? 'សូមចូលគណនីប្រព័ន្ធ (Login) ជាមុនសិន'
-              : 'Please Sign In to Your Account First'}
+              ? 'សូមចូលគណនីប្រព័ន្ធ (Login)'
+              : 'Please Sign In to Your Account'}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
             {isKh
@@ -751,8 +751,8 @@ export function StudentVerificationGate({
 
     setErrorMsg(
       isKh
-        ? 'លេខទូរស័ព្ទ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវទេ! សូមពិនិត្យម្តងទៀត ឬស្កេនកាត Barcode/QR។'
-        : 'Incorrect phone number or password! Please check again or scan your Barcode/QR card.'
+        ? 'លេខទូរស័ព្ទ ឬពាក្យសម្ងាត់មិនត្រូវ! សូមពិនិត្យ ឬស្កេនកាត Barcode/QR។'
+        : 'Incorrect phone number or password! Please check or scan your Barcode/QR card.'
     );
     return false;
   };
@@ -1671,7 +1671,7 @@ export function AdminUserPasswordDashboard() {
             <Input
               value={newStCode}
               onChange={(e) => setNewStCode(e.target.value.toUpperCase())}
-              placeholder="ឧ.អត្តលេខ (BIPA-025)..."
+              placeholder="ឧ.អត្តលេខ (BIPA-000)..."
               className="h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a] font-bold"
             />
             <Input
@@ -2301,8 +2301,8 @@ export function StudentPersonalDashboard() {
               <p className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">
                 {!user
                   ? isKh
-                    ? 'សូមចូលគណនីប្រព័ន្ធ (Login) ជាមុនសិន'
-                    : 'Please sign in to your account first'
+                    ? 'សូមចូលគណនីប្រព័ន្ធ (Login)'
+                    : 'Please sign in to your account '
                   : isKh
                   ? 'អ្នកមិនទាន់បានស្កេនកាត QR ឬបញ្ចូលកូដសម្ងាត់សិស្សនៅឡើយទេ'
                   : 'You have not scanned your student QR card yet'}

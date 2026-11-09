@@ -2831,7 +2831,7 @@ export function RiceStudentView({
 
   if (!user || !hasQrAccess || !matchedStudent) {
     return (
-      <GoToDashboardPromptCard titleKm="សូមចូលគណនី និងស្កេនកាត QR ដែលអ្នកគ្រប់គ្រងផ្តល់ជូន ដើម្បីមើលរបាយការណ៍អង្ករ" />
+      <GoToDashboardPromptCard titleKm="សូមចូលគណនី ស្កេនកាត QR ដែលអ្នកគ្រប់គ្រងផ្តល់ជូន" />
     );
   }
 
