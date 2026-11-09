@@ -45,7 +45,8 @@ import {
   generateDefaultPhone,
   generateEncryptedCodeFromId,
   getLocalDeletedCodes,
-  saveLocalDeletedCodes
+  saveLocalDeletedCodes,
+  VERIFIED_TOKEN_KEY
 } from '@/components/security/StudentSecuritySystem';
 
 export type MonthPaymentStatus = 'paid' | 'owed' | 'unpaid';
@@ -117,6 +118,16 @@ export const KHMER_MONTHS = [
   { num: 11, nameKm: 'វិច្ឆិកា', nameEn: 'Nov', color: '#f43f5e' },
   { num: 12, nameKm: 'ធ្នូ', nameEn: 'Dec', color: '#84cc16' }
 ];
+
+function isQrTokenVerifiedForCode(rawCode: string): boolean {
+  const code = normalizeStudentCodeInput(rawCode);
+  const token =
+    localStorage.getItem(VERIFIED_TOKEN_KEY) ||
+    localStorage.getItem('bipa_verified_student_token_v1') ||
+    '';
+  if (!code || !token) return false;
+  return token.toUpperCase().startsWith(`${code}:`);
+}
 
 function mapInitialResidentStudents(): PaymentResidentStudent[] {
   const deletedSet = new Set(getLocalDeletedCodes().map((c) => normalizeStudentCodeInput(c)));
@@ -264,7 +275,7 @@ export function getUnreadPaymentBadgeCountForStudent(
   rawStudentId: string
 ): number {
   const code = normalizeStudentCodeInput(rawStudentId);
-  if (!code) return 0;
+  if (!code || !isQrTokenVerifiedForCode(code)) return 0;
 
   const unreadNotifs = payload.notifications.filter(
     (n) =>
@@ -281,10 +292,11 @@ export function getUnreadPaymentBadgeCountForStudent(
 
 export function GlobalPaymentBadgeEnhancer() {
   const [badgeCount, setBadgeCount] = useState(0);
+  const { user } = useAuth();
 
   const refreshCount = async () => {
     const linked = localStorage.getItem('bipa_linked_student_id') || '';
-    if (!linked.trim()) {
+    if (!user || !linked.trim() || !isQrTokenVerifiedForCode(linked)) {
       setBadgeCount(0);
       return;
     }
@@ -297,6 +309,7 @@ export function GlobalPaymentBadgeEnhancer() {
     refreshCount();
     const interval = setInterval(refreshCount, 4000);
     window.addEventListener('payment-system-updated', refreshCount);
+    window.addEventListener('student-id-linked', refreshCount);
     window.addEventListener('storage', refreshCount);
 
     let bc: BroadcastChannel | null = null;
@@ -310,10 +323,11 @@ export function GlobalPaymentBadgeEnhancer() {
     return () => {
       clearInterval(interval);
       window.removeEventListener('payment-system-updated', refreshCount);
+      window.removeEventListener('student-id-linked', refreshCount);
       window.removeEventListener('storage', refreshCount);
       if (bc) bc.close();
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const applyBadgesToDom = () => {
@@ -2317,7 +2331,7 @@ export function PaymentStudentView({
 }: {
   onSwitchToAdmin?: () => void;
 }) {
-  const { hasRole } = useAuth();
+  const { user, hasRole } = useAuth();
   const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
 
   const currentYearStr = String(new Date().getFullYear());
@@ -2328,6 +2342,9 @@ export function PaymentStudentView({
 
   const [linkedId, setLinkedId] = useState<string>(() =>
     normalizeStudentCodeInput(localStorage.getItem('bipa_linked_student_id') || '')
+  );
+  const [isQrVerified, setIsQrVerified] = useState<boolean>(() =>
+    isQrTokenVerifiedForCode(localStorage.getItem('bipa_linked_student_id') || '')
   );
   const [showMyReceipt, setShowMyReceipt] = useState(false);
 
@@ -2347,8 +2364,10 @@ export function PaymentStudentView({
         localStorage.getItem('bipa_linked_student_id') || ''
       );
       setLinkedId(latest);
+      setIsQrVerified(isQrTokenVerifiedForCode(latest));
     };
     window.addEventListener('student-id-linked', syncGlobalId);
+    window.addEventListener('student-security-updated', syncGlobalId);
 
     let bc: BroadcastChannel | null = null;
     try {
@@ -2363,6 +2382,7 @@ export function PaymentStudentView({
       window.removeEventListener('payment-system-updated', loadData);
       window.removeEventListener('storage', loadData);
       window.removeEventListener('student-id-linked', syncGlobalId);
+      window.removeEventListener('student-security-updated', syncGlobalId);
       if (bc) bc.close();
     };
   }, []);
@@ -2389,14 +2409,14 @@ export function PaymentStudentView({
   }, [payload.residentStudents]);
 
   const matchedStudent = useMemo(() => {
-    if (!linkedId) return null;
+    if (!linkedId || !isQrVerified) return null;
     const clean = normalizeStudentCodeInput(linkedId);
     return (
       allStudentsPool.find(
         (s) => normalizeStudentCodeInput(s.student_code).toLowerCase() === clean.toLowerCase()
       ) || null
     );
-  }, [allStudentsPool, linkedId]);
+  }, [allStudentsPool, linkedId, isQrVerified]);
 
   const myYearMonths = useMemo(() => {
     if (!matchedStudent) return [];
@@ -2453,9 +2473,9 @@ export function PaymentStudentView({
     await savePaymentPayloadToDb(nextPayload);
   };
 
-  if (!matchedStudent) {
+  if (!user || !isQrVerified || !matchedStudent) {
     return (
-      <GoToDashboardPromptCard titleKm="សូមភ្ជាប់កូដសម្ងាត់ ឬស្កេន QR នៅក្នុងផ្ទាំងគ្រប់គ្រង (Dashboard)" />
+      <GoToDashboardPromptCard titleKm="សូមចូលគណនី និងស្កេនកាត QR ដែលអ្នកគ្រប់គ្រងផ្តល់ជូន ដើម្បីមើលទិន្នន័យបង់ប្រាក់" />
     );
   }
 

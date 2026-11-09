@@ -36,7 +36,21 @@ import {
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
 import { normalizeStudentCodeInput } from '@/components/layout/Header';
 import { cn } from '@/lib/utils';
-import { GoToDashboardPromptCard } from '@/components/security/StudentSecuritySystem';
+import {
+  fetchPaymentPayloadFromDb,
+  savePaymentPayloadToDb
+} from '@/components/payment/PaymentManagementSystem';
+import {
+  GoToDashboardPromptCard,
+  fetchSecurityPayloadFromDb,
+  saveSecurityPayloadToDb,
+  splitKhmerFullName,
+  generateDefaultPhone,
+  generateEncryptedCodeFromId,
+  getLocalDeletedCodes,
+  saveLocalDeletedCodes,
+  hasActiveStudentQrAccess
+} from '@/components/security/StudentSecuritySystem';
 
 export type MonthRiceStatus = 'paid' | 'owed' | 'unpaid';
 
@@ -110,6 +124,7 @@ export const KHMER_RICE_MONTHS = [
 ];
 
 function mapInitialRiceStudents(): RiceResidentStudent[] {
+  const deletedSet = new Set(getLocalDeletedCodes().map((c) => normalizeStudentCodeInput(c)));
   let baseList: BipaStudent[] = initialStudents;
   const cached =
     localStorage.getItem('bipa_students_directory_v2') ||
@@ -120,15 +135,17 @@ function mapInitialRiceStudents(): RiceResidentStudent[] {
       if (Array.isArray(parsed) && parsed.length > 0) baseList = parsed;
     } catch {}
   }
-  return baseList.map((s) => ({
-    id: String(s.id || s.student_code),
-    student_code: String(s.student_code || '').trim().toUpperCase(),
-    full_name_km: s.full_name_km || s.full_name_en || '',
-    full_name_en: s.full_name_en || s.full_name_km || '',
-    gender_km: s.gender_km || 'ប្រុស',
-    major_km: s.major_km || 'ព័ត៌មានវិទ្យា',
-    generation_km: s.generation_km || 'ជំនាន់ទី ១'
-  }));
+  return baseList
+    .filter((s) => !deletedSet.has(normalizeStudentCodeInput(s.student_code)))
+    .map((s) => ({
+      id: String(s.id || s.student_code),
+      student_code: String(s.student_code || '').trim().toUpperCase(),
+      full_name_km: s.full_name_km || s.full_name_en || '',
+      full_name_en: s.full_name_en || s.full_name_km || '',
+      gender_km: s.gender_km || 'ប្រុស',
+      major_km: s.major_km || 'ព័ត៌មានវិទ្យា',
+      generation_km: s.generation_km || 'ជំនាន់ទី ១'
+    }));
 }
 
 export const defaultRicePayload: RiceSystemPayload = {
@@ -161,6 +178,7 @@ export function getQuotaKgForMonth(
 }
 
 export function loadCachedRicePayload(): RiceSystemPayload {
+  const deletedSet = new Set(getLocalDeletedCodes().map((c) => normalizeStudentCodeInput(c)));
   try {
     const raw =
       localStorage.getItem(RICE_STORAGE_KEY) ||
@@ -173,16 +191,20 @@ export function loadCachedRicePayload(): RiceSystemPayload {
       };
     }
     const parsed = JSON.parse(raw);
+    const rawStudents: RiceResidentStudent[] =
+      Array.isArray(parsed.residentStudents) && parsed.residentStudents.length > 0
+        ? parsed.residentStudents
+        : fallbackResidents;
+
     return {
       monthlyRiceKg: Number(parsed.monthlyRiceKg || DEFAULT_MONTHLY_RICE_KG),
       monthlyQuotaByYearMonth: parsed.monthlyQuotaByYearMonth || {},
       customColumns: Array.isArray(parsed.customColumns)
         ? parsed.customColumns
         : defaultRicePayload.customColumns,
-      residentStudents:
-        Array.isArray(parsed.residentStudents) && parsed.residentStudents.length > 0
-          ? parsed.residentStudents
-          : fallbackResidents,
+      residentStudents: rawStudents.filter(
+        (s) => !deletedSet.has(normalizeStudentCodeInput(s.student_code))
+      ),
       recordsByYear: parsed.recordsByYear || {},
       notifications: Array.isArray(parsed.notifications) ? parsed.notifications : []
     };
@@ -196,6 +218,7 @@ export function loadCachedRicePayload(): RiceSystemPayload {
 
 export async function fetchRicePayloadFromDb(): Promise<RiceSystemPayload> {
   let current = loadCachedRicePayload();
+  const deletedSet = new Set(getLocalDeletedCodes().map((c) => normalizeStudentCodeInput(c)));
 
   try {
     const { data: setRow } = await supabase
@@ -206,16 +229,20 @@ export async function fetchRicePayloadFromDb(): Promise<RiceSystemPayload> {
 
     if (setRow && setRow.name_en) {
       const p = JSON.parse(setRow.name_en);
+      const rawStudents: RiceResidentStudent[] =
+        Array.isArray(p.residentStudents) && p.residentStudents.length > 0
+          ? p.residentStudents
+          : current.residentStudents;
+
       current = {
         monthlyRiceKg: Number(p.monthlyRiceKg || DEFAULT_MONTHLY_RICE_KG),
         monthlyQuotaByYearMonth: p.monthlyQuotaByYearMonth || {},
         customColumns: Array.isArray(p.customColumns)
           ? p.customColumns
           : defaultRicePayload.customColumns,
-        residentStudents:
-          Array.isArray(p.residentStudents) && p.residentStudents.length > 0
-            ? p.residentStudents
-            : current.residentStudents,
+        residentStudents: rawStudents.filter(
+          (s) => !deletedSet.has(normalizeStudentCodeInput(s.student_code))
+        ),
         recordsByYear: p.recordsByYear || {},
         notifications: Array.isArray(p.notifications) ? p.notifications : []
       };
@@ -261,27 +288,19 @@ export function getUnreadRiceBadgeCountForStudent(
   rawStudentId: string
 ): number {
   const code = normalizeStudentCodeInput(rawStudentId);
+  if (!code || !hasActiveStudentQrAccess()) return 0;
+
   const currentYear = String(new Date().getFullYear());
-
-  if (code) {
-    const unreadNotifs = payload.notifications.filter(
-      (n) =>
-        (normalizeStudentCodeInput(n.studentCode) === code || n.studentCode === 'ALL') &&
-        !(n.readBy || []).includes(code)
-    ).length;
-
-    const stYearData = payload.recordsByYear?.[currentYear]?.[code]?.months || {};
-    const owedCount = Object.values(stYearData).filter((m) => m.status === 'owed').length;
-
-    return unreadNotifs + (unreadNotifs === 0 ? owedCount : 0);
-  }
-
-  const deviceReadKey = localStorage.getItem('bipa_rice_device_last_read') || '';
-  const unreadGlobal = payload.notifications.filter(
-    (n) => n.createdAt > deviceReadKey && (n.readBy || []).length === 0
+  const unreadNotifs = payload.notifications.filter(
+    (n) =>
+      (normalizeStudentCodeInput(n.studentCode) === code || n.studentCode === 'ALL') &&
+      !(n.readBy || []).includes(code)
   ).length;
 
-  return unreadGlobal;
+  const stYearData = payload.recordsByYear?.[currentYear]?.[code]?.months || {};
+  const owedCount = Object.values(stYearData).filter((m) => m.status === 'owed').length;
+
+  return unreadNotifs + (unreadNotifs === 0 ? owedCount : 0);
 }
 
 export function findHomeFeatureCardByKeyword(keywords: string[]): HTMLElement | null {
@@ -334,14 +353,22 @@ export function GlobalRiceBadgeEnhancer() {
   const [riceBadgeCount, setRiceBadgeCount] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
-  const { hasRole } = useAuth();
+  const { user, hasRole } = useAuth();
   const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
 
   const isRiceOverlayOpen =
     location.search.includes('view=rice') || location.pathname === '/rice';
 
   const refreshCount = async () => {
+    if (!user || !hasActiveStudentQrAccess()) {
+      setRiceBadgeCount(0);
+      return;
+    }
     const linked = localStorage.getItem('bipa_linked_student_id') || '';
+    if (!linked.trim()) {
+      setRiceBadgeCount(0);
+      return;
+    }
     const payload = await fetchRicePayloadFromDb();
     const count = getUnreadRiceBadgeCountForStudent(payload, linked);
     setRiceBadgeCount(count);
@@ -352,6 +379,7 @@ export function GlobalRiceBadgeEnhancer() {
     const interval = setInterval(refreshCount, 3000);
     window.addEventListener('rice-system-updated', refreshCount);
     window.addEventListener('student-id-linked', refreshCount);
+    window.addEventListener('student-security-updated', refreshCount);
     window.addEventListener('storage', refreshCount);
 
     let bc: BroadcastChannel | null = null;
@@ -366,10 +394,11 @@ export function GlobalRiceBadgeEnhancer() {
       clearInterval(interval);
       window.removeEventListener('rice-system-updated', refreshCount);
       window.removeEventListener('student-id-linked', refreshCount);
+      window.removeEventListener('student-security-updated', refreshCount);
       window.removeEventListener('storage', refreshCount);
       if (bc) bc.close();
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const handleCaptureClick = (e: MouseEvent) => {
@@ -880,6 +909,98 @@ export function RiceAdminDashboard() {
     );
   };
 
+  const handleLocalChangeStudentField = (
+    studentId: string,
+    patch: Partial<RiceResidentStudent>
+  ) => {
+    const updatedStudents = students.map((s) =>
+      s.id === studentId ? { ...s, ...patch } : s
+    );
+    const nextPayload: RiceSystemPayload = {
+      ...payload,
+      residentStudents: updatedStudents
+    };
+    setPayload(nextPayload);
+    localStorage.setItem(RICE_STORAGE_KEY, JSON.stringify(nextPayload));
+  };
+
+  const handleCommitStudentRowSync = async (student: RiceResidentStudent) => {
+    const cleanCode = normalizeStudentCodeInput(student.student_code);
+    const normalizedList = students.map((s) =>
+      s.id === student.id ? { ...s, student_code: cleanCode } : s
+    );
+    const nextPayload: RiceSystemPayload = {
+      ...payload,
+      residentStudents: normalizedList
+    };
+    setPayload(nextPayload);
+    await saveRicePayloadToDb(nextPayload);
+
+    try {
+      const payDb = await fetchPaymentPayloadFromDb();
+      const existsInPay = (payDb.residentStudents || []).some(
+        (ps) =>
+          ps.id === student.id ||
+          normalizeStudentCodeInput(ps.student_code) === cleanCode
+      );
+      const nextPayStudents = existsInPay
+        ? (payDb.residentStudents || []).map((ps) =>
+            ps.id === student.id ||
+            normalizeStudentCodeInput(ps.student_code) === cleanCode
+              ? {
+                  ...ps,
+                  student_code: cleanCode,
+                  full_name_km: student.full_name_km,
+                  full_name_en: student.full_name_km,
+                  gender_km: student.gender_km
+                }
+              : ps
+          )
+        : [
+            ...(payDb.residentStudents || []),
+            {
+              ...student,
+              student_code: cleanCode
+            }
+          ];
+
+      await savePaymentPayloadToDb({
+        ...payDb,
+        residentStudents: nextPayStudents
+      });
+    } catch {}
+
+    try {
+      const secDb = await fetchSecurityPayloadFromDb();
+      const split = splitKhmerFullName(student.full_name_km);
+      const existingProf = secDb.profiles[cleanCode];
+      const seed = existingProf?.saltSeed || 2026;
+      await saveSecurityPayloadToDb({
+        ...secDb,
+        profiles: {
+          ...secDb.profiles,
+          [cleanCode]: {
+            ...(existingProf || {
+              studentCode: cleanCode,
+              userTypeKm: 'សិស្ស',
+              phoneNumber: generateDefaultPhone(cleanCode),
+              majorKm: student.major_km || 'ព័ត៌មានវិទ្យា',
+              generationKm: student.generation_km || 'សិស្សមណ្ឌល',
+              saltSeed: seed,
+              secretCode: generateEncryptedCodeFromId(cleanCode, seed),
+              avatarDataUrl: ''
+            }),
+            studentCode: cleanCode,
+            fullNameKm: student.full_name_km,
+            lastNameKm: split.lastName,
+            firstNameKm: split.firstName,
+            genderKm: student.gender_km
+          }
+        }
+      });
+    } catch {}
+  };
+
   const handleAddResidentStudent = async () => {
     const cleanCode = normalizeStudentCodeInput(newStCode);
     if (!cleanCode || !newStNameKm.trim()) {
@@ -894,6 +1015,11 @@ export function RiceAdminDashboard() {
       showToast(`អត្តលេខ "${cleanCode}" មានក្នុងតារាងអង្កររួចហើយ!`, 'error');
       return;
     }
+
+    const updatedDeleted = getLocalDeletedCodes().filter(
+      (c) => normalizeStudentCodeInput(c) !== cleanCode
+    );
+    saveLocalDeletedCodes(updatedDeleted);
 
     const newSt: RiceResidentStudent = {
       id: `rice-st-${Date.now()}`,
@@ -914,24 +1040,96 @@ export function RiceAdminDashboard() {
     setNewStNameKm('');
     setShowAddStudentBox(false);
     await saveRicePayloadToDb(nextPayload);
-    showToast(`បានបន្ថែមសិស្ស "${newSt.full_name_km}" (${cleanCode}) ចូលតារាងបង់អង្ករ!`);
+
+    try {
+      const payDb = await fetchPaymentPayloadFromDb();
+      if (
+        !(payDb.residentStudents || []).some(
+          (ps) => normalizeStudentCodeInput(ps.student_code) === cleanCode
+        )
+      ) {
+        await savePaymentPayloadToDb({
+          ...payDb,
+          residentStudents: [...(payDb.residentStudents || []), newSt]
+        });
+      }
+    } catch {}
+
+    try {
+      const secDb = await fetchSecurityPayloadFromDb();
+      const split = splitKhmerFullName(newSt.full_name_km);
+      const seed = Math.floor(1000 + Math.random() * 9000);
+      await saveSecurityPayloadToDb({
+        ...secDb,
+        deletedCodes: updatedDeleted,
+        profiles: {
+          ...secDb.profiles,
+          [cleanCode]: {
+            studentCode: cleanCode,
+            lastNameKm: split.lastName,
+            firstNameKm: split.firstName,
+            fullNameKm: newSt.full_name_km,
+            genderKm: newSt.gender_km,
+            userTypeKm: 'សិស្ស',
+            phoneNumber: generateDefaultPhone(cleanCode),
+            majorKm: newSt.major_km,
+            generationKm: newSt.generation_km,
+            saltSeed: seed,
+            secretCode: generateEncryptedCodeFromId(cleanCode, seed),
+            avatarDataUrl: ''
+          }
+        }
+      });
+    } catch {}
+
+    showToast(
+      `បានបន្ថែមសិស្ស "${newSt.full_name_km}" (${cleanCode}) ចូលទាំងតារាងបង់អង្ករ និងតារាងបង់ប្រាក់!`
+    );
   };
 
   const handleRemoveResidentStudent = async (st: RiceResidentStudent) => {
+    const cleanCode = normalizeStudentCodeInput(st.student_code);
     if (
       !window.confirm(
-        `តើអ្នកពិតជាចង់ដកឈ្មោះ "${st.full_name_km} (${st.student_code})" ចេញពីតារាងបង់អង្ករមណ្ឌលមែនទេ?`
+        `តើអ្នកពិតជាចង់ដកឈ្មោះ "${st.full_name_km} (${cleanCode})" ចេញពីតារាងបង់អង្ករ និងតារាងបង់ប្រាក់មែនទេ?`
       )
     ) {
       return;
     }
+
+    const updatedDeleted = Array.from(new Set([...getLocalDeletedCodes(), cleanCode]));
+    saveLocalDeletedCodes(updatedDeleted);
+
     const nextPayload: RiceSystemPayload = {
       ...payload,
-      residentStudents: students.filter((s) => s.student_code !== st.student_code)
+      residentStudents: students.filter(
+        (s) => normalizeStudentCodeInput(s.student_code) !== cleanCode
+      )
     };
     setPayload(nextPayload);
     await saveRicePayloadToDb(nextPayload);
-    showToast(`បានដកឈ្មោះ "${st.full_name_km}" ចេញពីតារាងបង់អង្កររួចរាល់!`);
+
+    try {
+      const payDb = await fetchPaymentPayloadFromDb();
+      await savePaymentPayloadToDb({
+        ...payDb,
+        residentStudents: (payDb.residentStudents || []).filter(
+          (ps) => normalizeStudentCodeInput(ps.student_code) !== cleanCode
+        )
+      });
+    } catch {}
+
+    try {
+      const secDb = await fetchSecurityPayloadFromDb();
+      const copyProfiles = { ...secDb.profiles };
+      delete copyProfiles[cleanCode];
+      await saveSecurityPayloadToDb({
+        profiles: copyProfiles,
+        deletedCodes: updatedDeleted
+      });
+    } catch {}
+
+    showToast(`បានដកឈ្មោះ "${st.full_name_km}" ចេញពីគ្រប់តារាងរួចរាល់!`);
   };
 
   const handleUpdateCustomCell = (studentCode: string, colName: string, val: string) => {
@@ -1057,6 +1255,13 @@ export function RiceAdminDashboard() {
   const handleSaveAllChanges = async () => {
     setSaving(true);
     const res = await saveRicePayloadToDb(payload);
+    try {
+      const payDb = await fetchPaymentPayloadFromDb();
+      await savePaymentPayloadToDb({
+        ...payDb,
+        residentStudents: payload.residentStudents
+      });
+    } catch {}
     setSaving(false);
     showToast(
       res.syncedCloud
@@ -1272,7 +1477,7 @@ export function RiceAdminDashboard() {
               <span>របាយការណ៍បង់អង្ករនិស្សិតប្រចាំខែ</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-              អាចកំណត់បរិមាណអង្ករ (១០គីឡូ, ៥គីឡូ ឬតាមចិត្ត) តាមដានសិស្សជំពាក់អង្ករ ចេញបង្កាន់ដៃ និងមើលក្រាបសរុបប្រចាំឆ្នាំ
+              អាចកំណត់បរិមាណអង្ករ កែប្រែឈ្មោះនិស្សិតផ្ទាល់លើតារាង តាមដានសិស្សជំពាក់អង្ករ និងមើលក្រាបសរុបប្រចាំឆ្នាំ
             </p>
           </div>
 
@@ -1378,7 +1583,7 @@ export function RiceAdminDashboard() {
           <div className="flex items-center justify-between">
             <h4 className="text-xs sm:text-sm font-black text-orange-500 flex items-center gap-1.5">
               <UserPlus className="h-4 w-4" />
-              បន្ថែមឈ្មោះសិស្សថ្មីដែលកំពុងស្នាក់នៅមណ្ឌលចូលក្នុងតារាងបង់អង្ករ
+              បន្ថែមឈ្មោះសិស្សថ្មី (នឹងបញ្ចូលទៅតារាងបង់ប្រាក់ និងតារាង User ដោយស្វ័យប្រវត្តិ)
             </h4>
             <button
               type="button"
@@ -1899,9 +2104,9 @@ export function RiceAdminDashboard() {
             <thead className="sticky top-0 z-20">
               <tr className="bg-amber-400 text-slate-950 font-black shadow-xs">
                 <th className="py-3.5 px-3 border border-amber-500/40 text-center w-12">ល.រ</th>
-                <th className="py-3.5 px-3 border border-amber-500/40">អត្តលេខ (ID)</th>
+                <th className="py-3.5 px-3 border border-amber-500/40">អត្តលេខ (កែបាន)</th>
                 <th className="py-3.5 px-3 border border-amber-500/40">
-                  គោត្តនាម និងនាម (ចុចមើលខែ)
+                  គោត្តនាម និងនាម (កែបាន)
                 </th>
                 <th className="py-3.5 px-2.5 border border-amber-500/40 text-center">ភេទ</th>
                 <th className="py-3.5 px-3 border border-amber-500/40 text-center">
@@ -1950,27 +2155,67 @@ export function RiceAdminDashboard() {
 
                 return (
                   <tr
-                    key={row.student.student_code}
+                    key={row.student.id}
                     className="bg-white dark:bg-[#162033] hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
                   >
-                    <td className="py-2.5 px-3 border border-slate-200/70 dark:border-slate-800 text-center font-black">
+                    <td className="py-2 px-3 border border-slate-200/70 dark:border-slate-800 text-center font-black">
                       {row.index}
                     </td>
-                    <td className="py-2.5 px-3 border border-slate-200/70 dark:border-slate-800 font-black text-orange-600 dark:text-orange-400 whitespace-nowrap">
-                      {row.student.student_code}
+                    <td className="py-2 px-2 border border-slate-200/70 dark:border-slate-800 whitespace-nowrap">
+                      <input
+                        type="text"
+                        value={row.student.student_code}
+                        onChange={(e) =>
+                          handleLocalChangeStudentField(row.student.id, {
+                            student_code: e.target.value.toUpperCase()
+                          })
+                        }
+                        onBlur={() => handleCommitStudentRowSync(row.student)}
+                        className="w-24 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-black text-orange-600 dark:text-orange-400 text-xs"
+                      />
                     </td>
-                    <td className="py-2.5 px-3 border border-slate-200/70 dark:border-slate-800 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => setActiveStudentModal(row.student)}
-                        className="font-black text-slate-900 dark:text-white hover:text-orange-500 flex items-center gap-1.5 text-left"
+                    <td className="py-2 px-2 border border-slate-200/70 dark:border-slate-800 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={row.student.full_name_km}
+                          onChange={(e) =>
+                            handleLocalChangeStudentField(row.student.id, {
+                              full_name_km: e.target.value,
+                              full_name_en: e.target.value
+                            })
+                          }
+                          onBlur={() => handleCommitStudentRowSync(row.student)}
+                          className="w-36 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-black text-slate-900 dark:text-white text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setActiveStudentModal(row.student)}
+                          className="p-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 shrink-0"
+                          title="ចុចមើលខែបង់អង្ករ"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 border border-slate-200/70 dark:border-slate-800 text-center whitespace-nowrap">
+                      <select
+                        value={row.student.gender_km}
+                        onChange={(e) => {
+                          const nextVal = e.target.value;
+                          handleLocalChangeStudentField(row.student.id, {
+                            gender_km: nextVal
+                          });
+                          handleCommitStudentRowSync({
+                            ...row.student,
+                            gender_km: nextVal
+                          });
+                        }}
+                        className="h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-bold text-xs text-slate-900 dark:text-white"
                       >
-                        <span>{row.student.full_name_km}</span>
-                        <Eye className="h-3.5 w-3.5 text-orange-500 opacity-75" />
-                      </button>
-                    </td>
-                    <td className="py-2.5 px-2.5 border border-slate-200/70 dark:border-slate-800 text-center font-bold whitespace-nowrap">
-                      {row.student.gender_km}
+                        <option value="ប្រុស">ប្រុស</option>
+                        <option value="ស្រី">ស្រី</option>
+                      </select>
                     </td>
                     <td className="py-2.5 px-3 border border-slate-200/70 dark:border-slate-800 text-center whitespace-nowrap">
                       <div className="inline-flex items-center gap-1">
@@ -2442,7 +2687,7 @@ export function RiceStudentView({
 }: {
   onSwitchToAdmin?: () => void;
 }) {
-  const { hasRole } = useAuth();
+  const { user, hasRole } = useAuth();
   const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
 
   const currentYearStr = String(new Date().getFullYear());
@@ -2454,11 +2699,13 @@ export function RiceStudentView({
   const [linkedId, setLinkedId] = useState<string>(() =>
     normalizeStudentCodeInput(localStorage.getItem('bipa_linked_student_id') || '')
   );
+  const [hasQrAccess, setHasQrAccess] = useState<boolean>(() => hasActiveStudentQrAccess());
   const [showMyReceipt, setShowMyReceipt] = useState(false);
 
   const loadData = async () => {
     const dbPayload = await fetchRicePayloadFromDb();
     setPayload(dbPayload);
+    setHasQrAccess(hasActiveStudentQrAccess());
   };
 
   useEffect(() => {
@@ -2472,8 +2719,10 @@ export function RiceStudentView({
         localStorage.getItem('bipa_linked_student_id') || ''
       );
       setLinkedId(latest);
+      setHasQrAccess(hasActiveStudentQrAccess());
     };
     window.addEventListener('student-id-linked', syncGlobalId);
+    window.addEventListener('student-security-updated', syncGlobalId);
 
     let bc: BroadcastChannel | null = null;
     try {
@@ -2488,6 +2737,7 @@ export function RiceStudentView({
       window.removeEventListener('rice-system-updated', loadData);
       window.removeEventListener('storage', loadData);
       window.removeEventListener('student-id-linked', syncGlobalId);
+      window.removeEventListener('student-security-updated', syncGlobalId);
       if (bc) bc.close();
     };
   }, []);
@@ -2579,9 +2829,9 @@ export function RiceStudentView({
     await saveRicePayloadToDb(nextPayload);
   };
 
-  if (!matchedStudent) {
+  if (!user || !hasQrAccess || !matchedStudent) {
     return (
-      <GoToDashboardPromptCard titleKm="សូមភ្ជាប់កូដសម្ងាត់ ឬស្កេន QR នៅក្នុងផ្ទាំងគ្រប់គ្រង (Dashboard)" />
+      <GoToDashboardPromptCard titleKm="សូមចូលគណនី និងស្កេនកាត QR ដែលអ្នកគ្រប់គ្រងផ្តល់ជូន ដើម្បីមើលរបាយការណ៍អង្ករ" />
     );
   }
 

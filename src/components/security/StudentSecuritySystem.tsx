@@ -467,6 +467,16 @@ export function isStudentSessionVerified(
   return null;
 }
 
+export function hasActiveStudentQrAccess(): boolean {
+  const linkedCode = normalizeCode(localStorage.getItem('bipa_linked_student_id') || '');
+  const verifiedToken =
+    localStorage.getItem(VERIFIED_TOKEN_KEY) ||
+    localStorage.getItem('bipa_verified_student_token_v1') ||
+    '';
+  if (!linkedCode || !verifiedToken) return false;
+  return verifiedToken.toUpperCase().startsWith(`${linkedCode}:`);
+}
+
 export function setVerifiedStudentSession(profile: StudentSecurityProfile) {
   const code = normalizeCode(profile.studentCode);
   const token = `${code}:${profile.secretCode}`;
@@ -478,17 +488,21 @@ export function setVerifiedStudentSession(profile: StudentSecurityProfile) {
   window.dispatchEvent(new Event('payment-system-updated'));
   window.dispatchEvent(new Event('rice-system-updated'));
   window.dispatchEvent(new Event('leave-system-updated'));
+  window.dispatchEvent(new Event('attendance-updated'));
 }
 
 export function clearVerifiedStudentSession() {
   localStorage.removeItem('bipa_linked_student_id');
   localStorage.removeItem(VERIFIED_TOKEN_KEY);
   localStorage.removeItem('bipa_verified_student_token_v1');
+  localStorage.removeItem('bipa_student_code');
+  localStorage.removeItem('student_id');
   window.dispatchEvent(new Event('student-id-linked'));
   window.dispatchEvent(new Event('student-security-updated'));
   window.dispatchEvent(new Event('payment-system-updated'));
   window.dispatchEvent(new Event('rice-system-updated'));
   window.dispatchEvent(new Event('leave-system-updated'));
+  window.dispatchEvent(new Event('attendance-updated'));
 }
 
 export function BarcodeSvg({
@@ -545,9 +559,48 @@ export function BarcodeSvg({
 
 export function GoToDashboardPromptCard({ titleKm }: { titleKm: string }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { lang } = useI18n();
   const isKh = lang === 'km';
   const [openDirectLogin, setOpenDirectLogin] = useState(false);
+
+  if (!user) {
+    return (
+      <div className="max-w-md mx-auto mt-6 bg-white dark:bg-[#162033] text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl text-center space-y-4 font-khmer animate-in fade-in duration-200">
+        <div className="w-16 h-16 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-500 mx-auto">
+          <User className="h-8 w-8" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-base sm:text-lg font-black">
+            {isKh
+              ? 'សូមចូលគណនីប្រព័ន្ធ (Login) ជាមុនសិន'
+              : 'Please Sign In to Your Account First'}
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            {isKh
+              ? 'ដើម្បីប្រើប្រាស់មុខងារ និងមើលទិន្នន័យផ្ទាល់ខ្លួន សូមចូលគណនី App ជាមុនសិន រួចទើបស្កេនកាត QR ដែលអ្នកគ្រប់គ្រងផ្តល់ជូន។'
+              : 'Please sign in to your account first, then scan the QR card provided by the administrator.'}
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1">
+          <button
+            type="button"
+            onClick={() => navigate('/signin')}
+            className="w-full sm:w-auto px-6 py-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-md transition-all active:scale-95"
+          >
+            {isKh ? 'ចូលគណនី (Login)' : 'Sign In'}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/signup')}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-full border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-black transition-all active:scale-95"
+          >
+            {isKh ? 'បង្កើតគណនីថ្មី' : 'Create Account'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (openDirectLogin) {
     return (
@@ -561,18 +614,18 @@ export function GoToDashboardPromptCard({ titleKm }: { titleKm: string }) {
   return (
     <div className="max-w-md mx-auto mt-6 bg-white dark:bg-[#162033] text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl text-center space-y-4 font-khmer animate-in fade-in duration-200">
       <div className="w-16 h-16 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 mx-auto">
-        <User className="h-8 w-8" />
+        <QrCode className="h-8 w-8" />
       </div>
       <div className="space-y-1.5">
         <h2 className="text-base sm:text-lg font-black">
           {isKh
-            ? 'អ្នកមិនទាន់បានចូលគណនី (login) នៅឡើយទេ'
-            : 'You are not logged in to your student profile yet'}
+            ? 'សូមស្កេនកាត QR ឬបញ្ចូលកូដសម្ងាត់សិស្ស'
+            : 'Please Scan Your Student QR Card'}
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
           {isKh
-            ? 'សូមបំពេញលេខកូដសម្ងាត់ ឬស្កេន Barcode/QR របស់អ្នកជាមុនសិន ទើបអាចមើលទិន្នន័យផ្ទាល់ខ្លួនបាន។'
-            : 'Please enter your secret passcode or scan your personal Barcode/QR card to view your records.'}
+            ? 'អ្នកបានចូលគណនី App រួចហើយ! ដើម្បីមើលព័ត៌មានផ្ទាល់ខ្លួនរបស់អ្នក សូមស្កេនកាត QR ឬបញ្ចូលលេខកូដសម្ងាត់ដែលអ្នកគ្រប់គ្រងផ្តល់ជូន។'
+            : 'You are signed in! To view your personal records, please scan your QR card or enter the passcode from the administrator.'}
         </p>
       </div>
       <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1">
@@ -581,14 +634,14 @@ export function GoToDashboardPromptCard({ titleKm }: { titleKm: string }) {
           onClick={() => setOpenDirectLogin(true)}
           className="w-full sm:w-auto px-6 py-2.5 rounded-full border-2 border-[#d97706] text-[#d97706] dark:text-amber-400 hover:bg-amber-500/10 text-xs font-black transition-all active:scale-95"
         >
-          {isKh ? 'ទៅកាន់ផ្ទាំង ចូលគណនី' : 'Go to Login Page'}
+          {isKh ? 'ស្កេនកាត QR / បញ្ចូលកូដ' : 'Scan QR / Enter Code'}
         </button>
         <button
           type="button"
           onClick={() => navigate('/dashboard')}
           className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-[#f59e0b] hover:bg-[#d97706] text-white text-xs font-black transition-all active:scale-95"
         >
-          {isKh ? 'បើកផ្ទាំងគ្រប់គ្រង User' : 'Open User Dashboard'}
+          {isKh ? 'ទៅកាន់ផ្ទាំងគ្រប់គ្រង User' : 'Go to User Dashboard'}
         </button>
       </div>
     </div>
@@ -1646,7 +1699,7 @@ export function AdminUserPasswordDashboard() {
                 className="h-9 rounded-xl px-2.5 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold flex-1"
               >
                 <option value="សិស្ស">សិស្ស</option>
-                <option value="និស្សិត">និស្សតិ</option>
+                <option value="និស្សិត">និស្សិត</option>
                 <option value="ពិសេស">ពិសេស</option>
               </select>
               <Button
@@ -1919,7 +1972,7 @@ export function StudentPersonalDashboard() {
   const navigate = useNavigate();
   const { lang, setLang } = useI18n();
   const { theme, toggleTheme } = useTheme();
-  const { hasRole } = useAuth();
+  const { user, hasRole } = useAuth();
   const isKh = lang === 'km';
   const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
 
@@ -1945,8 +1998,19 @@ export function StudentPersonalDashboard() {
     ]);
     setPaymentPayload(payData);
     setRicePayload(rData);
-    setVerifiedProfile(isStudentSessionVerified(secData));
+    if (!user) {
+      setVerifiedProfile(null);
+    } else {
+      setVerifiedProfile(isStudentSessionVerified(secData));
+    }
   };
+
+  useEffect(() => {
+    if (!user) {
+      clearVerifiedStudentSession();
+      setVerifiedProfile(null);
+    }
+  }, [user]);
 
   useEffect(() => {
     loadAllDashboardData();
@@ -1961,7 +2025,7 @@ export function StudentPersonalDashboard() {
       window.removeEventListener('rice-system-updated', loadAllDashboardData);
       window.removeEventListener('open-bipa-student-login', openLoginHandler);
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const el = heroBannerRef.current;
@@ -2027,10 +2091,12 @@ export function StudentPersonalDashboard() {
     return 'Student';
   };
 
+  const activeStudent = user && verifiedProfile ? verifiedProfile : null;
+
   const currentAvatar =
-    verifiedProfile?.avatarDataUrl ||
-    (verifiedProfile
-      ? localStorage.getItem(`bipa_avatar_${verifiedProfile.studentCode}`) || ''
+    activeStudent?.avatarDataUrl ||
+    (activeStudent
+      ? localStorage.getItem(`bipa_avatar_${activeStudent.studentCode}`) || ''
       : '');
 
   return (
@@ -2045,7 +2111,7 @@ export function StudentPersonalDashboard() {
         />
       )}
 
-      {verifiedProfile && scrolledCompact && (
+      {activeStudent && scrolledCompact && (
         <div
           onClick={() => setShowProfileDetailModal(true)}
           className="fixed top-16 sm:top-20 left-0 right-0 z-50 max-w-xl mx-auto bg-white/95 dark:bg-[#162033]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex items-center justify-between shadow-md cursor-pointer animate-in slide-in-from-top-2 duration-150"
@@ -2066,22 +2132,22 @@ export function StudentPersonalDashboard() {
                 <img src={currentAvatar} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white font-black text-sm">
-                  {verifiedProfile.fullNameKm.charAt(0)}
+                  {activeStudent.fullNameKm.charAt(0)}
                 </div>
               )}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white truncate">
-                  {verifiedProfile.fullNameKm}
+                  {activeStudent.fullNameKm}
                 </span>
                 <Badge className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0">
-                  {verifiedProfile.studentCode}
+                  {activeStudent.studentCode}
                 </Badge>
               </div>
               <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">
-                {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
-                {verifiedProfile.phoneNumber}
+                {renderTranslatedUserType(activeStudent.userTypeKm)} •{' '}
+                {activeStudent.phoneNumber}
               </p>
             </div>
           </div>
@@ -2089,7 +2155,7 @@ export function StudentPersonalDashboard() {
         </div>
       )}
 
-      {!verifiedProfile ? (
+      {!activeStudent ? (
         <div
           ref={heroBannerRef}
           className="relative w-full h-64 sm:h-72 bg-[#c57c14] flex flex-col justify-between p-4 sm:p-5 text-white select-none"
@@ -2119,7 +2185,13 @@ export function StudentPersonalDashboard() {
 
           <div className="relative z-10 flex items-center gap-4 pb-1">
             <div
-              onClick={() => setShowLoginModal(true)}
+              onClick={() => {
+                if (!user) {
+                  navigate('/signin');
+                } else {
+                  setShowLoginModal(true);
+                }
+              }}
               className="w-20 h-20 rounded-full bg-amber-200/30 border-2 border-amber-200/40 flex items-center justify-center cursor-pointer shrink-0"
             >
               <User className="h-9 w-9 text-[#935907]" />
@@ -2152,7 +2224,7 @@ export function StudentPersonalDashboard() {
               />
               <img
                 src={currentAvatar}
-                alt={verifiedProfile.fullNameKm}
+                alt={activeStudent.fullNameKm}
                 style={{ objectPosition: 'center 15%' }}
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
@@ -2193,25 +2265,25 @@ export function StudentPersonalDashboard() {
               {currentAvatar ? (
                 <img
                   src={currentAvatar}
-                  alt={verifiedProfile.fullNameKm}
+                  alt={activeStudent.fullNameKm}
                   className="w-full h-full object-cover object-top"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-2xl font-black">
-                  {verifiedProfile.fullNameKm.charAt(0)}
+                  {activeStudent.fullNameKm.charAt(0)}
                 </div>
               )}
             </div>
 
             <div className="space-y-0.5 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
               <h1 className="text-xl sm:text-2xl font-black text-white leading-tight">
-                {verifiedProfile.fullNameKm}
+                {activeStudent.fullNameKm}
               </h1>
               <p className="text-xs sm:text-sm font-bold text-white/95">
-                {renderTranslatedUserType(verifiedProfile.userTypeKm)}
+                {renderTranslatedUserType(activeStudent.userTypeKm)}
               </p>
               <p className="text-xs sm:text-sm font-semibold text-white/95 tracking-wide">
-                {verifiedProfile.phoneNumber}
+                {activeStudent.phoneNumber}
               </p>
             </div>
           </div>
@@ -2224,19 +2296,35 @@ export function StudentPersonalDashboard() {
             {isKh ? 'ប្រវត្តិរូប' : 'Profile'}
           </h2>
 
-          {!verifiedProfile ? (
+          {!activeStudent ? (
             <div className="bg-white dark:bg-[#162033] rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-2xs text-center space-y-3.5">
               <p className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">
-                {isKh
-                  ? 'អ្នកមិនទាន់បានចូលគណនី (login) នៅឡើយទេ'
-                  : 'You are not logged in (login) yet'}
+                {!user
+                  ? isKh
+                    ? 'សូមចូលគណនីប្រព័ន្ធ (Login) ជាមុនសិន'
+                    : 'Please sign in to your account first'
+                  : isKh
+                  ? 'អ្នកមិនទាន់បានស្កេនកាត QR ឬបញ្ចូលកូដសម្ងាត់សិស្សនៅឡើយទេ'
+                  : 'You have not scanned your student QR card yet'}
               </p>
               <button
                 type="button"
-                onClick={() => setShowLoginModal(true)}
+                onClick={() => {
+                  if (!user) {
+                    navigate('/signin');
+                  } else {
+                    setShowLoginModal(true);
+                  }
+                }}
                 className="px-6 py-2 rounded-full border border-[#d97706] text-[#d97706] dark:text-amber-400 hover:bg-amber-500/10 text-xs sm:text-sm font-bold transition-all active:scale-95"
               >
-                {isKh ? 'ទៅកាន់ផ្ទាំង ចូលគណនី' : 'Go to Login Page'}
+                {!user
+                  ? isKh
+                    ? 'ទៅកាន់ផ្ទាំង ចូលគណនី App'
+                    : 'Go to App Sign In'
+                  : isKh
+                  ? 'ស្កេនកាត QR / បញ្ចូលកូដសិស្ស'
+                  : 'Scan QR / Student Login'}
               </button>
             </div>
           ) : (
@@ -2254,8 +2342,8 @@ export function StudentPersonalDashboard() {
                       {isKh ? 'នាមត្រកូល' : 'Last Name'}
                     </p>
                     <p className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                      {verifiedProfile.lastNameKm ||
-                        splitKhmerFullName(verifiedProfile.fullNameKm).lastName}
+                      {activeStudent.lastNameKm ||
+                        splitKhmerFullName(activeStudent.fullNameKm).lastName}
                     </p>
                   </div>
                 </div>
@@ -2269,8 +2357,8 @@ export function StudentPersonalDashboard() {
                       {isKh ? 'នាមខ្លួន' : 'First Name'}
                     </p>
                     <p className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                      {verifiedProfile.firstNameKm ||
-                        splitKhmerFullName(verifiedProfile.fullNameKm).firstName}
+                      {activeStudent.firstNameKm ||
+                        splitKhmerFullName(activeStudent.fullNameKm).firstName}
                     </p>
                   </div>
                 </div>
@@ -2284,7 +2372,7 @@ export function StudentPersonalDashboard() {
                       {isKh ? 'ប្រភេទ' : 'Category'}
                     </p>
                     <p className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                      {renderTranslatedUserType(verifiedProfile.userTypeKm)}
+                      {renderTranslatedUserType(activeStudent.userTypeKm)}
                     </p>
                   </div>
                 </div>
@@ -2298,7 +2386,7 @@ export function StudentPersonalDashboard() {
                       {isKh ? 'លេខទូរស័ព្ទ' : 'Phone Number'}
                     </p>
                     <p className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                      {verifiedProfile.phoneNumber}
+                      {activeStudent.phoneNumber}
                     </p>
                   </div>
                 </div>
@@ -2529,7 +2617,7 @@ export function StudentPersonalDashboard() {
           </div>
         </div>
 
-        {verifiedProfile && (
+        {activeStudent && (
           <div className="pt-1">
             <button
               type="button"
@@ -2553,7 +2641,7 @@ export function StudentPersonalDashboard() {
         )}
       </div>
 
-      {verifiedProfile && showProfileDetailModal && (
+      {activeStudent && showProfileDetailModal && (
         <div
           onClick={() => setShowProfileDetailModal(false)}
           className="fixed inset-0 z-[240] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 font-khmer animate-in fade-in duration-200"
@@ -2566,12 +2654,12 @@ export function StudentPersonalDashboard() {
               {currentAvatar ? (
                 <img
                   src={currentAvatar}
-                  alt={verifiedProfile.fullNameKm}
+                  alt={activeStudent.fullNameKm}
                   className="w-full h-full object-contain"
                 />
               ) : (
                 <div className="w-28 h-28 rounded-full bg-amber-500 text-white font-black text-4xl flex items-center justify-center">
-                  {verifiedProfile.fullNameKm.charAt(0)}
+                  {activeStudent.fullNameKm.charAt(0)}
                 </div>
               )}
               <button
@@ -2587,15 +2675,15 @@ export function StudentPersonalDashboard() {
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                 <div>
                   <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                    {verifiedProfile.fullNameKm}
+                    {activeStudent.fullNameKm}
                   </h3>
                   <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                    {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
-                    {verifiedProfile.majorKm}
+                    {renderTranslatedUserType(activeStudent.userTypeKm)} •{' '}
+                    {activeStudent.majorKm}
                   </p>
                 </div>
                 <Badge className="bg-amber-400 text-slate-950 font-black text-xs px-3 py-1">
-                  {verifiedProfile.studentCode}
+                  {activeStudent.studentCode}
                 </Badge>
               </div>
 
@@ -2605,8 +2693,8 @@ export function StudentPersonalDashboard() {
                     {isKh ? 'នាមត្រកូល' : 'Last Name'}
                   </span>
                   <span className="font-black text-sm text-slate-900 dark:text-white">
-                    {verifiedProfile.lastNameKm ||
-                      splitKhmerFullName(verifiedProfile.fullNameKm).lastName}
+                    {activeStudent.lastNameKm ||
+                      splitKhmerFullName(activeStudent.fullNameKm).lastName}
                   </span>
                 </div>
 
@@ -2615,8 +2703,8 @@ export function StudentPersonalDashboard() {
                     {isKh ? 'នាមខ្លួន' : 'First Name'}
                   </span>
                   <span className="font-black text-sm text-slate-900 dark:text-white">
-                    {verifiedProfile.firstNameKm ||
-                      splitKhmerFullName(verifiedProfile.fullNameKm).firstName}
+                    {activeStudent.firstNameKm ||
+                      splitKhmerFullName(activeStudent.fullNameKm).firstName}
                   </span>
                 </div>
 
@@ -2625,7 +2713,7 @@ export function StudentPersonalDashboard() {
                     {isKh ? 'ប្រភេទ' : 'Category'}
                   </span>
                   <span className="font-black text-sm text-slate-900 dark:text-white">
-                    {renderTranslatedUserType(verifiedProfile.userTypeKm)}
+                    {renderTranslatedUserType(activeStudent.userTypeKm)}
                   </span>
                 </div>
 
@@ -2634,7 +2722,7 @@ export function StudentPersonalDashboard() {
                     {isKh ? 'លេខទូរស័ព្ទ' : 'Phone Number'}
                   </span>
                   <span className="font-black text-sm text-blue-600 dark:text-amber-400">
-                    {verifiedProfile.phoneNumber}
+                    {activeStudent.phoneNumber}
                   </span>
                 </div>
               </div>

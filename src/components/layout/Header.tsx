@@ -67,7 +67,9 @@ import {
   AdminStudentSecurityModal,
   parseStudentQrToken,
   fetchSecurityPayloadFromDb,
-  setVerifiedStudentSession
+  setVerifiedStudentSession,
+  clearVerifiedStudentSession,
+  hasActiveStudentQrAccess
 } from '@/components/security/StudentSecuritySystem';
 import { cn } from '@/lib/utils';
 
@@ -238,6 +240,14 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
         message: `បានបើកទិន្នន័យផ្ទាល់ខ្លួនរបស់ ${prof.fullNameKm} (${prof.studentCode})!`
       };
     }
+  }
+
+  if (!hasActiveStudentQrAccess()) {
+    return {
+      ok: false,
+      shortTitle: 'សូមស្កេនកាតសិស្សសិន',
+      message: 'សូមចូលគណនី និងស្កេនកាត QR សិស្សរបស់អ្នកជាមុនសិន!'
+    };
   }
 
   const linkedId = (localStorage.getItem('bipa_linked_student_id') || '').trim();
@@ -482,6 +492,56 @@ export function Header() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
+    const enforceAttendanceIdSecurity = () => {
+      const isAllowed = Boolean(user) && hasActiveStudentQrAccess();
+      if (!isAllowed && localStorage.getItem('bipa_linked_student_id')) {
+        clearVerifiedStudentSession();
+      }
+
+      if (location.pathname === '/attendance') {
+        const allElements = Array.from(document.querySelectorAll('main *')) as HTMLElement[];
+        allElements.forEach((el) => {
+          const directTxt = (el.textContent || '').trim();
+          if (
+            !isAllowed &&
+            directTxt.startsWith('✓ បានភ្ជាប់ ID រួចរាល់៖') &&
+            el.children.length === 0
+          ) {
+            el.textContent = 'សូមចូលគណនី និងស្កេនកាត QR របស់អ្នកជាមុនសិន';
+          }
+        });
+
+        const allButtons = Array.from(document.querySelectorAll('main button')) as HTMLElement[];
+        allButtons.forEach((btn) => {
+          const txt = (btn.textContent || '').trim();
+          if (
+            txt === 'ផ្លាស់ប្តូរ ID' ||
+            txt === 'ភ្ជាប់ ID' ||
+            txt === 'Save ID' ||
+            txt === 'សូមចូលគណនី & ស្កេនកាត QR ក្នុងផ្ទាំងគ្រប់គ្រង'
+          ) {
+            btn.onclick = (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              navigate(user ? '/dashboard' : '/signin');
+            };
+            if (!isAllowed) {
+              btn.textContent = 'សូមចូលគណនី & ស្កេនកាត QR ក្នុងផ្ទាំងគ្រប់គ្រង';
+              btn.style.display = '';
+            } else {
+              btn.style.display = 'none';
+            }
+          }
+        });
+      }
+    };
+
+    enforceAttendanceIdSecurity();
+    const timer = setInterval(enforceAttendanceIdSecurity, 400);
+    return () => clearInterval(timer);
+  }, [user, location.pathname, navigate]);
+
+  useEffect(() => {
     if (mobileOpen || showScanner) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -555,6 +615,7 @@ export function Header() {
   };
 
   const handleSignOut = async () => {
+    clearVerifiedStudentSession();
     await signOut();
     navigate('/');
   };
@@ -924,13 +985,11 @@ export function Header() {
                       <span>{lang === 'km' ? item.labelKm : item.labelEn}</span>
                     </DropdownMenuItem>
                   ))}
-                  
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
-        
               <div className="flex items-center md:mr-2 md:border-r border-slate-700 md:pr-4">
                 <Button
                   onClick={() => setShowScanner(true)}
