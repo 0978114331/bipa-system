@@ -531,6 +531,50 @@ export function Header() {
   const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
   const isAdminRoute = location.pathname.startsWith('/admin');
 
+  const isDashboardOverlay =
+    location.pathname === '/dashboard' || location.pathname === '/profile';
+
+  const isDutiesOverlay =
+    location.pathname.startsWith('/admin/duties') ||
+    location.pathname.startsWith('/dashboard/duties') ||
+    location.pathname === '/duties';
+
+  const isPaymentsOverlay =
+    location.pathname.startsWith('/admin/payments') ||
+    location.pathname.startsWith('/dashboard/payments') ||
+    location.pathname === '/payments';
+
+  const isRiceOverlay =
+    location.pathname.startsWith('/admin/assets') ||
+    location.pathname.startsWith('/dashboard/assets') ||
+    location.pathname === '/assets' ||
+    location.pathname === '/rice' ||
+    location.search.includes('view=rice');
+
+  const isLeaveOverlay =
+    location.pathname === '/leave' ||
+    location.pathname.startsWith('/dashboard/leave') ||
+    location.pathname.startsWith('/admin/leave-requests');
+
+  const isHeaderOverlayActive =
+    isDashboardOverlay ||
+    isDutiesOverlay ||
+    isPaymentsOverlay ||
+    isRiceOverlay ||
+    isLeaveOverlay;
+
+  const isSidebarSpecialOverlayActive =
+    location.search.includes('page=home-manager') ||
+    location.hash === '#home-manager' ||
+    location.pathname === '/admin/home-manager' ||
+    location.search.includes('page=user-passwords') ||
+    location.pathname === '/admin/user-passwords' ||
+    location.pathname.startsWith('/admin/residences') ||
+    location.pathname.startsWith('/admin/settings');
+
+  const shouldHideUnderlyingMain =
+    isHeaderOverlayActive || isSidebarSpecialOverlayActive;
+
   const mainNavItems = [
     { key: 'nav.home', path: '/', icon: Home, labelKm: 'ផ្ទះ', labelEn: 'Home' },
     { key: 'nav.attendance', path: '/attendance', icon: UserCheck, labelKm: 'វត្តមាន', labelEn: 'Attendance' },
@@ -772,70 +816,68 @@ export function Header() {
         <img
           src="https://i.ibb.co/KY0bJNW/b151bd61-2587-445b-b245-2ddaea928120.png"
           alt=""
-          className="w-full h-full object-cover object-center scale-105"
+          className="w-full h-full object-cover object-center"
         />
-        <div className="absolute inset-0 bg-[#061024]/85 backdrop-blur-[3px]" />
+        <div className="absolute inset-0 bg-[#f2f6ff]/82 dark:bg-[#061024]/86 transition-colors duration-300" />
       </div>
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Moul&family=Siemreap&display=swap');
-
         html, body, #root, main {
           font-family: 'Siemreap', sans-serif !important;
           background: transparent !important;
           background-color: transparent !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          width: 100% !important;
-          min-height: 100dvh !important;
-          overflow-x: hidden !important;
         }
-
         .font-khmer {
           font-family: 'Siemreap', sans-serif !important;
         }
-
         .font-moul-kh {
           font-family: 'Moul', serif !important;
           font-weight: 400 !important;
         }
-
-        /* Prevent overlapping and force full screen layout */
-        .fixed.top-16,
-        .fixed.top-20,
-        div.fixed.z-[85],
-        div.fixed.z-[90],
+        main > div,
+        .min-h-screen,
+        .bipa-header-single-overlay,
         div.fixed.z-30 {
-          position: fixed !important;
-          top: 4rem !important;
-          left: 0 !important;
-          right: 0 !important;
-          bottom: 4rem !important;
-          height: auto !important;
-          max-height: calc(100dvh - 8rem) !important;
-          background: rgba(11, 17, 32, 0.92) !important;
-          backdrop-filter: blur(12px) !important;
-          -webkit-backdrop-filter: blur(12px) !important;
-          border-radius: 0 !important;
-          border: none !important;
-          box-shadow: none !important;
-          padding: 0.75rem !important;
-          margin: 0 !important;
-          overflow-y: auto !important;
-          z-index: 85 !important;
+          background: transparent !important;
+          background-color: transparent !important;
         }
-
-        @media (min-width: 1024px) {
-          .fixed.top-16,
-          .fixed.top-20,
-          div.fixed.z-[85],
-          div.fixed.z-[90],
-          div.fixed.z-30 {
-            top: 5rem !important;
-            max-height: calc(100dvh - 9rem) !important;
-          }
+        html:not(.dark) main .bg-\\[\\#1e293b\\],
+        html:not(.dark) main .bg-\\[\\#0f172a\\] {
+          background-color: rgba(255, 255, 255, 0.9) !important;
+          color: #0f172a !important;
+          border-color: #e2e8f0 !important;
         }
-
+        html:not(.dark) main .bg-\\[\\#1e293b\\] h1,
+        html:not(.dark) main .bg-\\[\\#1e293b\\] h2,
+        html:not(.dark) main .bg-\\[\\#1e293b\\] h3,
+        html:not(.dark) main .bg-\\[\\#1e293b\\] p,
+        html:not(.dark) main .bg-\\[\\#1e293b\\] span:not(.bg-amber-500) {
+          color: #0f172a !important;
+        }
+        .bipa-glass-overlay,
+        div.fixed.z-\\[90\\] {
+          display: none !important;
+        }
+        ${
+          shouldHideUnderlyingMain
+            ? `
+        main,
+        footer {
+          display: none !important;
+        }
+        `
+            : ''
+        }
+        ${
+          isHeaderOverlayActive
+            ? `
+        div.fixed.z-30 {
+          display: none !important;
+        }
+        `
+            : ''
+        }
         @keyframes bipaSheetSlideUp {
           0% {
             opacity: 0;
@@ -846,9 +888,8 @@ export function Header() {
             transform: translateY(0);
           }
         }
-
         .animate-bipa-sheet-up {
-          animation: bipaSheetSlideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          animation: bipaSheetSlideUp 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
 
@@ -964,11 +1005,11 @@ export function Header() {
         </div>
       )}
 
-      <header className="sticky top-0 z-50 bg-[#0f172a] text-white shadow-md border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      <header className="sticky top-0 left-0 right-0 z-50 bg-[#0b1528]/95 backdrop-blur-md text-white shadow-md border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-20">
             <button onClick={() => navigate('/')} className="flex items-center gap-2.5 shrink-0">
-              <div className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden shrink-0 bg-white">
+              <div className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden shrink-0 bg-white shadow-xs">
                 {systemLogoUrl ? (
                   <img src={systemLogoUrl} alt="Logo" className="w-full h-full object-contain p-0.5" />
                 ) : (
@@ -978,7 +1019,7 @@ export function Header() {
                 )}
               </div>
               <div className="text-left flex flex-col justify-center">
-                <div className="font-moul-kh text-sm sm:text-base leading-tight tracking-wide text-white">
+                <div className="font-moul-kh text-xs sm:text-base leading-tight tracking-wide text-white">
                   {lang === 'km' ? systemNameKm : systemNameEn}
                 </div>
               </div>
@@ -1332,7 +1373,7 @@ export function Header() {
         </div>
       )}
 
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white dark:bg-[#0f172a] border-t border-slate-200 dark:border-slate-800 flex items-center justify-around h-16 pb-safe px-1 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] font-khmer">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white/95 dark:bg-[#0b1528]/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 flex items-center justify-around h-16 pb-safe px-1 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] font-khmer">
         <button
           type="button"
           onClick={() => {
@@ -1424,22 +1465,16 @@ export function Header() {
         </button>
       </div>
 
-      {(location.pathname === '/dashboard' || location.pathname === '/profile') && (
-        <div
-          style={{ height: 'calc(100dvh - 4rem)' }}
-          className="fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f5f6f8] dark:bg-[#0b1120] overflow-y-auto pb-24 scrollbar-thin"
-        >
+      {isDashboardOverlay && (
+        <div className="bipa-header-single-overlay fixed top-16 sm:top-20 bottom-16 md:bottom-0 left-0 right-0 z-[85] overflow-y-auto scrollbar-thin">
           <StudentPersonalDashboard />
         </div>
       )}
 
-      {(location.pathname.startsWith('/admin/duties') ||
-        location.pathname.startsWith('/dashboard/duties') ||
-        location.pathname === '/duties') && (
+      {isDutiesOverlay && (
         <div
-          style={{ height: 'calc(100dvh - 4rem)' }}
           className={cn(
-            'fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin',
+            'bipa-header-single-overlay fixed top-16 sm:top-20 bottom-16 md:bottom-0 left-0 right-0 z-[85] overflow-y-auto p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
           )}
         >
@@ -1453,13 +1488,10 @@ export function Header() {
         </div>
       )}
 
-      {(location.pathname.startsWith('/admin/payments') ||
-        location.pathname.startsWith('/dashboard/payments') ||
-        location.pathname === '/payments') && (
+      {isPaymentsOverlay && (
         <div
-          style={{ height: 'calc(100dvh - 4rem)' }}
           className={cn(
-            'fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin',
+            'bipa-header-single-overlay fixed top-16 sm:top-20 bottom-16 md:bottom-0 left-0 right-0 z-[85] overflow-y-auto p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
           )}
         >
@@ -1473,14 +1505,10 @@ export function Header() {
         </div>
       )}
 
-      {(location.pathname.startsWith('/admin/assets') ||
-        location.pathname.startsWith('/dashboard/assets') ||
-        location.pathname === '/assets' ||
-        location.pathname === '/rice') && (
+      {isRiceOverlay && (
         <div
-          style={{ height: 'calc(100dvh - 4rem)' }}
           className={cn(
-            'fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin',
+            'bipa-header-single-overlay fixed top-16 sm:top-20 bottom-16 md:bottom-0 left-0 right-0 z-[85] overflow-y-auto p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
           )}
         >
@@ -1494,13 +1522,10 @@ export function Header() {
         </div>
       )}
 
-      {(location.pathname === '/leave' ||
-        location.pathname.startsWith('/dashboard/leave') ||
-        location.pathname.startsWith('/admin/leave-requests')) && (
+      {isLeaveOverlay && (
         <div
-          style={{ height: 'calc(100dvh - 4rem)' }}
           className={cn(
-            'fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin',
+            'bipa-header-single-overlay fixed top-16 sm:top-20 bottom-16 md:bottom-0 left-0 right-0 z-[85] overflow-y-auto p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
           )}
         >

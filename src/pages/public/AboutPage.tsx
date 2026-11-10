@@ -527,29 +527,29 @@ export function AboutPage() {
       icon: Target,
       title: isKhmer ? content.purposeTitleKm : content.purposeTitleEn,
       desc: isKhmer ? content.purposeDescKm : content.purposeDescEn,
-      accent: 'from-amber-500/25 via-amber-500/5 to-transparent border-amber-500/40',
-      iconBg: 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+      accent: 'from-amber-500/20 via-amber-500/5 to-transparent border-amber-500/40',
+      iconBg: 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
     },
     {
       id: 'card-vision',
       icon: Eye,
       title: isKhmer ? content.visionTitleKm : content.visionTitleEn,
       desc: isKhmer ? content.visionDescKm : content.visionDescEn,
-      accent: 'from-blue-500/25 via-cyan-500/5 to-transparent border-blue-500/40',
-      iconBg: 'bg-blue-500/15 border-blue-500/30 text-blue-400'
+      accent: 'from-blue-500/20 via-cyan-500/5 to-transparent border-blue-500/40',
+      iconBg: 'bg-blue-500/15 border-blue-500/30 text-blue-600 dark:text-blue-400'
     },
     {
       id: 'card-mission',
       icon: Compass,
       title: isKhmer ? content.missionTitleKm : content.missionTitleEn,
       desc: isKhmer ? content.missionDescKm : content.missionDescEn,
-      accent: 'from-emerald-500/25 via-teal-500/5 to-transparent border-emerald-500/40',
-      iconBg: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+      accent: 'from-emerald-500/20 via-teal-500/5 to-transparent border-emerald-500/40',
+      iconBg: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
     }
   ];
 
   return (
-    <div className="min-h-screen bg-[#f4f6fb] dark:bg-[#0b1120] text-slate-900 dark:text-slate-100 pb-24 font-khmer overflow-x-hidden scroll-smooth">
+    <div className="w-full min-h-screen bg-transparent text-slate-900 dark:text-slate-100 pb-24 font-khmer overflow-x-hidden scroll-smooth">
       <div className="fixed top-16 sm:top-20 left-0 right-0 z-40 h-1 bg-transparent pointer-events-none">
         <div
           className="h-full bg-gradient-to-r from-blue-500 via-emerald-400 to-amber-400 shadow-[0_0_12px_rgba(59,130,246,0.8)] transition-all duration-150"
@@ -559,25 +559,22 @@ export function AboutPage() {
 
       <section
         id="about-hero"
-        className="relative overflow-hidden bg-gradient-to-b from-[#0f172a] via-[#131d33] to-[#0b1120] text-white border-b border-slate-800/80"
+        className="relative overflow-hidden bg-white/75 dark:bg-[#0f172a]/80 backdrop-blur-md text-slate-900 dark:text-white border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-300"
       >
-        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-blue-500/15 blur-3xl animate-pulse pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-96 h-96 rounded-full bg-amber-500/10 blur-3xl animate-pulse pointer-events-none" />
-
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
           <ScrollReveal>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-3 max-w-2xl">
-                <Badge className="bg-amber-500/15 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-3 py-1 text-xs font-extrabold tracking-wide">
+              <div className="space-y-2.5 max-w-2xl">
+                <Badge className="bg-amber-500/15 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 px-3 py-1 text-xs">
                   <Sparkles className="h-3.5 w-3.5 mr-1.5" />
                   {isKhmer ? content.badgeKm : content.badgeEn}
                 </Badge>
 
-                <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
+                <h1 className="font-moul-kh text-xl sm:text-3xl tracking-tight text-slate-900 dark:text-white">
                   {isKhmer ? content.pageTitleKm : content.pageTitleEn}
                 </h1>
 
-                <p className="text-xs sm:text-base text-slate-300 leading-relaxed">
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                   {isKhmer ? content.pageSubtitleKm : content.pageSubtitleEn}
                 </p>
               </div>
@@ -585,9 +582,9 @@ export function AboutPage() {
               {isAdmin && (
                 <Button
                   onClick={() => handleOpenEditModal('overview')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm h-11 px-5 rounded-xl shadow-lg shadow-blue-600/25 shrink-0 self-start sm:self-center active:scale-95 transition-all"
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-10 px-4 rounded-xl shadow-md shrink-0 self-start sm:self-center active:scale-95 transition-all"
                 >
-                  <Edit2 className="h-4 w-4 mr-2" />
+                  <Edit2 className="h-4 w-4 mr-1.5" />
                   {isKhmer ? 'កែប្រែទំព័រអំពីយើង' : 'Edit About Page'}
                 </Button>
               )}
@@ -595,39 +592,39 @@ export function AboutPage() {
           </ScrollReveal>
 
           <ScrollReveal delay={100}>
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pt-6 pb-1">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pt-5 pb-1">
               <button
                 type="button"
                 onClick={() => scrollToSection('about-intro')}
-                className="px-3.5 py-1.5 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-bold text-slate-200 shrink-0 transition-all active:scale-95"
+                className="px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-blue-500/15 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-200 shrink-0 transition-all active:scale-95"
               >
                 {isKhmer ? content.introHeadingKm : content.introHeadingEn}
               </button>
               <button
                 type="button"
                 onClick={() => scrollToSection('about-principles')}
-                className="px-3.5 py-1.5 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-bold text-slate-200 shrink-0 transition-all active:scale-95"
+                className="px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-blue-500/15 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-200 shrink-0 transition-all active:scale-95"
               >
                 {isKhmer ? content.principlesHeadingKm : content.principlesHeadingEn}
               </button>
               <button
                 type="button"
                 onClick={() => scrollToSection('about-directors')}
-                className="px-3.5 py-1.5 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-bold text-slate-200 shrink-0 transition-all active:scale-95"
+                className="px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-blue-500/15 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-200 shrink-0 transition-all active:scale-95"
               >
                 {isKhmer ? content.directorsTitleKm : content.directorsTitleEn}
               </button>
               <button
                 type="button"
                 onClick={() => scrollToSection('about-managers')}
-                className="px-3.5 py-1.5 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-bold text-slate-200 shrink-0 transition-all active:scale-95"
+                className="px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-blue-500/15 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-200 shrink-0 transition-all active:scale-95"
               >
                 {isKhmer ? content.managersTitleKm : content.managersTitleEn}
               </button>
             </div>
           </ScrollReveal>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 mt-5">
             {highlightCards.map((card, index) => {
               const IconComp = card.icon;
               const isTouched = activeCardId === card.id;
@@ -636,10 +633,10 @@ export function AboutPage() {
                   <div
                     onClick={() => setActiveCardId(isTouched ? null : card.id)}
                     className={cn(
-                      'group relative h-full rounded-2xl p-5 sm:p-6 bg-[#162033]/90 backdrop-blur-md border transition-all duration-500 cursor-pointer hover:-translate-y-2 hover:shadow-2xl',
+                      'group relative h-full rounded-2xl p-5 bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md border transition-all duration-500 cursor-pointer hover:-translate-y-1 hover:shadow-xl',
                       isTouched
-                        ? 'border-amber-400/80 shadow-xl shadow-amber-500/15 scale-[1.02]'
-                        : 'border-slate-800 hover:border-slate-600'
+                        ? 'border-amber-500/80 shadow-lg scale-[1.01]'
+                        : 'border-slate-200/90 dark:border-slate-800 hover:border-blue-400 dark:hover:border-slate-600'
                     )}
                   >
                     <div
@@ -648,21 +645,21 @@ export function AboutPage() {
                         card.accent
                       )}
                     />
-                    <div className="relative z-10 space-y-3.5">
-                      <div className="flex items-center gap-3.5">
+                    <div className="relative z-10 space-y-3">
+                      <div className="flex items-center gap-3">
                         <div
                           className={cn(
-                            'w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-6',
+                            'w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-105',
                             card.iconBg
                           )}
                         >
                           <IconComp className="h-5 w-5" />
                         </div>
-                        <h2 className="text-base sm:text-lg font-extrabold text-white">
+                        <h2 className="font-moul-kh text-sm sm:text-base text-slate-900 dark:text-white">
                           {card.title}
                         </h2>
                       </div>
-                      <p className="text-xs sm:text-sm text-slate-300 leading-relaxed whitespace-pre-line">
+                      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
                         {card.desc}
                       </p>
                     </div>
