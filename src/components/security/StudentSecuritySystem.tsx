@@ -788,7 +788,14 @@ export function StudentVerificationGate({
   ];
 
   return (
-    <div className="fixed inset-0 z-[210] bg-[#f8f9fa] dark:bg-[#0b1120] text-slate-900 dark:text-white flex flex-col justify-between p-5 sm:p-8 font-khmer overflow-y-auto animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[210] text-white flex flex-col justify-between p-4 sm:p-6 font-khmer overflow-y-auto animate-in fade-in duration-200 select-none">
+      <img
+        src="https://i.ibb.co/KY0bJNW/b151bd61-2587-445b-b245-2ddaea928120.png"
+        alt=""
+        className="fixed inset-0 w-full h-full object-cover object-center -z-20 pointer-events-none"
+      />
+      <div className="fixed inset-0 bg-[#041028]/55 backdrop-blur-[3px] -z-10 pointer-events-none" />
+
       <div id="bipa-login-qr-hidden" className="hidden" />
       <input
         ref={fileInputRef}
@@ -802,167 +809,175 @@ export function StudentVerificationGate({
         <button
           type="button"
           onClick={() => (onClose ? onClose() : navigate('/'))}
-          className="p-2 -ml-2 rounded-full text-slate-800 dark:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
+          className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-md flex items-center justify-center text-white border border-white/20 transition-colors"
         >
           <X className="h-5 w-5" />
         </button>
       </div>
 
-      <div className="w-full max-w-md mx-auto my-auto py-5 space-y-6">
-        <div className="flex flex-col items-center justify-center">
-          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-white shadow-md border border-slate-200/80 p-1.5 flex items-center justify-center overflow-hidden">
+      <div className="w-full max-w-md mx-auto my-auto py-4 space-y-5">
+        <div className="flex flex-col items-center justify-center space-y-2 text-center">
+          <div className="w-22 h-22 sm:w-24 sm:h-24 rounded-full bg-white shadow-[0_0_30px_rgba(59,130,246,0.5)] border-2 border-white p-1.5 flex items-center justify-center overflow-hidden" style={{ width: '88px', height: '88px' }}>
             <img
               src={logoUrl}
               alt="BIPA Logo"
-              className="w-full h-full object-contain"
+              className="w-full h-full object-contain rounded-full"
             />
           </div>
+          <h2 className="font-moul-kh text-sm sm:text-base text-white drop-shadow">
+            {isKh ? 'ផ្ទៀងផ្ទាត់អត្តសញ្ញាណនិស្សិត' : 'Student Verification'}
+          </h2>
         </div>
 
-        {scanningCamera ? (
-          <div className="bg-white dark:bg-[#162033] p-4 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-lg space-y-3 text-center">
-            <p className="text-xs text-slate-700 dark:text-slate-200">
-              {isKh ? 'ដាក់កាត QR ឱ្យចំកាមេរ៉ា' : 'Center your QR card'}
-            </p>
-            <div className="relative w-60 h-60 mx-auto rounded-2xl overflow-hidden bg-slate-950 border-2 border-amber-500">
-              <div id="bipa-login-qr-reader" className="w-full h-full" />
+        <div className="bg-[#091e42]/65 backdrop-blur-xl border border-white/25 rounded-3xl p-4 sm:p-5 shadow-[0_20px_50px_rgba(0,0,0,0.45)] space-y-3.5">
+          {scanningCamera ? (
+            <div className="space-y-3 text-center">
+              <p className="text-xs text-sky-100">
+                {isKh ? 'ដាក់កាតឱ្យចំកណ្តាល' : 'Center your QR card'}
+              </p>
+              <div className="relative w-60 h-60 mx-auto rounded-2xl overflow-hidden bg-slate-950 border-2 border-amber-400">
+                <div id="bipa-login-qr-reader" className="w-full h-full" />
+              </div>
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-xl h-9 px-3.5"
+                >
+                  <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                  {isKh ? 'ជ្រើសរូប QR' : 'Upload QR'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setScanningCamera(false)}
+                  className="bg-white/10 border-white/25 text-white hover:bg-white/20 text-xs rounded-xl h-9 px-3.5"
+                >
+                  {isKh ? 'បិទកាមេរ៉ា' : 'Close'}
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center justify-center gap-2 pt-1">
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-xl h-8 px-3"
-              >
-                <ImageUp className="h-3.5 w-3.5 mr-1.5" />
-                {isKh ? 'ជ្រើសរើសរូប' : 'Upload QR'}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setScanningCamera(false)}
-                className="text-xs rounded-xl h-8 px-3.5"
-              >
-                {isKh ? 'បិទកាមេរ៉ា' : 'Close'}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3.5">
-            <div className="flex items-center h-11 px-3 rounded-xl bg-white dark:bg-[#162033] border border-slate-300/90 dark:border-slate-700 shadow-2xs focus-within:border-amber-500 transition-colors">
-              <div className="flex items-center gap-1.5 pr-2.5 border-r border-slate-200 dark:border-slate-700 shrink-0 select-none">
-                <span className="text-xs">🇰🇭</span>
-                <span className="text-xs text-slate-800 dark:text-slate-200">+855 ▾</span>
+          ) : (
+            <div className="space-y-3.5">
+              <div className="w-full flex items-center h-11 px-2.5 rounded-xl bg-slate-950/55 border border-white/25 focus-within:border-amber-400 transition-colors overflow-hidden">
+                <div className="flex items-center gap-1 pr-2 border-r border-white/20 shrink-0 select-none">
+                  <span className="text-xs">🇰🇭</span>
+                  <span className="text-[11px] text-sky-100">+855</span>
+                </div>
+
+                <input
+                  type="text"
+                  value={phoneOrIdInput}
+                  onChange={(e) => setPhoneOrIdInput(e.target.value)}
+                  placeholder={isKh ? 'លេខទូរស័ព្ទ ឬ ID' : 'Phone or ID'}
+                  style={{ fontSize: '12px' }}
+                  className="min-w-0 w-0 flex-1 h-10 px-2.5 bg-transparent text-white placeholder:text-slate-300/75 outline-none"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setScanningCamera(true)}
+                  className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-950 text-[11px] shadow-xs active:scale-95 transition-all"
+                  title={isKh ? 'ស្កេនកាត QR' : 'Scan QR'}
+                >
+                  <QrCode className="h-3.5 w-3.5 shrink-0" />
+                  <span>QR</span>
+                </button>
               </div>
 
-              <input
-                type="text"
-                value={phoneOrIdInput}
-                onChange={(e) => setPhoneOrIdInput(e.target.value)}
-                placeholder={isKh ? 'លេខទូរស័ព្ទ ឬ ID' : 'Phone or ID'}
-                style={{ fontSize: '12px' }}
-                className="flex-1 h-10 px-2.5 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 outline-none"
-              />
+              <div className="w-full flex items-center h-11 px-3 rounded-xl bg-slate-950/55 border border-white/25 focus-within:border-amber-400 transition-colors overflow-hidden">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      verifyByQrOrCredentials(passwordInput, phoneOrIdInput);
+                    }
+                  }}
+                  placeholder={isKh ? 'ពាក្យសម្ងាត់ ' : 'Password'}
+                  style={{ fontSize: '12px' }}
+                  className="min-w-0 w-0 flex-1 h-10 bg-transparent text-white placeholder:text-slate-300/75 outline-none"
+                />
 
-              <button
-                type="button"
-                onClick={() => setScanningCamera(true)}
-                className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
-              >
-                <QrCode className="h-4 w-4" />
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((p) => !p)}
+                  className="shrink-0 p-1.5 text-sky-200 hover:text-white transition-colors"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
 
-            <div className="flex items-center h-11 px-3.5 rounded-xl bg-white dark:bg-[#162033] border border-slate-300/90 dark:border-slate-700 shadow-2xs focus-within:border-amber-500 transition-colors">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    verifyByQrOrCredentials(passwordInput, phoneOrIdInput);
-                  }
-                }}
-                placeholder={isKh ? 'ពាក្យសម្ងាត់' : 'Password'}
-                style={{ fontSize: '12px' }}
-                className="flex-1 h-10 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 outline-none"
-              />
-
-              <button
-                type="button"
-                onClick={() => setShowPassword((p) => !p)}
-                className="p-1.5 -mr-1 text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between pt-0.5 px-1">
-              <div className="flex items-center gap-4">
-                {roleLabels.map((roleOption) => {
-                  const active = selectedRole === roleOption.key;
-                  return (
-                    <button
-                      key={roleOption.key}
-                      type="button"
-                      onClick={() => setSelectedRole(roleOption.key)}
-                      className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200"
-                    >
-                      <span
-                        className={cn(
-                          'w-4 h-4 rounded-full flex items-center justify-center border transition-all',
-                          active
-                            ? 'border-[#f59e0b] bg-[#f59e0b] text-white'
-                            : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
-                        )}
+              <div className="flex items-center justify-between pt-0.5 px-0.5 flex-wrap gap-2">
+                <div className="flex items-center gap-3.5">
+                  {roleLabels.map((roleOption) => {
+                    const active = selectedRole === roleOption.key;
+                    return (
+                      <button
+                        key={roleOption.key}
+                        type="button"
+                        onClick={() => setSelectedRole(roleOption.key)}
+                        className="flex items-center gap-1.5 text-xs text-white"
                       >
-                        {active && (
-                          <CheckCircle2 className="h-3.5 w-3.5 fill-[#f59e0b] text-white" />
-                        )}
-                      </span>
-                      <span>{isKh ? roleOption.labelKm : roleOption.labelEn}</span>
-                    </button>
-                  );
-                })}
+                        <span
+                          className={cn(
+                            'w-4 h-4 rounded-full flex items-center justify-center border transition-all',
+                            active
+                              ? 'border-amber-400 bg-amber-400 text-slate-950'
+                              : 'border-white/50 bg-transparent'
+                          )}
+                        >
+                          {active && (
+                            <CheckCircle2 className="h-3.5 w-3.5 fill-amber-400 text-slate-950" />
+                          )}
+                        </span>
+                        <span>{isKh ? roleOption.labelKm : roleOption.labelEn}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-[11px] text-amber-300 hover:underline flex items-center gap-1"
+                >
+                  <ImageUp className="h-3.5 w-3.5" />
+                  <span>{isKh ? 'ជ្រើសរូប QR' : 'QR'}</span>
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="text-[11px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
-              >
-                <ImageUp className="h-3.5 w-3.5" />
-                <span>{isKh ? 'រូប QR' : 'QR Image'}</span>
-              </button>
-            </div>
+              {errorMsg && (
+                <div className="p-2.5 rounded-xl bg-rose-950/80 border border-rose-400/50 text-rose-200 text-[11px] flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
 
-            {errorMsg && (
-              <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/90 border border-rose-200 dark:border-rose-500/50 text-rose-600 dark:text-rose-300 text-[11px] flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />
-                <span>{errorMsg}</span>
+              <div className="space-y-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => verifyByQrOrCredentials(passwordInput, phoneOrIdInput)}
+                  className="w-full h-11 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 text-xs sm:text-sm shadow-lg flex items-center justify-center gap-1.5 active:scale-98 transition-all"
+                >
+                  <span>{isKh ? 'ចូលប្រព័ន្ធ' : 'Sign In'}</span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+
               </div>
-            )}
-
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => verifyByQrOrCredentials(passwordInput, phoneOrIdInput)}
-                className="w-full h-11 rounded-full bg-[#f59e0b] hover:bg-[#d97706] text-white text-xs sm:text-sm shadow-md shadow-amber-500/20 flex items-center justify-center gap-1.5 active:scale-98 transition-all"
-              >
-                <span>{isKh ? 'ចូលប្រព័ន្ធ' : 'Sign In'}</span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      <div className="h-4" />
+      <div className="h-10" />
     </div>
   );
 }

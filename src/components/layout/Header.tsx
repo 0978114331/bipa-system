@@ -439,17 +439,17 @@ export function Header() {
   const [systemLogoUrl, setSystemLogoUrl] = useState(
     'https://i.ibb.co/tphX7kd4/ce2e43f3-9d48-4d71-86a6-dd1ac3d77c49.png'
   );
-  const [systemNameKm, setSystemNameKm] = useState('BIPA');
-  const [systemNameEn, setSystemNameEn] = useState('BIPA');
+  const [systemNameKm, setSystemNameKm] = useState('មណ្ឌលនិស្សិត BIPA');
+  const [systemNameEn, setSystemNameEn] = useState('BIPA Residence');
 
   useEffect(() => {
     const fetchSettings = async () => {
       try {
         const { data } = await supabase.from('bipa_settings').select('*').eq('id', '1').single();
         if (data) {
-          setSystemLogoUrl(data.logo_url);
-          setSystemNameKm(data.name_km);
-          setSystemNameEn(data.name_en);
+          if (data.logo_url) setSystemLogoUrl(data.logo_url);
+          if (data.name_km) setSystemNameKm(data.name_km);
+          if (data.name_en) setSystemNameEn(data.name_en);
         }
       } catch {}
     };
@@ -465,6 +465,26 @@ export function Header() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
+    const p = location.pathname;
+    if (p === '/dashboard/payments' || p === '/payments') {
+      navigate('/?view=payments', { replace: true });
+      return;
+    }
+    if (p === '/dashboard/duties' || p === '/duties') {
+      navigate('/?view=duties', { replace: true });
+      return;
+    }
+    if (p === '/dashboard/assets' || p === '/assets' || p === '/rice') {
+      navigate('/?view=rice', { replace: true });
+      return;
+    }
+    if (p === '/dashboard/leave') {
+      navigate('/leave', { replace: true });
+      return;
+    }
+  }, [location.pathname, navigate]);
+
+  useEffect(() => {
     const hideBackButtonsAndFormatAttendanceBox = () => {
       const buttons = Array.from(document.querySelectorAll('button, a'));
       buttons.forEach((btn) => {
@@ -477,6 +497,15 @@ export function Header() {
           (btn as HTMLElement).style.display = 'none';
         }
       });
+
+      const allSingleViews = Array.from(
+        document.querySelectorAll('#bipa-active-single-view')
+      ) as HTMLElement[];
+      if (allSingleViews.length > 1) {
+        allSingleViews.slice(1).forEach((el) => {
+          el.style.display = 'none';
+        });
+      }
 
       if (location.pathname === '/attendance') {
         const isAllowed = hasActiveStudentQrAccess();
@@ -513,9 +542,63 @@ export function Header() {
     };
 
     hideBackButtonsAndFormatAttendanceBox();
-    const timer = setInterval(hideBackButtonsAndFormatAttendanceBox, 450);
+    const timer = setInterval(hideBackButtonsAndFormatAttendanceBox, 350);
     return () => clearInterval(timer);
   }, [location.pathname, location.search, navigate]);
+
+  const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
+  const isAdminRoute = location.pathname.startsWith('/admin');
+
+  const isSidebarSpecialOverlayActive =
+    location.search.includes('page=home-manager') ||
+    location.hash === '#home-manager' ||
+    location.pathname === '/admin/home-manager' ||
+    location.search.includes('page=user-passwords') ||
+    location.pathname === '/admin/user-passwords' ||
+    location.pathname.startsWith('/admin/residences') ||
+    location.pathname.startsWith('/admin/settings');
+
+  const isDashboardOverlay =
+    !isSidebarSpecialOverlayActive &&
+    (location.pathname === '/dashboard' || location.pathname === '/profile') &&
+    !location.search.includes('view=');
+
+  const isDutiesOverlay =
+    !isSidebarSpecialOverlayActive &&
+    (location.pathname.startsWith('/admin/duties') ||
+      location.pathname.startsWith('/dashboard/duties') ||
+      location.pathname === '/duties' ||
+      location.search.includes('view=duties'));
+
+  const isPaymentsOverlay =
+    !isSidebarSpecialOverlayActive &&
+    (location.pathname.startsWith('/admin/payments') ||
+      location.pathname.startsWith('/dashboard/payments') ||
+      location.pathname === '/payments' ||
+      location.search.includes('view=payments'));
+
+  const isRiceOverlay =
+    !isSidebarSpecialOverlayActive &&
+    (location.pathname.startsWith('/admin/assets') ||
+      location.pathname.startsWith('/dashboard/assets') ||
+      location.pathname === '/assets' ||
+      location.pathname === '/rice' ||
+      location.search.includes('view=rice'));
+
+  const isLeaveOverlay =
+    !isSidebarSpecialOverlayActive &&
+    (location.pathname === '/leave' ||
+      location.pathname.startsWith('/dashboard/leave') ||
+      location.pathname.startsWith('/admin/leave-requests') ||
+      location.search.includes('view=leave'));
+
+  const isAnyOverlayOpen =
+    isDashboardOverlay ||
+    isDutiesOverlay ||
+    isPaymentsOverlay ||
+    isRiceOverlay ||
+    isLeaveOverlay ||
+    isSidebarSpecialOverlayActive;
 
   useEffect(() => {
     if (mobileOpen || showScanner) {
@@ -528,53 +611,6 @@ export function Header() {
     };
   }, [mobileOpen, showScanner]);
 
-  const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
-  const isAdminRoute = location.pathname.startsWith('/admin');
-
-  const isDashboardOverlay =
-    location.pathname === '/dashboard' || location.pathname === '/profile';
-
-  const isDutiesOverlay =
-    location.pathname.startsWith('/admin/duties') ||
-    location.pathname.startsWith('/dashboard/duties') ||
-    location.pathname === '/duties';
-
-  const isPaymentsOverlay =
-    location.pathname.startsWith('/admin/payments') ||
-    location.pathname.startsWith('/dashboard/payments') ||
-    location.pathname === '/payments';
-
-  const isRiceOverlay =
-    location.pathname.startsWith('/admin/assets') ||
-    location.pathname.startsWith('/dashboard/assets') ||
-    location.pathname === '/assets' ||
-    location.pathname === '/rice' ||
-    location.search.includes('view=rice');
-
-  const isLeaveOverlay =
-    location.pathname === '/leave' ||
-    location.pathname.startsWith('/dashboard/leave') ||
-    location.pathname.startsWith('/admin/leave-requests');
-
-  const isHeaderOverlayActive =
-    isDashboardOverlay ||
-    isDutiesOverlay ||
-    isPaymentsOverlay ||
-    isRiceOverlay ||
-    isLeaveOverlay;
-
-  const isSidebarSpecialOverlayActive =
-    location.search.includes('page=home-manager') ||
-    location.hash === '#home-manager' ||
-    location.pathname === '/admin/home-manager' ||
-    location.search.includes('page=user-passwords') ||
-    location.pathname === '/admin/user-passwords' ||
-    location.pathname.startsWith('/admin/residences') ||
-    location.pathname.startsWith('/admin/settings');
-
-  const shouldHideUnderlyingMain =
-    isHeaderOverlayActive || isSidebarSpecialOverlayActive;
-
   const mainNavItems = [
     { key: 'nav.home', path: '/', icon: Home, labelKm: 'ផ្ទះ', labelEn: 'Home' },
     { key: 'nav.attendance', path: '/attendance', icon: UserCheck, labelKm: 'វត្តមាន', labelEn: 'Attendance' },
@@ -584,7 +620,7 @@ export function Header() {
 
   const menuFeatureItems = [
     {
-      path: isAdminRoute ? '/admin/payments' : '/dashboard/payments',
+      path: isAdminRoute ? '/admin/payments' : '/?view=payments',
       icon: DollarSign,
       color: 'text-emerald-400',
       labelKm: 'បង់ប្រាក់',
@@ -598,7 +634,7 @@ export function Header() {
       labelEn: 'Rice'
     },
     {
-      path: isAdminRoute ? '/admin/duties' : '/dashboard/duties',
+      path: isAdminRoute ? '/admin/duties' : '/?view=duties',
       icon: CalendarClock,
       color: 'text-sky-400',
       labelKm: 'វេនប្រចាំថ្ងៃ',
@@ -628,10 +664,13 @@ export function Header() {
   ];
 
   const isActive = (path: string) => {
-    if (path === '/?view=rice') {
-      return location.search.includes('view=rice') || location.pathname === '/rice';
+    if (path === '/?view=rice') return location.search.includes('view=rice');
+    if (path === '/?view=payments') return location.search.includes('view=payments');
+    if (path === '/?view=duties') return location.search.includes('view=duties');
+    if (path === '/') {
+      return location.pathname === '/' && !location.search.includes('view=');
     }
-    return location.pathname === path && !location.search.includes('view=rice');
+    return location.pathname === path && !location.search.includes('view=');
   };
 
   const handleSignOut = async () => {
@@ -818,15 +857,29 @@ export function Header() {
           alt=""
           className="w-full h-full object-cover object-center"
         />
-        <div className="absolute inset-0 bg-[#f2f6ff]/82 dark:bg-[#061024]/86 transition-colors duration-300" />
+        <div className="absolute inset-0 bg-[#041028]/15 dark:bg-[#040c1d]/50 transition-colors duration-300" />
       </div>
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Moul&family=Siemreap&display=swap');
-        html, body, #root, main {
+        html, body, #root {
           font-family: 'Siemreap', sans-serif !important;
           background: transparent !important;
           background-color: transparent !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          overflow-x: hidden !important;
+        }
+        main {
+          font-family: 'Siemreap', sans-serif !important;
+          background: transparent !important;
+          background-color: transparent !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
         }
         .font-khmer {
           font-family: 'Siemreap', sans-serif !important;
@@ -837,30 +890,18 @@ export function Header() {
         }
         main > div,
         .min-h-screen,
-        .bipa-header-single-overlay,
+        #bipa-active-single-view,
         div.fixed.z-30 {
           background: transparent !important;
           background-color: transparent !important;
         }
-        html:not(.dark) main .bg-\\[\\#1e293b\\],
-        html:not(.dark) main .bg-\\[\\#0f172a\\] {
-          background-color: rgba(255, 255, 255, 0.9) !important;
-          color: #0f172a !important;
-          border-color: #e2e8f0 !important;
-        }
-        html:not(.dark) main .bg-\\[\\#1e293b\\] h1,
-        html:not(.dark) main .bg-\\[\\#1e293b\\] h2,
-        html:not(.dark) main .bg-\\[\\#1e293b\\] h3,
-        html:not(.dark) main .bg-\\[\\#1e293b\\] p,
-        html:not(.dark) main .bg-\\[\\#1e293b\\] span:not(.bg-amber-500) {
-          color: #0f172a !important;
-        }
-        .bipa-glass-overlay,
-        div.fixed.z-\\[90\\] {
+        .bipa-glass-overlay:not(#bipa-active-single-view),
+        div.fixed.z-\\[90\\]:not(#bipa-active-single-view),
+        div.fixed.z-\\[85\\]:not(#bipa-active-single-view) {
           display: none !important;
         }
         ${
-          shouldHideUnderlyingMain
+          isAnyOverlayOpen
             ? `
         main,
         footer {
@@ -870,9 +911,9 @@ export function Header() {
             : ''
         }
         ${
-          isHeaderOverlayActive
+          !isSidebarSpecialOverlayActive && isAnyOverlayOpen
             ? `
-        div.fixed.z-30 {
+        div.fixed.z-30:not(#bipa-active-single-view) {
           display: none !important;
         }
         `
@@ -894,7 +935,7 @@ export function Header() {
       `}</style>
 
       {showScanner && (
-        <div className="fixed inset-0 z-[140] bg-[#070b14] flex flex-col items-center justify-center p-6 font-khmer select-none">
+        <div className="fixed inset-0 z-50 bg-[#070b14] flex flex-col items-center justify-center p-6 font-khmer select-none" style={{ zIndex: 140 }}>
           <style>{`
             @keyframes scanLine {
               0% { top: 8%; }
@@ -1005,11 +1046,11 @@ export function Header() {
         </div>
       )}
 
-      <header className="sticky top-0 left-0 right-0 z-50 bg-[#0b1528]/95 backdrop-blur-md text-white shadow-md border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 sm:h-20">
-            <button onClick={() => navigate('/')} className="flex items-center gap-2.5 shrink-0">
-              <div className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden shrink-0 bg-white shadow-xs">
+      <header className="sticky top-0 left-0 right-0 z-50 w-full bg-[#091224] text-white shadow-md border-0 m-0" style={{ zIndex: 110 }}>
+        <div className="w-full max-w-7xl mx-auto px-3.5 sm:px-6">
+          <div className="flex items-center justify-between h-14 sm:h-16">
+            <button onClick={() => navigate('/')} className="flex items-center gap-2.5 min-w-0">
+              <div className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden shrink-0 bg-white shadow-xs">
                 {systemLogoUrl ? (
                   <img src={systemLogoUrl} alt="Logo" className="w-full h-full object-contain p-0.5" />
                 ) : (
@@ -1018,14 +1059,14 @@ export function Header() {
                   </div>
                 )}
               </div>
-              <div className="text-left flex flex-col justify-center">
-                <div className="font-moul-kh text-xs sm:text-base leading-tight tracking-wide text-white">
-                  {lang === 'km' ? systemNameKm : systemNameEn}
+              <div className="text-left flex flex-col justify-center min-w-0">
+                <div className="font-moul-kh text-xs sm:text-base leading-tight tracking-wide text-white truncate">
+                  {lang === 'km' ? systemNameKm || 'មណ្ឌលនិស្សិត BIPA' : systemNameEn || 'BIPA Residence'}
                 </div>
               </div>
             </button>
 
-            <div className="hidden md:flex items-center bg-[#1e293b] rounded-full px-2 py-1.5 shadow-inner border border-slate-700/50">
+            <div className="hidden md:flex items-center bg-[#1e293b] rounded-full px-2 py-1 shadow-inner border border-slate-700/50">
               {mainNavItems.map((item) => (
                 <button
                   key={item.path}
@@ -1072,11 +1113,11 @@ export function Header() {
               </DropdownMenu>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 shrink-0">
               <div className="flex items-center md:mr-2 md:border-r border-slate-700 md:pr-4">
                 <Button
                   onClick={() => setShowScanner(true)}
-                  className="bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.4)] w-10 h-10 border-0 p-0 flex items-center justify-center transition-transform hover:scale-105"
+                  className="bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.4)] w-9 h-9 sm:w-10 sm:h-10 border-0 p-0 flex items-center justify-center transition-transform active:scale-95"
                 >
                   <QrCode className="h-5 w-5" />
                 </Button>
@@ -1186,12 +1227,13 @@ export function Header() {
       {mobileOpen && (
         <div
           onClick={() => setMobileOpen(false)}
-          className="md:hidden fixed inset-0 z-[95] bg-black/60 backdrop-blur-[2px] font-khmer"
+          className="md:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] font-khmer"
+          style={{ zIndex: 105 }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
-            className="fixed left-0 right-0 z-[96] mx-auto w-full max-w-md rounded-t-[26px] bg-white dark:bg-[#151e2e] border-t border-slate-200 dark:border-slate-700/80 shadow-[0_-12px_35px_rgba(0,0,0,0.3)] max-h-[75dvh] overflow-y-auto animate-bipa-sheet-up"
+            style={{ bottom: 'calc(3.75rem + env(safe-area-inset-bottom, 0px))', zIndex: 106 }}
+            className="fixed left-0 right-0 mx-auto w-full max-w-md rounded-t-[26px] bg-white dark:bg-[#151e2e] border-t border-slate-200 dark:border-slate-700/80 shadow-[0_-12px_35px_rgba(0,0,0,0.3)] max-h-[75dvh] overflow-y-auto animate-bipa-sheet-up"
           >
             <div className="p-3.5 pb-4 flex flex-col gap-2.5">
               <div
@@ -1373,7 +1415,10 @@ export function Header() {
         </div>
       )}
 
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white/95 dark:bg-[#0b1528]/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 flex items-center justify-around h-16 pb-safe px-1 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] font-khmer">
+      <div
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-[#091224]/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-around h-[60px] pb-safe px-1 shadow-[0_-8px_20px_rgba(0,0,0,0.06)] font-khmer"
+        style={{ zIndex: 110 }}
+      >
         <button
           type="button"
           onClick={() => {
@@ -1381,11 +1426,11 @@ export function Header() {
             navigate('/');
           }}
           className={cn(
-            'flex flex-col items-center justify-center w-full gap-1 transition-colors',
+            'flex flex-col items-center justify-center w-full gap-0.5 transition-colors',
             isActive('/') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
-          <Home className="h-[20px] w-[20px]" />
+          <Home className="h-[19px] w-[19px]" />
           <span className="text-[10px]">{lang === 'km' ? 'ផ្ទះ' : 'Home'}</span>
         </button>
 
@@ -1396,29 +1441,22 @@ export function Header() {
             navigate('/attendance');
           }}
           className={cn(
-            'flex flex-col items-center justify-center w-full gap-1 transition-colors',
+            'flex flex-col items-center justify-center w-full gap-0.5 transition-colors',
             isActive('/attendance') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
-          <div
-            className={cn(
-              'p-1 rounded-full transition-colors',
-              isActive('/attendance') && !mobileOpen ? 'bg-blue-50 dark:bg-blue-950/60' : ''
-            )}
-          >
-            <UserCheck className="h-[20px] w-[20px]" />
-          </div>
+          <UserCheck className="h-[19px] w-[19px]" />
           <span className="text-[10px]">{lang === 'km' ? 'វត្តមាន' : 'Attendance'}</span>
         </button>
 
         <button
           type="button"
           onClick={() => setMobileOpen((prev) => !prev)}
-          className="flex flex-col items-center justify-center shrink-0 -mt-7 mx-1"
+          className="flex flex-col items-center justify-center shrink-0 -mt-6 mx-1"
         >
           <div
             className={cn(
-              'text-white h-[50px] w-[50px] flex items-center justify-center rounded-full shadow-lg border-[4px] border-white dark:border-[#0f172a] transition-all active:scale-95',
+              'text-white h-[48px] w-[48px] flex items-center justify-center rounded-full shadow-lg border-[3.5px] border-white dark:border-[#091224] transition-all active:scale-95',
               mobileOpen ? 'bg-[#3b82f6]' : 'bg-[#1e293b]'
             )}
           >
@@ -1426,7 +1464,7 @@ export function Header() {
           </div>
           <span
             className={cn(
-              'text-[10px] mt-1',
+              'text-[10px] mt-0.5',
               mobileOpen ? 'text-[#3b82f6]' : 'text-slate-600 dark:text-slate-300'
             )}
           >
@@ -1441,11 +1479,11 @@ export function Header() {
             navigate('/leave');
           }}
           className={cn(
-            'flex flex-col items-center justify-center w-full gap-1 transition-colors',
+            'flex flex-col items-center justify-center w-full gap-0.5 transition-colors',
             isActive('/leave') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
-          <FileText className="h-[20px] w-[20px]" />
+          <FileText className="h-[19px] w-[19px]" />
           <span className="text-[10px]">{lang === 'km' ? 'សុំច្បាប់' : 'Leave'}</span>
         </button>
 
@@ -1456,25 +1494,33 @@ export function Header() {
             navigate('/about');
           }}
           className={cn(
-            'flex flex-col items-center justify-center w-full gap-1 transition-colors',
+            'flex flex-col items-center justify-center w-full gap-0.5 transition-colors',
             isActive('/about') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
-          <Info className="h-[20px] w-[20px]" />
+          <Info className="h-[19px] w-[19px]" />
           <span className="text-[10px]">{lang === 'km' ? 'អំពីយើង' : 'About'}</span>
         </button>
       </div>
 
       {isDashboardOverlay && (
-        <div className="bipa-header-single-overlay fixed top-16 sm:top-20 bottom-16 md:bottom-0 left-0 right-0 z-[85] overflow-y-auto scrollbar-thin">
-          <StudentPersonalDashboard />
+        <div
+          id="bipa-active-single-view"
+          style={{ zIndex: 88 }}
+          className="fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto scrollbar-thin"
+        >
+          <div id="bipa-dashboard-scroll-container" className="w-full h-full overflow-y-auto">
+            <StudentPersonalDashboard />
+          </div>
         </div>
       )}
 
       {isDutiesOverlay && (
         <div
+          id="bipa-active-single-view"
+          style={{ zIndex: 88 }}
           className={cn(
-            'bipa-header-single-overlay fixed top-16 sm:top-20 bottom-16 md:bottom-0 left-0 right-0 z-[85] overflow-y-auto p-3 sm:p-6 scrollbar-thin',
+            'fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
           )}
         >
@@ -1490,8 +1536,10 @@ export function Header() {
 
       {isPaymentsOverlay && (
         <div
+          id="bipa-active-single-view"
+          style={{ zIndex: 88 }}
           className={cn(
-            'bipa-header-single-overlay fixed top-16 sm:top-20 bottom-16 md:bottom-0 left-0 right-0 z-[85] overflow-y-auto p-3 sm:p-6 scrollbar-thin',
+            'fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
           )}
         >
@@ -1507,8 +1555,10 @@ export function Header() {
 
       {isRiceOverlay && (
         <div
+          id="bipa-active-single-view"
+          style={{ zIndex: 88 }}
           className={cn(
-            'bipa-header-single-overlay fixed top-16 sm:top-20 bottom-16 md:bottom-0 left-0 right-0 z-[85] overflow-y-auto p-3 sm:p-6 scrollbar-thin',
+            'fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
           )}
         >
@@ -1524,8 +1574,10 @@ export function Header() {
 
       {isLeaveOverlay && (
         <div
+          id="bipa-active-single-view"
+          style={{ zIndex: 88 }}
           className={cn(
-            'bipa-header-single-overlay fixed top-16 sm:top-20 bottom-16 md:bottom-0 left-0 right-0 z-[85] overflow-y-auto p-3 sm:p-6 scrollbar-thin',
+            'fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
           )}
         >
