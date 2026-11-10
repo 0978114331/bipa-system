@@ -772,39 +772,70 @@ export function Header() {
         <img
           src="https://i.ibb.co/KY0bJNW/b151bd61-2587-445b-b245-2ddaea928120.png"
           alt=""
-          className="w-full h-full object-cover object-center"
+          className="w-full h-full object-cover object-center scale-105"
         />
-        <div className="absolute inset-0 bg-white/80 dark:bg-[#071126]/82" />
+        <div className="absolute inset-0 bg-[#061024]/85 backdrop-blur-[3px]" />
       </div>
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Moul&family=Siemreap&display=swap');
+
         html, body, #root, main {
           font-family: 'Siemreap', sans-serif !important;
           background: transparent !important;
           background-color: transparent !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+          min-height: 100dvh !important;
+          overflow-x: hidden !important;
         }
+
         .font-khmer {
           font-family: 'Siemreap', sans-serif !important;
         }
+
         .font-moul-kh {
           font-family: 'Moul', serif !important;
           font-weight: 400 !important;
         }
-        main > div,
-        .min-h-screen,
-        .bipa-glass-overlay,
-        div.fixed.z-\\[85\\],
-        div.fixed.z-\\[90\\],
+
+        /* Prevent overlapping and force full screen layout */
+        .fixed.top-16,
+        .fixed.top-20,
+        div.fixed.z-[85],
+        div.fixed.z-[90],
         div.fixed.z-30 {
-          background: transparent !important;
-          background-color: transparent !important;
+          position: fixed !important;
+          top: 4rem !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 4rem !important;
+          height: auto !important;
+          max-height: calc(100dvh - 8rem) !important;
+          background: rgba(11, 17, 32, 0.92) !important;
+          backdrop-filter: blur(12px) !important;
+          -webkit-backdrop-filter: blur(12px) !important;
+          border-radius: 0 !important;
+          border: none !important;
+          box-shadow: none !important;
+          padding: 0.75rem !important;
+          margin: 0 !important;
+          overflow-y: auto !important;
+          z-index: 85 !important;
         }
-        div.fixed.z-\\[85\\] > div,
-        div.fixed.z-\\[90\\] > div,
-        div.fixed.z-30 > div {
-          background-color: transparent !important;
+
+        @media (min-width: 1024px) {
+          .fixed.top-16,
+          .fixed.top-20,
+          div.fixed.z-[85],
+          div.fixed.z-[90],
+          div.fixed.z-30 {
+            top: 5rem !important;
+            max-height: calc(100dvh - 9rem) !important;
+          }
         }
+
         @keyframes bipaSheetSlideUp {
           0% {
             opacity: 0;
@@ -815,8 +846,9 @@ export function Header() {
             transform: translateY(0);
           }
         }
+
         .animate-bipa-sheet-up {
-          animation: bipaSheetSlideUp 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          animation: bipaSheetSlideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
 
