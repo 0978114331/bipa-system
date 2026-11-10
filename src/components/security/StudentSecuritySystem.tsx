@@ -1912,6 +1912,13 @@ export function StudentPersonalDashboard() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileDetailModal, setShowProfileDetailModal] = useState(false);
 
+  const [scrolledCompact, setScrolledCompact] = useState(false);
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const [pullStretch, setPullStretch] = useState(0);
+
+  const touchStartYRef = useRef<number | null>(null);
+  const heroBannerRef = useRef<HTMLDivElement>(null);
+
   const loadAllDashboardData = async () => {
     const [secData, payData, rData] = await Promise.all([
       fetchSecurityPayloadFromDb(),
@@ -1937,6 +1944,44 @@ export function StudentPersonalDashboard() {
       window.removeEventListener('open-bipa-student-login', openLoginHandler);
     };
   }, []);
+
+  useEffect(() => {
+    const scrollContainer = document.getElementById('bipa-dashboard-scroll-container');
+    if (!scrollContainer) return;
+
+    const handleScroll = () => {
+      const top = scrollContainer.scrollTop;
+      setScrollOffset(top);
+      setScrolledCompact(top > 190);
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const scrollContainer = document.getElementById('bipa-dashboard-scroll-container');
+    if (scrollContainer && scrollContainer.scrollTop <= 4) {
+      touchStartYRef.current = e.touches[0].clientY;
+    } else {
+      touchStartYRef.current = null;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartYRef.current === null) return;
+    const deltaY = e.touches[0].clientY - touchStartYRef.current;
+    if (deltaY > 0) {
+      setPullStretch(Math.min(100, deltaY * 0.5));
+    } else {
+      setPullStretch(0);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchStartYRef.current = null;
+    setPullStretch(0);
+  };
 
   const myPaySummary = useMemo(() => {
     if (!verifiedProfile) return { paidCount: 0, owedCount: 0, paidRiel: 0, owedRiel: 0 };
@@ -1995,8 +2040,21 @@ export function StudentPersonalDashboard() {
       ? localStorage.getItem(`bipa_avatar_${verifiedProfile.studentCode}`) || ''
       : '');
 
+  const coverBaseHeight = verifiedProfile ? 295 : 230;
+  const dynamicCoverHeight = Math.max(
+    190,
+    coverBaseHeight + pullStretch - Math.min(scrollOffset * 0.32, 80)
+  );
+  const dynamicImageScale =
+    1 + pullStretch / 210 + Math.min(scrollOffset / 1200, 0.08);
+
   return (
-    <div className="w-full max-w-xl mx-auto min-h-full text-slate-900 dark:text-white font-khmer px-3.5 sm:px-5 pt-3.5 pb-10 space-y-4 overflow-x-hidden">
+    <div
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className="w-full max-w-xl mx-auto min-h-full text-white font-khmer pb-14 overflow-x-hidden select-none"
+    >
       {showLoginModal && (
         <StudentVerificationGate
           onVerified={(prof) => {
@@ -2007,62 +2065,148 @@ export function StudentPersonalDashboard() {
         />
       )}
 
-      <div className="relative rounded-3xl overflow-hidden shadow-xl border border-white/20 dark:border-slate-700/80 bg-gradient-to-br from-[#0a2246] via-[#0f3166] to-[#18458b] text-white p-4 sm:p-5 select-none">
-        {verifiedProfile && currentAvatar && (
-          <img
-            src={currentAvatar}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-20 blur-md scale-110 pointer-events-none"
-          />
-        )}
-        <div className="absolute -top-16 -right-16 w-44 h-44 rounded-full bg-amber-400/15 blur-2xl pointer-events-none" />
-        <div className="absolute -bottom-16 -left-16 w-44 h-44 rounded-full bg-sky-400/15 blur-2xl pointer-events-none" />
+      {verifiedProfile && scrolledCompact && (
+        <div
+          onClick={() => setShowProfileDetailModal(true)}
+          className="fixed top-14 sm:top-16 left-0 right-0 z-50 max-w-xl mx-auto bg-[#07152e]/90 backdrop-blur-xl border-b border-white/15 px-3.5 py-2 flex items-center justify-between shadow-lg cursor-pointer animate-in slide-in-from-top-2 duration-150"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate('/');
+              }}
+              className="p-1 text-white"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-amber-400 bg-slate-800 shrink-0">
+              {currentAvatar ? (
+                <img src={currentAvatar} alt="" className="w-full h-full object-cover object-top" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-xs">
+                  {verifiedProfile.fullNameKm.charAt(0)}
+                </div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <span className="font-moul-kh text-xs text-white truncate block">
+                {verifiedProfile.fullNameKm}
+              </span>
+              <p className="text-[10px] text-sky-200 truncate">
+                {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
+                {verifiedProfile.phoneNumber}
+              </p>
+            </div>
+          </div>
+          <Eye className="h-4 w-4 text-amber-300 shrink-0" />
+        </div>
+      )}
 
-        <div className="relative z-10 flex items-center justify-between mb-4">
+      <div
+        ref={heroBannerRef}
+        onClick={() => {
+          if (verifiedProfile) setShowProfileDetailModal(true);
+        }}
+        style={{
+          height: `${dynamicCoverHeight}px`,
+          transition: pullStretch > 0 ? 'none' : 'height 0.28s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}
+        className={cn(
+          'relative w-full overflow-hidden rounded-b-[32px] shadow-[0_12px_35px_rgba(0,0,0,0.35)] border-b border-white/20 flex flex-col justify-between p-4 sm:p-5 text-white',
+          verifiedProfile
+            ? 'bg-[#091834] cursor-pointer'
+            : 'bg-gradient-to-br from-[#0c244d]/90 via-[#123570]/85 to-[#081838]/95 backdrop-blur-xl'
+        )}
+      >
+        {verifiedProfile ? (
+          currentAvatar ? (
+            <>
+              <img
+                src={currentAvatar}
+                alt=""
+                style={{
+                  transform: `scale(${dynamicImageScale + 0.14})`,
+                  transition: pullStretch > 0 ? 'none' : 'transform 0.3s ease-out'
+                }}
+                className="absolute inset-0 w-full h-full object-cover blur-xl opacity-60 pointer-events-none"
+              />
+              <img
+                src={currentAvatar}
+                alt={verifiedProfile.fullNameKm}
+                style={{
+                  objectPosition: 'center 8%',
+                  transform: `scale(${dynamicImageScale})`,
+                  transition: pullStretch > 0 ? 'none' : 'transform 0.3s ease-out'
+                }}
+                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              />
+            </>
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-[#0f254a] via-[#133266] to-[#0b1528]" />
+          )
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-15">
+            <User
+              style={{
+                transform: `scale(${dynamicImageScale})`,
+                transition: pullStretch > 0 ? 'none' : 'transform 0.3s ease-out'
+              }}
+              className="w-36 h-36 text-sky-200"
+            />
+          </div>
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-[#040d21]/90 via-black/20 to-black/10 pointer-events-none" />
+
+        <div className="relative z-10 flex items-center justify-between">
           <button
             type="button"
-            onClick={() => navigate('/')}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate('/');
+            }}
+            className="w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md flex items-center justify-center text-white border border-white/20 transition-colors"
           >
-            <ChevronLeft className="h-4 w-4" />
-            <span>{isKh ? 'ទំព័រដើម' : 'Home'}</span>
+            <ChevronLeft className="h-5 w-5" />
           </button>
 
           {isAdmin ? (
             <button
               type="button"
-              onClick={() => navigate('/admin?page=user-passwords')}
-              className="px-3 py-1 rounded-full bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/40 text-amber-300 text-[11px]"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate('/admin?page=user-passwords');
+              }}
+              className="px-3.5 py-1.5 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md text-amber-300 text-[11px] border border-white/20"
             >
-              {isKh ? 'គ្រប់គ្រងកូដសិស្ស (Admin)' : 'Manage Users'}
+              {isKh ? 'កែរូបក្នុង Admin' : 'Edit in Admin'}
             </button>
-          ) : (
-            <span className="px-2.5 py-0.5 rounded-full bg-white/10 border border-white/15 text-[10px] text-sky-200">
-              BIPA DIGITAL ID
+          ) : verifiedProfile ? (
+            <span className="px-3 py-1 rounded-full bg-black/35 backdrop-blur-md border border-white/20 text-[10px] text-white/95 flex items-center gap-1">
+              <Eye className="h-3 w-3 text-amber-300" />
+              <span>{isKh ? 'មើលរូបពេញ' : 'View Cover'}</span>
             </span>
-          )}
+          ) : null}
         </div>
 
         {!verifiedProfile ? (
-          <div className="relative z-10 flex items-center justify-between gap-3 pt-1">
-            <div className="flex items-center gap-3.5 min-w-0">
+          <div className="relative z-10 flex items-center justify-between gap-3 pb-1">
+            <div className="flex items-center gap-3.5">
               <div
                 onClick={() => setShowLoginModal(true)}
-                className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-gradient-to-tr from-amber-500/30 to-amber-300/20 border-2 border-amber-400/70 flex items-center justify-center cursor-pointer shrink-0 shadow-lg"
+                className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-white/15 border-2 border-amber-300/80 flex items-center justify-center cursor-pointer shrink-0 shadow-lg"
               >
                 <User className="h-8 w-8 text-amber-300" />
               </div>
-              <div className="space-y-0.5 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h1 className="font-moul-kh text-sm sm:text-base text-white truncate">
-                    {isKh ? 'ភ្ញៀវ (Guest)' : 'Guest User'}
-                  </h1>
-                </div>
-                <p className="text-[11px] text-blue-100/85">
-                  {isKh ? 'មិនទាន់ភ្ជាប់កាតសិស្ស' : 'Not linked yet'}
-                </p>
-                <p className="text-[11px] font-mono tracking-wider text-amber-300/90">
-                  ID: BIPA-XXX
+              <div className="space-y-0.5">
+                <h1 className="font-moul-kh text-base sm:text-lg text-white leading-tight drop-shadow">
+                  {isKh ? 'ភ្ញៀវ' : 'Guest'}
+                </h1>
+                <p className="text-xs text-sky-200">{isKh ? 'មិនទាន់ភ្ជាប់កាតសិស្ស' : 'Guest'}</p>
+                <p className="text-[11px] font-mono tracking-wider text-amber-300">
+                  XXX-XXX-XXX
                 </p>
               </div>
             </div>
@@ -2070,386 +2214,379 @@ export function StudentPersonalDashboard() {
             <button
               type="button"
               onClick={() => setShowLoginModal(true)}
-              className="shrink-0 px-4 py-2 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 text-xs shadow-md flex items-center gap-1.5 active:scale-95 transition-all"
+              className="px-4 py-2 rounded-2xl bg-amber-400 hover:bg-amber-500 text-slate-950 text-xs shadow-lg flex items-center gap-1.5 active:scale-95 transition-all"
             >
               <QrCode className="h-4 w-4" />
               <span>{isKh ? 'ស្កេនកាត' : 'Scan QR'}</span>
             </button>
           </div>
         ) : (
-          <div
-            onClick={() => setShowProfileDetailModal(true)}
-            className="relative z-10 flex items-center justify-between gap-3 pt-1 cursor-pointer group"
-          >
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full overflow-hidden border-2 border-amber-400 shadow-xl bg-slate-900 shrink-0 group-hover:scale-105 transition-transform">
-                {currentAvatar ? (
-                  <img
-                    src={currentAvatar}
-                    alt={verifiedProfile.fullNameKm}
-                    className="w-full h-full object-cover object-top"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-amber-500 text-slate-950 text-lg">
-                    {verifiedProfile.fullNameKm.charAt(0)}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-0.5 min-w-0">
-                <h1 className="font-moul-kh text-sm sm:text-base text-white truncate">
-                  {verifiedProfile.fullNameKm}
-                </h1>
-                <p className="text-xs text-sky-200">
-                  {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
-                  {verifiedProfile.majorKm || 'ព័ត៌មានវិទ្យា'}
-                </p>
-                <p className="text-xs text-amber-300 tracking-wide">
-                  {verifiedProfile.phoneNumber}
-                </p>
-              </div>
-            </div>
-
-            <div className="shrink-0 flex flex-col items-end gap-1.5">
-              <span className="px-2.5 py-1 rounded-xl bg-white/15 border border-white/20 text-[11px] text-white flex items-center gap-1">
-                <Eye className="h-3.5 w-3.5 text-amber-300" />
-                <span>{isKh ? 'មើលកាត' : 'View'}</span>
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <h2 className="text-xs text-slate-600 dark:text-slate-300 px-1">
-          {isKh ? 'ប្រវត្តិរូប' : 'Profile'}
-        </h2>
-
-        {!verifiedProfile ? (
-          <div className="bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs text-center space-y-3">
-            <p className="text-xs text-slate-600 dark:text-slate-300">
-              {isKh
-                ? 'អ្នកមិនទាន់បានចូលគណនី (login) នៅឡើយទេ'
-                : 'You are not logged in yet'}
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowLoginModal(true)}
-              className="px-5 py-2 rounded-full border border-[#d97706] text-[#d97706] dark:text-amber-400 hover:bg-amber-500/10 text-xs transition-all active:scale-95"
-            >
-              {isKh ? 'ទៅកាន់ផ្ទាំង ចូលគណនី' : 'Go to Login'}
-            </button>
-          </div>
-        ) : (
-          <>
+          <div className="relative z-10 flex items-center gap-3.5 pb-1">
             <div
-              onClick={() => setShowProfileDetailModal(true)}
-              className="bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden cursor-pointer hover:border-amber-500/50 transition-colors"
+              className="rounded-full overflow-hidden border-[2.5px] border-white shadow-2xl bg-slate-900 shrink-0"
+              style={{ width: '76px', height: '76px' }}
             >
-              <div className="p-3 sm:p-3.5 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                  <Contact className="h-4 w-4" />
+              {currentAvatar ? (
+                <img
+                  src={currentAvatar}
+                  alt={verifiedProfile.fullNameKm}
+                  className="w-full h-full object-cover object-top"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-xl">
+                  {verifiedProfile.fullNameKm.charAt(0)}
                 </div>
-                <div>
-                  <p className="text-[10px] text-slate-400">
-                    {isKh ? 'នាមត្រកូល' : 'Last Name'}
-                  </p>
-                  <p className="text-xs sm:text-sm text-slate-900 dark:text-white">
-                    {verifiedProfile.lastNameKm ||
-                      splitKhmerFullName(verifiedProfile.fullNameKm).lastName}
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-3 sm:p-3.5 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                  <Contact className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400">
-                    {isKh ? 'នាមខ្លួន' : 'First Name'}
-                  </p>
-                  <p className="text-xs sm:text-sm text-slate-900 dark:text-white">
-                    {verifiedProfile.firstNameKm ||
-                      splitKhmerFullName(verifiedProfile.fullNameKm).firstName}
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-3 sm:p-3.5 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                  <User className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400">
-                    {isKh ? 'ប្រភេទ' : 'Category'}
-                  </p>
-                  <p className="text-xs sm:text-sm text-slate-900 dark:text-white">
-                    {renderTranslatedUserType(verifiedProfile.userTypeKm)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-3 sm:p-3.5 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                  <Phone className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400">
-                    {isKh ? 'លេខទូរស័ព្ទ' : 'Phone Number'}
-                  </p>
-                  <p className="text-xs sm:text-sm text-slate-900 dark:text-white">
-                    {verifiedProfile.phoneNumber}
-                  </p>
-                </div>
-              </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5 pt-1">
-              <div
-                onClick={() => navigate('/dashboard/payments')}
-                className="bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md rounded-2xl p-3 border border-slate-200/80 dark:border-slate-800 shadow-xs cursor-pointer hover:border-blue-500 transition-all space-y-1"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-7 h-7 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center">
-                    <DollarSign className="h-3.5 w-3.5" />
-                  </div>
-                  <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-                </div>
-                <p className="text-xs text-slate-900 dark:text-white">
-                  {isKh ? 'ការបង់ប្រាក់ប្រចាំខែ' : 'Monthly Payment'}
-                </p>
-                <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                  {isKh
-                    ? `បង់រួច ${myPaySummary.paidCount} ខែ (${formatRiel(myPaySummary.paidRiel)})`
-                    : `Paid ${myPaySummary.paidCount} mo`}
-                </p>
-                {myPaySummary.owedCount > 0 && (
-                  <p className="text-[10px] text-rose-500">
-                    {isKh
-                      ? `ជំពាក់ ${myPaySummary.owedCount} ខែ`
-                      : `Owed ${myPaySummary.owedCount} mo`}
-                  </p>
-                )}
-              </div>
-
-              <div
-                onClick={() => navigate('/?view=rice')}
-                className="bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md rounded-2xl p-3 border border-slate-200/80 dark:border-slate-800 shadow-xs cursor-pointer hover:border-orange-500 transition-all space-y-1"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-7 h-7 rounded-full bg-orange-500/15 text-orange-500 flex items-center justify-center">
-                    <Package className="h-3.5 w-3.5" />
-                  </div>
-                  <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-                </div>
-                <p className="text-xs text-slate-900 dark:text-white">
-                  {isKh ? 'ការរួមចំណែកអង្ករ' : 'Rice Contribution'}
-                </p>
-                <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                  {isKh
-                    ? `បង់រួច ${myRiceSummary.paidCount} ខែ (${formatKg(myRiceSummary.paidKg)})`
-                    : `Paid ${myRiceSummary.paidCount} mo`}
-                </p>
-                {myRiceSummary.owedCount > 0 && (
-                  <p className="text-[10px] text-rose-500">
-                    {isKh
-                      ? `ជំពាក់ ${myRiceSummary.owedCount} ខែ`
-                      : `Owed ${myRiceSummary.owedCount} mo`}
-                  </p>
-                )}
-              </div>
+            <div className="space-y-0.5 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] min-w-0">
+              <h1 className="font-moul-kh text-base sm:text-lg text-white leading-tight truncate">
+                {verifiedProfile.fullNameKm}
+              </h1>
+              <p className="text-xs text-sky-100">
+                {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
+                {verifiedProfile.majorKm || 'ព័ត៌មានវិទ្យា'}
+              </p>
+              <p className="text-xs text-amber-300 tracking-wide">
+                {verifiedProfile.phoneNumber}
+              </p>
             </div>
-          </>
+          </div>
         )}
       </div>
 
-      <div className="space-y-2">
-        <h2 className="text-xs text-slate-600 dark:text-slate-300 px-1">
-          {isKh ? 'ការកំណត់កម្មវិធី' : 'App Settings'}
-        </h2>
+      <div className="px-3.5 sm:px-5 pt-4 space-y-4">
+        <div className="space-y-2">
+          <h2 className="text-xs text-sky-100/95 px-1 drop-shadow-2xs">
+            {isKh ? 'ប្រវត្តិរូប' : 'Profile'}
+          </h2>
 
-        <div className="bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
-          <div className="p-3 sm:p-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[#f59e0b] text-white flex items-center justify-center shrink-0">
-                <Sun className="h-4 w-4" />
+          {!verifiedProfile ? (
+            <div className="bg-[#091e42]/55 backdrop-blur-xl rounded-3xl p-5 border border-white/25 shadow-lg text-center space-y-3">
+              <p className="text-xs text-white/95">
+                {isKh
+                  ? 'អ្នកមិនទាន់បានចូលគណនី (login) នៅឡើយទេ'
+                  : 'You are not logged in yet'}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowLoginModal(true)}
+                className="px-5 py-2 rounded-full bg-amber-400 hover:bg-amber-500 text-slate-950 text-xs shadow transition-all active:scale-95"
+              >
+                {isKh ? 'ទៅកាន់ផ្ទាំង ចូលគណនី' : 'Go to Login'}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div
+                onClick={() => setShowProfileDetailModal(true)}
+                className="bg-[#091e42]/55 backdrop-blur-xl rounded-3xl border border-white/25 shadow-[0_8px_30px_rgba(0,0,0,0.22)] divide-y divide-white/15 overflow-hidden cursor-pointer hover:border-amber-300/60 transition-colors"
+              >
+                <div className="p-3.5 flex items-center gap-3.5">
+                  <div className="w-9 h-9 rounded-full bg-amber-400/20 border border-amber-300/30 text-amber-300 flex items-center justify-center shrink-0">
+                    <Contact className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10.5px] text-sky-200/90">
+                      {isKh ? 'នាមត្រកូល' : 'Last Name'}
+                    </p>
+                    <p className="text-xs sm:text-sm text-white drop-shadow-2xs">
+                      {verifiedProfile.lastNameKm ||
+                        splitKhmerFullName(verifiedProfile.fullNameKm).lastName}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 flex items-center gap-3.5">
+                  <div className="w-9 h-9 rounded-full bg-amber-400/20 border border-amber-300/30 text-amber-300 flex items-center justify-center shrink-0">
+                    <Contact className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10.5px] text-sky-200/90">
+                      {isKh ? 'នាមខ្លួន' : 'First Name'}
+                    </p>
+                    <p className="text-xs sm:text-sm text-white drop-shadow-2xs">
+                      {verifiedProfile.firstNameKm ||
+                        splitKhmerFullName(verifiedProfile.fullNameKm).firstName}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 flex items-center gap-3.5">
+                  <div className="w-9 h-9 rounded-full bg-amber-400/20 border border-amber-300/30 text-amber-300 flex items-center justify-center shrink-0">
+                    <User className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10.5px] text-sky-200/90">
+                      {isKh ? 'ប្រភេទ' : 'Category'}
+                    </p>
+                    <p className="text-xs sm:text-sm text-white drop-shadow-2xs">
+                      {renderTranslatedUserType(verifiedProfile.userTypeKm)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 flex items-center gap-3.5">
+                  <div className="w-9 h-9 rounded-full bg-amber-400/20 border border-amber-300/30 text-amber-300 flex items-center justify-center shrink-0">
+                    <Phone className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10.5px] text-sky-200/90">
+                      {isKh ? 'លេខទូរស័ព្ទ' : 'Phone Number'}
+                    </p>
+                    <p className="text-xs sm:text-sm text-amber-300 tracking-wide drop-shadow-2xs">
+                      {verifiedProfile.phoneNumber}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-slate-900 dark:text-white">
-                  {isKh ? 'រូបរាង' : 'Appearance'}
-                </p>
-                <p className="text-[10px] text-slate-400">
-                  {theme === 'light'
-                    ? isKh
-                      ? 'ភ្លឺ'
-                      : 'Light'
-                    : isKh
-                    ? 'ងងឹត'
-                    : 'Dark'}
-                </p>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div
+                  onClick={() => navigate('/dashboard/payments')}
+                  className="bg-[#091e42]/55 backdrop-blur-xl rounded-3xl p-3.5 border border-white/25 shadow-[0_8px_30px_rgba(0,0,0,0.22)] cursor-pointer hover:border-sky-300/60 transition-all space-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 rounded-full bg-emerald-400/20 border border-emerald-300/30 text-emerald-300 flex items-center justify-center">
+                      <DollarSign className="h-4 w-4" />
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-sky-200/80" />
+                  </div>
+                  <p className="text-xs text-white pt-0.5 drop-shadow-2xs">
+                    {isKh ? 'ការបង់ប្រាក់ប្រចាំខែ' : 'Monthly Payment'}
+                  </p>
+                  <p className="text-[11px] text-emerald-300 drop-shadow-2xs">
+                    {isKh
+                      ? `បង់រួច ${myPaySummary.paidCount} ខែ (${formatRiel(myPaySummary.paidRiel)})`
+                      : `Paid ${myPaySummary.paidCount} mo`}
+                  </p>
+                  {myPaySummary.owedCount > 0 && (
+                    <p className="text-[10.5px] text-rose-300 drop-shadow-2xs">
+                      {isKh
+                        ? `ជំពាក់ ${myPaySummary.owedCount} ខែ`
+                        : `Owed ${myPaySummary.owedCount} mo`}
+                    </p>
+                  )}
+                </div>
+
+                <div
+                  onClick={() => navigate('/?view=rice')}
+                  className="bg-[#091e42]/55 backdrop-blur-xl rounded-3xl p-3.5 border border-white/25 shadow-[0_8px_30px_rgba(0,0,0,0.22)] cursor-pointer hover:border-amber-300/60 transition-all space-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 rounded-full bg-amber-400/20 border border-amber-300/30 text-amber-300 flex items-center justify-center">
+                      <Package className="h-4 w-4" />
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-sky-200/80" />
+                  </div>
+                  <p className="text-xs text-white pt-0.5 drop-shadow-2xs">
+                    {isKh ? 'ការរួមចំណែកអង្ករ' : 'Rice Contribution'}
+                  </p>
+                  <p className="text-[11px] text-emerald-300 drop-shadow-2xs">
+                    {isKh
+                      ? `បង់រួច ${myRiceSummary.paidCount} ខែ (${formatKg(myRiceSummary.paidKg)})`
+                      : `Paid ${myRiceSummary.paidCount} mo`}
+                  </p>
+                  {myRiceSummary.owedCount > 0 && (
+                    <p className="text-[10.5px] text-rose-300 drop-shadow-2xs">
+                      {isKh
+                        ? `ជំពាក់ ${myRiceSummary.owedCount} ខែ`
+                        : `Owed ${myRiceSummary.owedCount} mo`}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <h2 className="text-xs text-sky-100/95 px-1 drop-shadow-2xs">
+            {isKh ? 'ការកំណត់កម្មវិធី' : 'App Settings'}
+          </h2>
+
+          <div className="bg-[#091e42]/55 backdrop-blur-xl rounded-3xl border border-white/25 shadow-[0_8px_30px_rgba(0,0,0,0.22)] divide-y divide-white/15 overflow-hidden">
+            <div className="p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 shadow">
+                  <Sun className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs text-white drop-shadow-2xs">
+                    {isKh ? 'រូបរាង' : 'Appearance'}
+                  </p>
+                  <p className="text-[10.5px] text-sky-200">
+                    {theme === 'light'
+                      ? isKh
+                        ? 'ភ្លឺ'
+                        : 'Light'
+                      : isKh
+                      ? 'ងងឹត'
+                      : 'Dark'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className={cn(
+                  'w-12 h-6 rounded-full p-0.5 transition-colors flex items-center border border-white/20',
+                  theme === 'dark'
+                    ? 'bg-amber-500 justify-end'
+                    : 'bg-white/25 justify-start'
+                )}
+              >
+                <span className="w-5 h-5 rounded-full bg-white shadow block" />
+              </button>
+            </div>
+
+            <div className="p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-blue-500 text-white flex items-center justify-center shrink-0 shadow">
+                  <Globe className="h-4 w-4" />
+                </div>
+                <span className="text-xs text-white drop-shadow-2xs">
+                  {isKh ? 'ភាសា' : 'Language'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3.5">
+                <button
+                  type="button"
+                  onClick={() => setLang('km')}
+                  className="flex items-center gap-1.5 text-xs text-white"
+                >
+                  <span
+                    className={cn(
+                      'w-4 h-4 rounded-full flex items-center justify-center border',
+                      lang === 'km'
+                        ? 'border-amber-400 bg-amber-400 text-slate-950'
+                        : 'border-white/50'
+                    )}
+                  >
+                    {lang === 'km' && (
+                      <CheckCircle2 className="h-3.5 w-3.5 fill-amber-400 text-slate-950" />
+                    )}
+                  </span>
+                  <span>ខ្មែរ</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLang('en')}
+                  className="flex items-center gap-1.5 text-xs text-white"
+                >
+                  <span
+                    className={cn(
+                      'w-4 h-4 rounded-full flex items-center justify-center border',
+                      lang === 'en'
+                        ? 'border-amber-400 bg-amber-400 text-slate-950'
+                        : 'border-white/50'
+                    )}
+                  >
+                    {lang === 'en' && (
+                      <CheckCircle2 className="h-3.5 w-3.5 fill-amber-400 text-slate-950" />
+                    )}
+                  </span>
+                  <span>{isKh ? 'អង់គ្លេស' : 'English'}</span>
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h2 className="text-xs text-sky-100/95 px-1 drop-shadow-2xs">
+            {isKh ? 'ព័ត៌មាន' : 'Information'}
+          </h2>
+
+          <div className="bg-[#091e42]/55 backdrop-blur-xl rounded-3xl border border-white/25 shadow-[0_8px_30px_rgba(0,0,0,0.22)] divide-y divide-white/15 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => navigate('/contact')}
+              className="w-full p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-cyan-400/20 border border-cyan-300/30 text-cyan-300 flex items-center justify-center">
+                  <Headphones className="h-4 w-4" />
+                </div>
+                <span className="text-xs text-white drop-shadow-2xs">
+                  {isKh ? 'ទាក់ទងមកយើង' : 'Contact Us'}
+                </span>
+              </div>
+              <ChevronRight className="h-4 w-4 text-sky-200/80" />
+            </button>
 
             <button
               type="button"
-              onClick={toggleTheme}
-              className={cn(
-                'w-12 h-6 rounded-full p-0.5 transition-colors flex items-center',
-                theme === 'dark'
-                  ? 'bg-amber-500 justify-end'
-                  : 'bg-slate-200 dark:bg-slate-700 justify-start'
-              )}
+              onClick={() => navigate('/about')}
+              className="w-full p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors"
             >
-              <span className="w-5 h-5 rounded-full bg-white shadow block" />
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-purple-400/20 border border-purple-300/30 text-purple-300 flex items-center justify-center">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <span className="text-xs text-white drop-shadow-2xs">
+                  {isKh ? 'គោលការណ៍ឯកជនភាព' : 'Privacy Policy'}
+                </span>
+              </div>
+              <ChevronRight className="h-4 w-4 text-sky-200/80" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/residence-info')}
+              className="w-full p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-emerald-400/20 border border-emerald-300/30 text-emerald-300 flex items-center justify-center">
+                  <FileText className="h-4 w-4" />
+                </div>
+                <span className="text-xs text-white drop-shadow-2xs">
+                  {isKh ? 'លក្ខខណ្ឌប្រើប្រាស់' : 'Terms of Use'}
+                </span>
+              </div>
+              <ChevronRight className="h-4 w-4 text-sky-200/80" />
+            </button>
+
+            <div className="p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-amber-400/20 border border-amber-300/30 text-amber-300 flex items-center justify-center">
+                  <Info className="h-4 w-4" />
+                </div>
+                <span className="text-xs text-white drop-shadow-2xs">
+                  {isKh ? 'កំណែ' : 'Version'}
+                </span>
+              </div>
+              <span className="text-xs text-amber-300">2.0.6</span>
+            </div>
+          </div>
+        </div>
+
+        {verifiedProfile && (
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                clearVerifiedStudentSession();
+                setVerifiedProfile(null);
+              }}
+              className="w-full bg-rose-500/25 hover:bg-rose-500/35 backdrop-blur-xl rounded-3xl p-3.5 border border-rose-300/35 shadow-lg flex items-center justify-between transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-rose-500/30 text-rose-200 flex items-center justify-center">
+                  <LogOut className="h-4 w-4" />
+                </div>
+                <span className="text-xs text-rose-100">
+                  {isKh ? 'ចាកចេញ' : 'Sign Out'}
+                </span>
+              </div>
+              <ChevronRight className="h-4 w-4 text-rose-200" />
             </button>
           </div>
-
-          <div className="p-3 sm:p-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[#2563eb] text-white flex items-center justify-center shrink-0">
-                <Globe className="h-4 w-4" />
-              </div>
-              <span className="text-xs text-slate-900 dark:text-white">
-                {isKh ? 'ភាសា' : 'Language'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3.5">
-              <button
-                type="button"
-                onClick={() => setLang('km')}
-                className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200"
-              >
-                <span
-                  className={cn(
-                    'w-4 h-4 rounded-full flex items-center justify-center border',
-                    lang === 'km'
-                      ? 'border-[#f59e0b] bg-[#f59e0b] text-white'
-                      : 'border-slate-300 dark:border-slate-600'
-                  )}
-                >
-                  {lang === 'km' && (
-                    <CheckCircle2 className="h-3.5 w-3.5 fill-[#f59e0b] text-white" />
-                  )}
-                </span>
-                <span>ខ្មែរ</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setLang('en')}
-                className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200"
-              >
-                <span
-                  className={cn(
-                    'w-4 h-4 rounded-full flex items-center justify-center border',
-                    lang === 'en'
-                      ? 'border-[#f59e0b] bg-[#f59e0b] text-white'
-                      : 'border-slate-300 dark:border-slate-600'
-                  )}
-                >
-                  {lang === 'en' && (
-                    <CheckCircle2 className="h-3.5 w-3.5 fill-[#f59e0b] text-white" />
-                  )}
-                </span>
-                <span>{isKh ? 'អង់គ្លេស' : 'English'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
-
-      <div className="space-y-2">
-        <h2 className="text-xs text-slate-600 dark:text-slate-300 px-1">
-          {isKh ? 'ព័ត៌មាន' : 'Information'}
-        </h2>
-
-        <div className="bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
-          <button
-            type="button"
-            onClick={() => navigate('/contact')}
-            className="w-full p-3 sm:p-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
-                <Headphones className="h-4 w-4" />
-              </div>
-              <span className="text-xs text-slate-900 dark:text-white">
-                {isKh ? 'ទាក់ទងមកយើង' : 'Contact Us'}
-              </span>
-            </div>
-            <ChevronRight className="h-4 w-4 text-slate-400" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate('/about')}
-            className="w-full p-3 sm:p-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                <ShieldCheck className="h-4 w-4" />
-              </div>
-              <span className="text-xs text-slate-900 dark:text-white">
-                {isKh ? 'គោលការណ៍ឯកជនភាព' : 'Privacy Policy'}
-              </span>
-            </div>
-            <ChevronRight className="h-4 w-4 text-slate-400" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate('/residence-info')}
-            className="w-full p-3 sm:p-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                <FileText className="h-4 w-4" />
-              </div>
-              <span className="text-xs text-slate-900 dark:text-white">
-                {isKh ? 'លក្ខខណ្ឌប្រើប្រាស់' : 'Terms of Use'}
-              </span>
-            </div>
-            <ChevronRight className="h-4 w-4 text-slate-400" />
-          </button>
-
-          <div className="p-3 sm:p-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                <Info className="h-4 w-4" />
-              </div>
-              <span className="text-xs text-slate-900 dark:text-white">
-                {isKh ? 'កំណែ' : 'Version'}
-              </span>
-            </div>
-            <span className="text-xs text-amber-600 dark:text-amber-400">2.0.6</span>
-          </div>
-        </div>
-      </div>
-
-      {verifiedProfile && (
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={() => {
-              clearVerifiedStudentSession();
-              setVerifiedProfile(null);
-            }}
-            className="w-full bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-rose-500/10 text-rose-600 flex items-center justify-center">
-                <LogOut className="h-4 w-4" />
-              </div>
-              <span className="text-xs text-rose-600">
-                {isKh ? 'ចាកចេញ' : 'Sign Out'}
-              </span>
-            </div>
-            <ChevronRight className="h-4 w-4 text-slate-400" />
-          </button>
-        </div>
-      )}
 
       {verifiedProfile && showProfileDetailModal && (
         <div
@@ -2458,7 +2595,7 @@ export function StudentPersonalDashboard() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-white dark:bg-[#162033] text-slate-900 dark:text-white rounded-3xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-200"
+            className="w-full max-w-sm bg-[#0b1830] text-white rounded-3xl overflow-hidden shadow-2xl border border-white/20 animate-in zoom-in-95 duration-200"
           >
             <div className="relative w-full h-72 bg-slate-950 flex items-center justify-center overflow-hidden">
               {currentAvatar ? (
@@ -2482,12 +2619,12 @@ export function StudentPersonalDashboard() {
             </div>
 
             <div className="p-4 space-y-3.5">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+              <div className="flex items-center justify-between border-b border-white/15 pb-2.5">
                 <div>
-                  <h3 className="font-moul-kh text-sm text-slate-900 dark:text-white">
+                  <h3 className="font-moul-kh text-sm text-white">
                     {verifiedProfile.fullNameKm}
                   </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  <p className="text-[11px] text-sky-200 mt-0.5">
                     {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
                     {verifiedProfile.majorKm}
                   </p>
@@ -2498,40 +2635,40 @@ export function StudentPersonalDashboard() {
               </div>
 
               <div className="grid grid-cols-2 gap-2.5 text-xs">
-                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">
+                <div className="p-2.5 rounded-xl bg-white/10 border border-white/15">
+                  <span className="text-[10px] text-sky-200 block">
                     {isKh ? 'នាមត្រកូល' : 'Last Name'}
                   </span>
-                  <span className="text-xs text-slate-900 dark:text-white">
+                  <span className="text-xs text-white">
                     {verifiedProfile.lastNameKm ||
                       splitKhmerFullName(verifiedProfile.fullNameKm).lastName}
                   </span>
                 </div>
 
-                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">
+                <div className="p-2.5 rounded-xl bg-white/10 border border-white/15">
+                  <span className="text-[10px] text-sky-200 block">
                     {isKh ? 'នាមខ្លួន' : 'First Name'}
                   </span>
-                  <span className="text-xs text-slate-900 dark:text-white">
+                  <span className="text-xs text-white">
                     {verifiedProfile.firstNameKm ||
                       splitKhmerFullName(verifiedProfile.fullNameKm).firstName}
                   </span>
                 </div>
 
-                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">
+                <div className="p-2.5 rounded-xl bg-white/10 border border-white/15">
+                  <span className="text-[10px] text-sky-200 block">
                     {isKh ? 'ប្រភេទ' : 'Category'}
                   </span>
-                  <span className="text-xs text-slate-900 dark:text-white">
+                  <span className="text-xs text-white">
                     {renderTranslatedUserType(verifiedProfile.userTypeKm)}
                   </span>
                 </div>
 
-                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">
+                <div className="p-2.5 rounded-xl bg-white/10 border border-white/15">
+                  <span className="text-[10px] text-sky-200 block">
                     {isKh ? 'លេខទូរស័ព្ទ' : 'Phone Number'}
                   </span>
-                  <span className="text-xs text-blue-600 dark:text-amber-400">
+                  <span className="text-xs text-amber-300">
                     {verifiedProfile.phoneNumber}
                   </span>
                 </div>
@@ -2540,7 +2677,7 @@ export function StudentPersonalDashboard() {
               <Button
                 type="button"
                 onClick={() => setShowProfileDetailModal(false)}
-                className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs h-9 rounded-xl"
+                className="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 text-xs h-9 rounded-xl"
               >
                 {isKh ? 'បិទផ្ទាំង' : 'Close'}
               </Button>

@@ -548,236 +548,220 @@ export function AboutPage() {
     }
   ];
 
-  return (
+ return (
     <div className="w-full min-h-screen bg-transparent text-slate-900 dark:text-slate-100 pb-24 font-khmer overflow-x-hidden scroll-smooth">
-      <div className="fixed top-16 sm:top-20 left-0 right-0 z-40 h-1 bg-transparent pointer-events-none">
+      <div className="fixed top-14 sm:top-16 left-0 right-0 z-40 h-1 bg-transparent pointer-events-none">
         <div
           className="h-full bg-gradient-to-r from-blue-500 via-emerald-400 to-amber-400 shadow-[0_0_12px_rgba(59,130,246,0.8)] transition-all duration-150"
           style={{ width: `${scrollProgress}%` }}
         />
       </div>
 
-      <section
-        id="about-hero"
-        className="relative overflow-hidden bg-white/75 dark:bg-[#0f172a]/80 backdrop-blur-md text-slate-900 dark:text-white border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-300"
-      >
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-          <ScrollReveal>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-2.5 max-w-2xl">
-                <Badge className="bg-amber-500/15 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 px-3 py-1 text-xs">
-                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                  {isKhmer ? content.badgeKm : content.badgeEn}
-                </Badge>
+      <div className="max-w-5xl mx-auto px-3.5 sm:px-6 pt-5 sm:pt-8 space-y-6 sm:space-y-8">
+        <ScrollReveal>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+            <div className="space-y-2 max-w-2xl">
+              <Badge className="bg-amber-500/15 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 px-3 py-1 text-xs rounded-full">
+                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                {isKhmer ? content.badgeKm : content.badgeEn}
+              </Badge>
 
-                <h1 className="font-moul-kh text-xl sm:text-3xl tracking-tight text-slate-900 dark:text-white">
-                  {isKhmer ? content.pageTitleKm : content.pageTitleEn}
-                </h1>
+              <h1 className="font-moul-kh text-xl sm:text-3xl tracking-tight text-slate-900 dark:text-white">
+                {isKhmer ? content.pageTitleKm : content.pageTitleEn}
+              </h1>
 
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {isKhmer ? content.pageSubtitleKm : content.pageSubtitleEn}
-                </p>
-              </div>
-
-              {isAdmin && (
-                <Button
-                  onClick={() => handleOpenEditModal('overview')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-10 px-4 rounded-xl shadow-md shrink-0 self-start sm:self-center active:scale-95 transition-all"
-                >
-                  <Edit2 className="h-4 w-4 mr-1.5" />
-                  {isKhmer ? 'កែប្រែទំព័រអំពីយើង' : 'Edit About Page'}
-                </Button>
-              )}
+              <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                {isKhmer ? content.pageSubtitleKm : content.pageSubtitleEn}
+              </p>
             </div>
-          </ScrollReveal>
 
-          <ScrollReveal delay={100}>
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pt-5 pb-1">
-              <button
-                type="button"
-                onClick={() => scrollToSection('about-intro')}
-                className="px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-blue-500/15 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-200 shrink-0 transition-all active:scale-95"
+            {isAdmin && (
+              <Button
+                onClick={() => handleOpenEditModal('overview')}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 px-4 rounded-full shadow-md shrink-0 self-start sm:self-center active:scale-95 transition-all"
               >
-                {isKhmer ? content.introHeadingKm : content.introHeadingEn}
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection('about-principles')}
-                className="px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-blue-500/15 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-200 shrink-0 transition-all active:scale-95"
-              >
-                {isKhmer ? content.principlesHeadingKm : content.principlesHeadingEn}
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection('about-directors')}
-                className="px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-blue-500/15 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-200 shrink-0 transition-all active:scale-95"
-              >
-                {isKhmer ? content.directorsTitleKm : content.directorsTitleEn}
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection('about-managers')}
-                className="px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-blue-500/15 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-200 shrink-0 transition-all active:scale-95"
-              >
-                {isKhmer ? content.managersTitleKm : content.managersTitleEn}
-              </button>
-            </div>
-          </ScrollReveal>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 mt-5">
-            {highlightCards.map((card, index) => {
-              const IconComp = card.icon;
-              const isTouched = activeCardId === card.id;
-              return (
-                <ScrollReveal key={card.id} delay={150 + index * 120}>
-                  <div
-                    onClick={() => setActiveCardId(isTouched ? null : card.id)}
-                    className={cn(
-                      'group relative h-full rounded-2xl p-5 bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md border transition-all duration-500 cursor-pointer hover:-translate-y-1 hover:shadow-xl',
-                      isTouched
-                        ? 'border-amber-500/80 shadow-lg scale-[1.01]'
-                        : 'border-slate-200/90 dark:border-slate-800 hover:border-blue-400 dark:hover:border-slate-600'
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        'absolute inset-0 rounded-2xl bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none',
-                        card.accent
-                      )}
-                    />
-                    <div className="relative z-10 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={cn(
-                            'w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-105',
-                            card.iconBg
-                          )}
-                        >
-                          <IconComp className="h-5 w-5" />
-                        </div>
-                        <h2 className="font-moul-kh text-sm sm:text-base text-slate-900 dark:text-white">
-                          {card.title}
-                        </h2>
-                      </div>
-                      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
-                        {card.desc}
-                      </p>
-                    </div>
-                  </div>
-                </ScrollReveal>
-              );
-            })}
+                <Edit2 className="h-3.5 w-3.5 mr-1.5" />
+                {isKhmer ? 'កែប្រែទំព័រអំពីយើង' : 'Edit About Page'}
+              </Button>
+            )}
           </div>
-        </div>
-      </section>
+        </ScrollReveal>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-12 space-y-12 sm:space-y-16">
+        <ScrollReveal delay={80}>
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
+            <button
+              type="button"
+              onClick={() => scrollToSection('about-intro')}
+              className="px-4 py-1.5 rounded-full bg-white/85 dark:bg-[#162033]/85 backdrop-blur-md hover:bg-blue-500/15 border border-white/80 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 shadow-2xs shrink-0 transition-all active:scale-95"
+            >
+              {isKhmer ? content.introHeadingKm : content.introHeadingEn}
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection('about-principles')}
+              className="px-4 py-1.5 rounded-full bg-white/85 dark:bg-[#162033]/85 backdrop-blur-md hover:bg-blue-500/15 border border-white/80 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 shadow-2xs shrink-0 transition-all active:scale-95"
+            >
+              {isKhmer ? content.principlesHeadingKm : content.principlesHeadingEn}
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection('about-directors')}
+              className="px-4 py-1.5 rounded-full bg-white/85 dark:bg-[#162033]/85 backdrop-blur-md hover:bg-blue-500/15 border border-white/80 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 shadow-2xs shrink-0 transition-all active:scale-95"
+            >
+              {isKhmer ? content.directorsTitleKm : content.directorsTitleEn}
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection('about-managers')}
+              className="px-4 py-1.5 rounded-full bg-white/85 dark:bg-[#162033]/85 backdrop-blur-md hover:bg-blue-500/15 border border-white/80 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 shadow-2xs shrink-0 transition-all active:scale-95"
+            >
+              {isKhmer ? content.managersTitleKm : content.managersTitleEn}
+            </button>
+          </div>
+        </ScrollReveal>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-5">
+          {highlightCards.map((card, index) => {
+            const IconComp = card.icon;
+            const isTouched = activeCardId === card.id;
+            return (
+              <ScrollReveal key={card.id} delay={120 + index * 100}>
+                <div
+                  onClick={() => setActiveCardId(isTouched ? null : card.id)}
+                  className={cn(
+                    'group relative h-full rounded-[26px] p-5 bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md border transition-all duration-300 cursor-pointer hover:-translate-y-1 shadow-sm',
+                    isTouched
+                      ? 'border-amber-500/80 shadow-lg scale-[1.01]'
+                      : 'border-white/80 dark:border-slate-800 hover:border-blue-400'
+                  )}
+                >
+                  <div className="relative z-10 space-y-2.5">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={cn(
+                          'w-10 h-10 rounded-2xl border flex items-center justify-center shrink-0',
+                          card.iconBg
+                        )}
+                      >
+                        <IconComp className="h-5 w-5" />
+                      </div>
+                      <h2 className="font-moul-kh text-sm sm:text-base text-slate-900 dark:text-white">
+                        {card.title}
+                      </h2>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+                      {card.desc}
+                    </p>
+                  </div>
+                </div>
+              </ScrollReveal>
+            );
+          })}
+        </div>
+
         <ScrollReveal>
           <section
             id="about-intro"
-            className="bg-white dark:bg-[#162033] border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 sm:p-8 lg:p-10 shadow-sm space-y-8 sm:space-y-10"
+            className="bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md border border-white/80 dark:border-slate-800 rounded-[28px] p-5 sm:p-7 shadow-sm space-y-6"
           >
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-8 items-start">
-              <div className="lg:col-span-4 flex items-center justify-between">
-                <div className="inline-flex items-center gap-2.5 text-blue-600 dark:text-blue-400 font-extrabold text-base sm:text-lg">
-                  <span className="w-2 h-6 rounded-full bg-blue-600 dark:bg-blue-400 inline-block" />
-                  <BookOpen className="h-5 w-5 shrink-0" />
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 font-moul-kh text-sm sm:text-base">
+                  <BookOpen className="h-4 w-4 shrink-0" />
                   <span>{isKhmer ? content.introHeadingKm : content.introHeadingEn}</span>
                 </div>
                 {isAdmin && (
                   <button
                     type="button"
                     onClick={() => handleOpenEditModal('overview')}
-                    className="lg:hidden text-xs font-bold text-blue-500 flex items-center gap-1"
+                    className="text-xs text-blue-500 flex items-center gap-1"
                   >
                     <Edit2 className="h-3.5 w-3.5" />
                     <span>{isKhmer ? 'កែប្រែ' : 'Edit'}</span>
                   </button>
                 )}
               </div>
-              <div className="lg:col-span-8 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
                 {isKhmer ? content.introFullKm : content.introFullEn}
-              </div>
+              </p>
             </div>
 
-            <div className="border-t border-slate-200 dark:border-slate-800/90" />
+            <div className="border-t border-slate-200/70 dark:border-slate-800" />
 
-            <div
-              id="about-principles"
-              className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start"
-            >
-              <div className="lg:col-span-4 space-y-2">
-                <div className="inline-flex items-center gap-2.5 text-blue-600 dark:text-blue-400 font-extrabold text-base sm:text-lg leading-snug">
-                  <span className="w-2 h-6 rounded-full bg-amber-500 inline-block shrink-0" />
-                  <span>{isKhmer ? content.principlesHeadingKm : content.principlesHeadingEn}</span>
+            <div id="about-principles" className="space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-moul-kh text-sm sm:text-base text-slate-900 dark:text-white">
+                    {isKhmer ? content.principlesHeadingKm : content.principlesHeadingEn}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {isKhmer ? content.principlesSubKm : content.principlesSubEn}
+                  </p>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 pl-4">
-                  {isKhmer ? content.principlesSubKm : content.principlesSubEn}
-                </p>
                 {isAdmin && (
-                  <div className="pl-4 pt-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleOpenEditModal('principles')}
-                      className="h-8 text-xs font-bold rounded-xl border-amber-500/40 text-amber-600 dark:text-amber-400"
-                    >
-                      <Edit2 className="h-3.5 w-3.5 mr-1.5" />
-                      {isKhmer ? 'កែប្រែគុណតម្លៃ & គោលដៅ' : 'Edit Values & Goals'}
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleOpenEditModal('principles')}
+                    className="h-8 text-xs rounded-full border-amber-500/40 text-amber-600 dark:text-amber-400 self-start"
+                  >
+                    <Edit2 className="h-3.5 w-3.5 mr-1.5" />
+                    {isKhmer ? 'កែប្រែគុណតម្លៃ' : 'Edit Values'}
+                  </Button>
                 )}
               </div>
 
-              <div className="lg:col-span-8 space-y-7">
-                <div className="space-y-3">
-                  <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Award className="h-4 w-4 text-amber-500" />
-                    {isKhmer ? content.valuesHeadingKm : content.valuesHeadingEn}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-2.5">
+                  <h4 className="text-xs sm:text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                    <Award className="h-4 w-4" />
+                    <span>{isKhmer ? content.valuesHeadingKm : content.valuesHeadingEn}</span>
                   </h4>
                   <div className="space-y-2.5">
                     {content.values.map((val, idx) => (
-                      <ScrollReveal key={val.id || idx} delay={idx * 80}>
-                        <div className="group flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50/80 dark:bg-[#0f172a]/90 border border-slate-200/60 dark:border-slate-800/80 hover:border-amber-500/50 hover:shadow-md transition-all duration-300">
-                          <span className="w-6 h-6 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-black flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
-                            {idx + 1}
+                      <div
+                        key={val.id || idx}
+                        className="flex items-start gap-2.5 text-xs sm:text-sm leading-relaxed"
+                      >
+                        <span className="w-5 h-5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <span className="text-slate-900 dark:text-white">
+                            {isKhmer ? val.titleKm : val.titleEn}៖{' '}
                           </span>
-                          <div className="text-xs sm:text-sm leading-relaxed">
-                            <span className="font-extrabold text-slate-900 dark:text-white">
-                              {isKhmer ? val.titleKm : val.titleEn}៖{' '}
-                            </span>
-                            <span className="text-slate-600 dark:text-slate-300">
-                              {isKhmer ? val.descKm : val.descEn}
-                            </span>
-                          </div>
+                          <span className="text-slate-600 dark:text-slate-300">
+                            {isKhmer ? val.descKm : val.descEn}
+                          </span>
                         </div>
-                      </ScrollReveal>
+                      </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-blue-500" />
-                    {isKhmer ? content.goalsHeadingKm : content.goalsHeadingEn}
+                <div className="space-y-2.5">
+                  <h4 className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>{isKhmer ? content.goalsHeadingKm : content.goalsHeadingEn}</span>
                   </h4>
                   <div className="space-y-2.5">
                     {content.goals.map((goal, idx) => (
-                      <ScrollReveal key={goal.id || idx} delay={idx * 80}>
-                        <div className="group flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50/80 dark:bg-[#0f172a]/90 border border-slate-200/60 dark:border-slate-800/80 hover:border-blue-500/50 hover:shadow-md transition-all duration-300">
-                          <span className="w-6 h-6 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 text-xs font-black flex items-center justify-center shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
-                            {idx + 1}
+                      <div
+                        key={goal.id || idx}
+                        className="flex items-start gap-2.5 text-xs sm:text-sm leading-relaxed"
+                      >
+                        <span className="w-5 h-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <span className="text-slate-900 dark:text-white">
+                            {isKhmer ? goal.titleKm : goal.titleEn}៖{' '}
                           </span>
-                          <div className="text-xs sm:text-sm leading-relaxed">
-                            <span className="font-extrabold text-slate-900 dark:text-white">
-                              {isKhmer ? goal.titleKm : goal.titleEn}៖{' '}
-                            </span>
-                            <span className="text-slate-600 dark:text-slate-300">
-                              {isKhmer ? goal.descKm : goal.descEn}
-                            </span>
-                          </div>
+                          <span className="text-slate-600 dark:text-slate-300">
+                            {isKhmer ? goal.descKm : goal.descEn}
+                          </span>
                         </div>
-                      </ScrollReveal>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -786,17 +770,14 @@ export function AboutPage() {
           </section>
         </ScrollReveal>
 
-        <section id="about-directors" className="space-y-6">
+        <section id="about-directors" className="space-y-4">
           <ScrollReveal>
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 px-1">
               <div>
-                <div className="flex items-center gap-2.5">
-                  <span className="w-2 h-7 rounded-full bg-blue-600 inline-block" />
-                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                    {isKhmer ? content.directorsTitleKm : content.directorsTitleEn}
-                  </h2>
-                </div>
-                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 pl-4">
+                <h2 className="font-moul-kh text-base sm:text-xl text-slate-900 dark:text-white">
+                  {isKhmer ? content.directorsTitleKm : content.directorsTitleEn}
+                </h2>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                   {isKhmer ? content.directorsSubtitleKm : content.directorsSubtitleEn}
                 </p>
               </div>
@@ -806,9 +787,9 @@ export function AboutPage() {
                   size="sm"
                   variant="outline"
                   onClick={() => handleOpenEditModal('directors')}
-                  className="self-start sm:self-auto rounded-xl border-blue-500/40 text-blue-600 dark:text-blue-400 text-xs font-bold"
+                  className="self-start sm:self-auto rounded-full bg-white/80 dark:bg-slate-900/80 border-blue-500/40 text-blue-600 dark:text-blue-400 text-xs"
                 >
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  <Plus className="h-3.5 w-3.5 mr-1" />
                   {isKhmer ? 'បន្ថែម / កែប្រែប្រធានមណ្ឌល' : 'Manage Leadership'}
                 </Button>
               )}
@@ -816,87 +797,70 @@ export function AboutPage() {
           </ScrollReveal>
 
           {content.directors.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
               {content.directors.map((person, index) => (
-                <ScrollReveal key={person.id} delay={index * 100}>
+                <ScrollReveal key={person.id} delay={index * 80}>
                   <Card
                     onClick={() => setSelectedMember(person)}
-                    className="group bg-white dark:bg-[#162033] border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 active:scale-[0.99] transition-all duration-500 cursor-pointer flex flex-col h-full"
+                    className="group bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md border border-white/80 dark:border-slate-800 rounded-[26px] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col h-full"
                   >
-                    <div className="relative h-60 sm:h-64 w-full overflow-hidden bg-gradient-to-br from-slate-800 via-[#162033] to-slate-900 flex items-center justify-center">
+                    <div className="relative h-56 sm:h-60 w-full overflow-hidden bg-slate-200 dark:bg-slate-900 flex items-center justify-center">
                       {person.imageUrl ? (
                         <img
                           src={person.imageUrl}
                           alt={isKhmer ? person.nameKm : person.nameEn}
-                          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
+                          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
                         />
                       ) : (
-                        <div className="w-24 h-24 rounded-full bg-amber-500/15 border-2 border-amber-400/40 flex items-center justify-center text-amber-400 text-3xl font-black shadow-inner group-hover:scale-110 transition-transform duration-500">
+                        <div className="w-20 h-20 rounded-full bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-amber-500 text-2xl">
                           {(isKhmer ? person.nameKm : person.nameEn).charAt(0).toUpperCase()}
                         </div>
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-70 group-hover:opacity-90 transition-opacity" />
-                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-                        <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-extrabold text-[10px] uppercase tracking-wider shadow">
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                      <div className="absolute bottom-3 left-3">
+                        <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] shadow">
                           {isKhmer ? content.directorsBadgeKm : content.directorsBadgeEn}
                         </span>
                       </div>
                     </div>
 
-                    <CardContent className="p-4 sm:p-5 space-y-1.5 flex-1 flex flex-col justify-between">
-                      <div>
-                        <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white group-hover:text-blue-500 transition-colors">
-                          {isKhmer ? person.nameKm : person.nameEn}
-                        </h3>
-                        <p className="text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400 mt-0.5">
-                          {isKhmer ? person.roleKm : person.roleEn}
+                    <CardContent className="p-4 space-y-1 flex-1">
+                      <h3 className="font-moul-kh text-sm text-slate-900 dark:text-white">
+                        {isKhmer ? person.nameKm : person.nameEn}
+                      </h3>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">
+                        {isKhmer ? person.roleKm : person.roleEn}
+                      </p>
+                      {(person.orgKm || person.orgEn) && (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {isKhmer ? person.orgKm : person.orgEn}
                         </p>
-                        {(person.orgKm || person.orgEn) && (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                            {isKhmer ? person.orgKm : person.orgEn}
-                          </p>
-                        )}
-                      </div>
+                      )}
                     </CardContent>
                   </Card>
                 </ScrollReveal>
               ))}
             </div>
           ) : (
-            <ScrollReveal>
-              <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 bg-white/50 dark:bg-[#162033]/50 p-8 text-center space-y-3">
-                <UserCheck className="h-10 w-10 text-blue-500 mx-auto opacity-80" />
-                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                  {isKhmer
-                    ? 'មិនទាន់មានរូបភាព និងព័ត៌មានប្រធានមណ្ឌលនៅឡើយទេ'
-                    : 'No leadership profiles added yet'}
-                </p>
-                {isAdmin && (
-                  <Button
-                    size="sm"
-                    onClick={() => handleOpenEditModal('directors')}
-                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl"
-                  >
-                    <Plus className="h-4 w-4 mr-1.5" />
-                    {isKhmer ? 'បន្ថែមប្រធានមណ្ឌលឥឡូវនេះ' : 'Add Leadership Now'}
-                  </Button>
-                )}
-              </div>
-            </ScrollReveal>
+            <div className="rounded-[26px] border border-dashed border-slate-300 dark:border-slate-800 bg-white/70 dark:bg-[#162033]/70 backdrop-blur-md p-7 text-center space-y-2.5">
+              <UserCheck className="h-8 w-8 text-blue-500 mx-auto opacity-80" />
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {isKhmer
+                  ? 'មិនទាន់មានរូបភាព និងព័ត៌មានប្រធានមណ្ឌលនៅឡើយទេ'
+                  : 'No leadership profiles added yet'}
+              </p>
+            </div>
           )}
         </section>
 
-        <section id="about-managers" className="space-y-6">
+        <section id="about-managers" className="space-y-4">
           <ScrollReveal>
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 px-1">
               <div>
-                <div className="flex items-center gap-2.5">
-                  <span className="w-2 h-7 rounded-full bg-emerald-500 inline-block" />
-                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                    {isKhmer ? content.managersTitleKm : content.managersTitleEn}
-                  </h2>
-                </div>
-                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 pl-4">
+                <h2 className="font-moul-kh text-base sm:text-xl text-slate-900 dark:text-white">
+                  {isKhmer ? content.managersTitleKm : content.managersTitleEn}
+                </h2>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                   {isKhmer ? content.managersSubtitleKm : content.managersSubtitleEn}
                 </p>
               </div>
@@ -906,9 +870,9 @@ export function AboutPage() {
                   size="sm"
                   variant="outline"
                   onClick={() => handleOpenEditModal('managers')}
-                  className="self-start sm:self-auto rounded-xl border-emerald-500/40 text-emerald-600 dark:text-emerald-400 text-xs font-bold"
+                  className="self-start sm:self-auto rounded-full bg-white/80 dark:bg-slate-900/80 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 text-xs"
                 >
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  <Plus className="h-3.5 w-3.5 mr-1" />
                   {isKhmer ? 'បន្ថែម / កែប្រែសមាជិកគ្រប់គ្រង' : 'Manage Committee'}
                 </Button>
               )}
@@ -916,68 +880,53 @@ export function AboutPage() {
           </ScrollReveal>
 
           {content.managers.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-5">
               {content.managers.map((member, index) => (
-                <ScrollReveal key={member.id} delay={index * 80}>
+                <ScrollReveal key={member.id} delay={index * 60}>
                   <Card
                     onClick={() => setSelectedMember(member)}
-                    className="group bg-white dark:bg-[#162033] border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 active:scale-[0.99] transition-all duration-500 cursor-pointer flex flex-col h-full"
+                    className="group bg-white/90 dark:bg-[#162033]/90 backdrop-blur-md border border-white/80 dark:border-slate-800 rounded-[24px] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col h-full"
                   >
-                    <div className="relative h-44 sm:h-56 w-full overflow-hidden bg-gradient-to-br from-slate-800 via-[#162033] to-slate-900 flex items-center justify-center">
+                    <div className="relative h-44 sm:h-52 w-full overflow-hidden bg-slate-200 dark:bg-slate-900 flex items-center justify-center">
                       {member.imageUrl ? (
                         <img
                           src={member.imageUrl}
                           alt={isKhmer ? member.nameKm : member.nameEn}
-                          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
+                          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
                         />
                       ) : (
-                        <div className="w-20 h-20 rounded-full bg-emerald-500/15 border-2 border-emerald-400/40 flex items-center justify-center text-emerald-400 text-2xl font-black shadow-inner group-hover:scale-110 transition-transform duration-500">
+                        <div className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-400/40 flex items-center justify-center text-emerald-500 text-xl">
                           {(isKhmer ? member.nameKm : member.nameEn).charAt(0).toUpperCase()}
                         </div>
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
 
-                    <CardContent className="p-3.5 sm:p-4 space-y-1 flex-1 flex flex-col justify-between">
-                      <div>
-                        <h3 className="text-xs sm:text-base font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-500 transition-colors line-clamp-1">
-                          {isKhmer ? member.nameKm : member.nameEn}
-                        </h3>
-                        <p className="text-[11px] sm:text-xs font-bold text-slate-600 dark:text-slate-300 line-clamp-1 mt-0.5">
-                          {isKhmer ? member.roleKm : member.roleEn}
+                    <CardContent className="p-3.5 space-y-0.5 flex-1">
+                      <h3 className="text-xs sm:text-sm text-slate-900 dark:text-white line-clamp-1">
+                        {isKhmer ? member.nameKm : member.nameEn}
+                      </h3>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-1">
+                        {isKhmer ? member.roleKm : member.roleEn}
+                      </p>
+                      {(member.orgKm || member.orgEn) && (
+                        <p className="text-[10px] text-slate-400 line-clamp-1">
+                          {isKhmer ? member.orgKm : member.orgEn}
                         </p>
-                        {(member.orgKm || member.orgEn) && (
-                          <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-400 line-clamp-1 mt-0.5">
-                            {isKhmer ? member.orgKm : member.orgEn}
-                          </p>
-                        )}
-                      </div>
+                      )}
                     </CardContent>
                   </Card>
                 </ScrollReveal>
               ))}
             </div>
           ) : (
-            <ScrollReveal>
-              <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 bg-white/50 dark:bg-[#162033]/50 p-8 text-center space-y-3">
-                <Users className="h-10 w-10 text-emerald-500 mx-auto opacity-80" />
-                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                  {isKhmer
-                    ? 'មិនទាន់មានរូបភាព និងព័ត៌មានសមាជិកគ្រប់គ្រងនៅឡើយទេ'
-                    : 'No committee members added yet'}
-                </p>
-                {isAdmin && (
-                  <Button
-                    size="sm"
-                    onClick={() => handleOpenEditModal('managers')}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl"
-                  >
-                    <Plus className="h-4 w-4 mr-1.5" />
-                    {isKhmer ? 'បន្ថែមសមាជិកគ្រប់គ្រងឥឡូវនេះ' : 'Add Committee Member Now'}
-                  </Button>
-                )}
-              </div>
-            </ScrollReveal>
+            <div className="rounded-[26px] border border-dashed border-slate-300 dark:border-slate-800 bg-white/70 dark:bg-[#162033]/70 backdrop-blur-md p-7 text-center space-y-2.5">
+              <Users className="h-8 w-8 text-emerald-500 mx-auto opacity-80" />
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {isKhmer
+                  ? 'មិនទាន់មានរូបភាព និងព័ត៌មានសមាជិកគ្រប់គ្រងនៅឡើយទេ'
+                  : 'No committee members added yet'}
+              </p>
+            </div>
           )}
         </section>
       </div>
