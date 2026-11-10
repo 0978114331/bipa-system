@@ -242,14 +242,6 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
     }
   }
 
-  if (!hasActiveStudentQrAccess()) {
-    return {
-      ok: false,
-      shortTitle: 'សូមស្កេនកាតសិស្សសិន',
-      message: 'សូមចូលគណនី ស្កេនកាត QR របស់អ្នកជាមុនសិន!'
-    };
-  }
-
   const linkedId = (localStorage.getItem('bipa_linked_student_id') || '').trim();
   const isStationQr =
     raw.toUpperCase().startsWith('BIPA-STATION') ||
@@ -260,8 +252,8 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
   if (isStationQr && !linkedId) {
     return {
       ok: false,
-      shortTitle: 'សូមភ្ជាប់ ID សិន',
-      message: 'សូមភ្ជាប់អត្តលេខសិស្ស (ID) របស់អ្នកជាមុនសិន មុនពេលស្កែន!'
+      shortTitle: 'សូមស្កេនកាតសិស្សសិន',
+      message: 'សូមស្កេនកាត QR សិស្សរបស់អ្នកជាមុនសិន!'
     };
   }
 
@@ -269,8 +261,8 @@ export async function processAttendanceScan(scannedCode: string): Promise<ScanPr
   if (!lookupCode) {
     return {
       ok: false,
-      shortTitle: 'សូមភ្ជាប់ ID សិន',
-      message: 'មិនឃើញអត្តលេខសិស្ស (ID) សម្រាប់ស្កែនទេ សូមភ្ជាប់ ID ជាមុនសិន!'
+      shortTitle: 'សូមស្កេនកាតសិស្សសិន',
+      message: 'សូមស្កេនកាត QR សិស្សរបស់អ្នកជាមុនសិន!'
     };
   }
 
@@ -473,7 +465,7 @@ export function Header() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
-    const hideBackButtons = () => {
+    const hideBackButtonsAndFormatAttendanceBox = () => {
       const buttons = Array.from(document.querySelectorAll('button, a'));
       buttons.forEach((btn) => {
         const txt = (btn.textContent || '').trim();
@@ -485,49 +477,33 @@ export function Header() {
           (btn as HTMLElement).style.display = 'none';
         }
       });
-    };
-    hideBackButtons();
-    const timer = setInterval(hideBackButtons, 500);
-    return () => clearInterval(timer);
-  }, [location.pathname, location.search]);
-
-  useEffect(() => {
-    const enforceAttendanceIdSecurity = () => {
-      const isAllowed = Boolean(user) && hasActiveStudentQrAccess();
-      if (!isAllowed && localStorage.getItem('bipa_linked_student_id')) {
-        clearVerifiedStudentSession();
-      }
 
       if (location.pathname === '/attendance') {
-        const allElements = Array.from(document.querySelectorAll('main *')) as HTMLElement[];
-        allElements.forEach((el) => {
-          const directTxt = (el.textContent || '').trim();
-          if (
-            !isAllowed &&
-            directTxt.startsWith('✓ បានភ្ជាប់ ID រួចរាល់៖') &&
-            el.children.length === 0
-          ) {
-            el.textContent = 'សូមចូលគណនី ស្កេនកាត QR របស់អ្នកជាមុនសិន';
-          }
-        });
-
-        const allButtons = Array.from(document.querySelectorAll('main button')) as HTMLElement[];
-        allButtons.forEach((btn) => {
+        const isAllowed = hasActiveStudentQrAccess();
+        const mainBtns = Array.from(document.querySelectorAll('main button')) as HTMLElement[];
+        mainBtns.forEach((btn) => {
           const txt = (btn.textContent || '').trim();
           if (
             txt === 'ផ្លាស់ប្តូរ ID' ||
             txt === 'ភ្ជាប់ ID' ||
             txt === 'Save ID' ||
-            txt === 'សូមចូលគណនី'
+            txt.includes('ស្កេនកាត QR')
           ) {
+            const parentInput = btn.parentElement?.querySelector('input') as HTMLElement | null;
+            if (parentInput) {
+              parentInput.style.display = 'none';
+            }
+            btn.style.width = '100%';
+            btn.style.fontSize = '12px';
+            btn.style.fontWeight = '500';
             btn.onclick = (ev) => {
               ev.preventDefault();
               ev.stopPropagation();
-              navigate(user ? '/dashboard' : '/signin');
+              navigate('/dashboard');
             };
             if (!isAllowed) {
-              btn.textContent = 'សូមចូលគណនី ';
-              btn.style.display = '';
+              btn.textContent = 'ចូលស្កេនកាត QR ក្នុងផ្ទាំងគ្រប់គ្រង';
+              btn.style.display = 'inline-flex';
             } else {
               btn.style.display = 'none';
             }
@@ -536,10 +512,10 @@ export function Header() {
       }
     };
 
-    enforceAttendanceIdSecurity();
-    const timer = setInterval(enforceAttendanceIdSecurity, 400);
+    hideBackButtonsAndFormatAttendanceBox();
+    const timer = setInterval(hideBackButtonsAndFormatAttendanceBox, 450);
     return () => clearInterval(timer);
-  }, [user, location.pathname, navigate]);
+  }, [location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (mobileOpen || showScanner) {
@@ -685,7 +661,7 @@ export function Header() {
             }, 800);
           } else {
             setScanStage('error');
-            setScanOverlayLabel(res.shortTitle || 'សូមភ្ជាប់កូដសិស្សសិន');
+            setScanOverlayLabel(res.shortTitle || 'សូមស្កេនកាតសិស្សសិន');
             setTimeout(() => {
               if (!isMounted) return;
               setScanStage('scanning');
@@ -773,7 +749,7 @@ export function Header() {
         }, 800);
       } else {
         setScanStage('error');
-        setScanOverlayLabel(res.shortTitle || 'សូមភ្ជាប់កូដសិស្សសិន');
+        setScanOverlayLabel(res.shortTitle || 'សូមស្កេនកាតសិស្សសិន');
         setTimeout(() => setScanStage('scanning'), 1800);
       }
     } catch {
@@ -792,7 +768,43 @@ export function Header() {
   return (
     <>
       <div id="global-qr-file-hidden" className="hidden" />
+      <div className="fixed inset-0 -z-50 pointer-events-none select-none overflow-hidden">
+        <img
+          src="https://i.ibb.co/KY0bJNW/b151bd61-2587-445b-b245-2ddaea928120.png"
+          alt=""
+          className="w-full h-full object-cover object-center"
+        />
+        <div className="absolute inset-0 bg-white/80 dark:bg-[#071126]/82" />
+      </div>
+
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Moul&family=Siemreap&display=swap');
+        html, body, #root, main {
+          font-family: 'Siemreap', sans-serif !important;
+          background: transparent !important;
+          background-color: transparent !important;
+        }
+        .font-khmer {
+          font-family: 'Siemreap', sans-serif !important;
+        }
+        .font-moul-kh {
+          font-family: 'Moul', serif !important;
+          font-weight: 400 !important;
+        }
+        main > div,
+        .min-h-screen,
+        .bipa-glass-overlay,
+        div.fixed.z-\\[85\\],
+        div.fixed.z-\\[90\\],
+        div.fixed.z-30 {
+          background: transparent !important;
+          background-color: transparent !important;
+        }
+        div.fixed.z-\\[85\\] > div,
+        div.fixed.z-\\[90\\] > div,
+        div.fixed.z-30 > div {
+          background-color: transparent !important;
+        }
         @keyframes bipaSheetSlideUp {
           0% {
             opacity: 0;
@@ -860,8 +872,8 @@ export function Header() {
               <div className="absolute inset-0 z-30 bg-black/65 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center animate-in fade-in duration-150">
                 {scanStage === 'processing' && (
                   <>
-                    <div className="w-14 h-14 rounded-full border-4 border-white/20 border-t-white animate-spin mb-3.5" />
-                    <span className="text-white font-extrabold text-sm sm:text-base tracking-wide drop-shadow">
+                    <div className="w-12 h-12 rounded-full border-4 border-white/20 border-t-white animate-spin mb-3" />
+                    <span className="text-white text-xs sm:text-sm tracking-wide">
                       {scanOverlayLabel || 'កំពុងដំណើរការ...'}
                     </span>
                   </>
@@ -869,12 +881,10 @@ export function Header() {
 
                 {scanStage === 'success' && (
                   <>
-                    <div className="w-16 h-16 rounded-full bg-[#10b981] flex items-center justify-center shadow-[0_0_25px_rgba(16,185,129,0.55)] mb-3.5 animate-in zoom-in-75 duration-200">
-                      <div className="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center">
-                        <Check className="h-4 w-4 text-white stroke-[3]" />
-                      </div>
+                    <div className="w-14 h-14 rounded-full bg-[#10b981] flex items-center justify-center shadow-lg mb-3 animate-in zoom-in-75 duration-200">
+                      <Check className="h-6 w-6 text-white stroke-[2.5]" />
                     </div>
-                    <span className="text-[#10b981] font-extrabold text-sm sm:text-base tracking-wide drop-shadow">
+                    <span className="text-[#10b981] text-xs sm:text-sm tracking-wide">
                       {scanOverlayLabel || 'ស្កេនជោគជ័យ'}
                     </span>
                   </>
@@ -882,10 +892,10 @@ export function Header() {
 
                 {scanStage === 'error' && (
                   <>
-                    <div className="w-16 h-16 rounded-full bg-[#dc2626] flex items-center justify-center shadow-[0_0_25px_rgba(220,38,38,0.55)] mb-3.5 animate-in zoom-in-75 duration-200">
-                      <X className="h-8 w-8 text-white stroke-[2.5]" />
+                    <div className="w-14 h-14 rounded-full bg-[#dc2626] flex items-center justify-center shadow-lg mb-3 animate-in zoom-in-75 duration-200">
+                      <X className="h-6 w-6 text-white stroke-[2.5]" />
                     </div>
-                    <span className="text-[#ef4444] font-extrabold text-sm sm:text-base tracking-wide drop-shadow">
+                    <span className="text-[#ef4444] text-xs sm:text-sm tracking-wide">
                       {scanOverlayLabel || 'ស្កេនរួចរាល់ហើយ'}
                     </span>
                   </>
@@ -894,14 +904,14 @@ export function Header() {
             )}
           </div>
 
-          <p className="text-slate-400 text-xs sm:text-sm font-medium mt-6 mb-4 text-center">
-            ដាក់កូដ QR ឱ្យចំកណ្តាល (កាន់ទូរស័ព្ទឃ្លាតប្រហែល ១៥-២០ សង់ទីម៉ែត្រ)
+          <p className="text-slate-400 text-[11px] sm:text-xs mt-5 mb-4 text-center">
+            ដាក់កូដ QR ឱ្យចំកណ្តាលដើម្បីស្កេន
           </p>
 
-          <div className="flex items-center gap-3">
-            <label className="cursor-pointer flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg text-xs sm:text-sm font-bold active:scale-95 transition-all">
+          <div className="flex items-center gap-2.5">
+            <label className="cursor-pointer flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg text-xs active:scale-95 transition-all">
               <QrCode className="h-4 w-4" />
-              <span>ថត ឬជ្រើសរើសរូប QR</span>
+              <span>រូបភាព QR</span>
               <input
                 type="file"
                 accept="image/*"
@@ -913,7 +923,7 @@ export function Header() {
             <button
               type="button"
               onClick={() => setShowScanner(false)}
-              className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-[#111622] hover:bg-[#1a2234] text-white border border-white/10 shadow-lg text-xs sm:text-sm font-bold active:scale-95 transition-all"
+              className="flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-2xl bg-[#111622] hover:bg-[#1a2234] text-white border border-white/10 shadow-lg text-xs active:scale-95 transition-all"
             >
               <X className="h-4 w-4 text-slate-300" />
               <span>បិទកាមេរ៉ា</span>
@@ -925,18 +935,18 @@ export function Header() {
       <header className="sticky top-0 z-50 bg-[#0f172a] text-white shadow-md border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-20">
-            <button onClick={() => navigate('/')} className="flex items-center gap-2 sm:gap-3 shrink-0">
-              <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden shrink-0 bg-white">
+            <button onClick={() => navigate('/')} className="flex items-center gap-2.5 shrink-0">
+              <div className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden shrink-0 bg-white">
                 {systemLogoUrl ? (
                   <img src={systemLogoUrl} alt="Logo" className="w-full h-full object-contain p-0.5" />
                 ) : (
                   <div className="flex items-center justify-center w-full h-full bg-gold-gradient">
-                    <GraduationCap className="h-6 w-6 text-navy" />
+                    <GraduationCap className="h-5 w-5 text-navy" />
                   </div>
                 )}
               </div>
-              <div className="text-left flex flex-col justify-center font-khmer">
-                <div className="text-base sm:text-xl font-bold leading-tight tracking-wide">
+              <div className="text-left flex flex-col justify-center">
+                <div className="font-moul-kh text-sm sm:text-base leading-tight tracking-wide text-white">
                   {lang === 'km' ? systemNameKm : systemNameEn}
                 </div>
               </div>
@@ -948,7 +958,7 @@ export function Header() {
                   key={item.path}
                   onClick={() => navigate(item.path)}
                   className={cn(
-                    'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all duration-300 font-khmer',
+                    'flex items-center gap-2 px-4 py-1.5 text-xs rounded-full transition-all duration-300 font-khmer',
                     isActive(item.path)
                       ? 'bg-[#3b82f6] text-white shadow-md'
                       : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
@@ -961,27 +971,27 @@ export function Header() {
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-300 font-khmer">
+                  <button className="flex items-center gap-2 px-4 py-1.5 text-xs rounded-full text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-300 font-khmer">
                     <LayoutGrid className="h-4 w-4" />
                     <span>{lang === 'km' ? 'ម៉ឺនុយ' : 'Menu'}</span>
                     <ChevronDown className="h-3 w-3 opacity-70" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-[#1e293b] border-slate-700 text-white font-khmer">
+                <DropdownMenuContent align="end" className="w-52 bg-[#1e293b] border-slate-700 text-white font-khmer text-xs">
                   <DropdownMenuItem
                     onClick={() => navigate('/dashboard')}
-                    className="hover:bg-slate-800 cursor-pointer"
+                    className="hover:bg-slate-800 cursor-pointer text-xs"
                   >
-                    <LayoutDashboard className="h-4 w-4 mr-3 text-blue-400" />
+                    <LayoutDashboard className="h-4 w-4 mr-2.5 text-blue-400" />
                     <span>គ្រប់គ្រង</span>
                   </DropdownMenuItem>
                   {menuFeatureItems.map((item) => (
                     <DropdownMenuItem
                       key={item.path}
                       onClick={() => navigate(item.path)}
-                      className="hover:bg-slate-800 cursor-pointer"
+                      className="hover:bg-slate-800 cursor-pointer text-xs"
                     >
-                      <item.icon className={cn('h-4 w-4 mr-3', item.color)} />
+                      <item.icon className={cn('h-4 w-4 mr-2.5', item.color)} />
                       <span>{lang === 'km' ? item.labelKm : item.labelEn}</span>
                     </DropdownMenuItem>
                   ))}
@@ -993,104 +1003,104 @@ export function Header() {
               <div className="flex items-center md:mr-2 md:border-r border-slate-700 md:pr-4">
                 <Button
                   onClick={() => setShowScanner(true)}
-                  className="bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.4)] w-10 h-10 sm:w-11 sm:h-11 border-0 p-0 flex items-center justify-center transition-transform hover:scale-105"
+                  className="bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.4)] w-10 h-10 border-0 p-0 flex items-center justify-center transition-transform hover:scale-105"
                 >
-                  <QrCode className="h-5 w-5 sm:h-6 sm:w-6" />
+                  <QrCode className="h-5 w-5" />
                 </Button>
               </div>
 
               {user ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="hidden md:flex text-white hover:bg-slate-800 gap-2 px-2 h-11 rounded-xl">
+                    <Button variant="ghost" className="hidden md:flex text-white hover:bg-slate-800 gap-2 px-2 h-10 rounded-xl">
                       <Avatar className="h-8 w-8 border border-slate-600">
                         <AvatarImage src={profile?.avatar_url ? profile.avatar_url : undefined} />
-                        <AvatarFallback className="bg-[#eab308] text-[#0f172a] text-xs font-bold">
+                        <AvatarFallback className="bg-[#eab308] text-[#0f172a] text-xs">
                           {profile?.display_name?.charAt(0).toUpperCase() || 'U'}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col items-start justify-center">
-                        <span className="text-sm font-medium max-w-[100px] truncate leading-none">
+                        <span className="text-xs max-w-[100px] truncate leading-none">
                           {profile?.display_name || 'User'}
                         </span>
-                        <span className="text-[10px] text-slate-400 mt-1 uppercase leading-none">
+                        <span className="text-[9px] text-slate-400 mt-1 uppercase leading-none">
                           {renderRole(profile?.role)}
                         </span>
                       </div>
-                      <ChevronDown className="h-4 w-4 opacity-50 ml-1" />
+                      <ChevronDown className="h-3.5 w-3.5 opacity-50 ml-1" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56 bg-[#1e293b] border-slate-700 text-white font-khmer">
+                  <DropdownMenuContent align="end" className="w-52 bg-[#1e293b] border-slate-700 text-white font-khmer text-xs">
                     <DropdownMenuLabel>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm font-medium">{profile?.display_name || 'User'}</span>
-                        <span className="text-xs text-slate-400">{profile?.email || ''}</span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs">{profile?.display_name || 'User'}</span>
+                        <span className="text-[10px] text-slate-400">{profile?.email || ''}</span>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator className="bg-slate-700" />
-                    <DropdownMenuItem onClick={() => navigate('/dashboard')} className="hover:bg-slate-800 cursor-pointer">
-                      <LayoutDashboard className="h-4 w-4 mr-3 text-slate-400" />
+                    <DropdownMenuItem onClick={() => navigate('/dashboard')} className="hover:bg-slate-800 cursor-pointer text-xs">
+                      <LayoutDashboard className="h-4 w-4 mr-2.5 text-slate-400" />
                       គ្រប់គ្រង
                     </DropdownMenuItem>
 
                     {isAdminRoute ? (
-                      <DropdownMenuItem onClick={() => navigate('/')} className="hover:bg-slate-800 cursor-pointer">
-                        <Eye className="h-4 w-4 mr-3 text-slate-400" />
+                      <DropdownMenuItem onClick={() => navigate('/')} className="hover:bg-slate-800 cursor-pointer text-xs">
+                        <Eye className="h-4 w-4 mr-2.5 text-slate-400" />
                         View Site
                       </DropdownMenuItem>
                     ) : (
                       isAdmin && (
-                        <DropdownMenuItem onClick={() => navigate('/admin')} className="hover:bg-slate-800 cursor-pointer">
-                          <Shield className="h-4 w-4 mr-3 text-slate-400" />
+                        <DropdownMenuItem onClick={() => navigate('/admin')} className="hover:bg-slate-800 cursor-pointer text-xs">
+                          <Shield className="h-4 w-4 mr-2.5 text-slate-400" />
                           Admin
                         </DropdownMenuItem>
                       )
                     )}
 
-                    <DropdownMenuItem onClick={() => navigate('/profile')} className="hover:bg-slate-800 cursor-pointer">
-                      <User className="h-4 w-4 mr-3 text-slate-400" />
+                    <DropdownMenuItem onClick={() => navigate('/profile')} className="hover:bg-slate-800 cursor-pointer text-xs">
+                      <User className="h-4 w-4 mr-2.5 text-slate-400" />
                       {t('nav.profile')}
                     </DropdownMenuItem>
 
                     <DropdownMenuSeparator className="bg-slate-700" />
-                    <div className="px-2 py-2 flex items-center justify-between">
+                    <div className="px-2 py-1.5 flex items-center justify-between">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setLang(lang === 'en' ? 'km' : 'en')}
-                        className="text-slate-300 hover:text-white hover:bg-slate-800"
+                        className="text-slate-300 hover:text-white hover:bg-slate-800 text-xs h-8"
                       >
-                        <Languages className="h-4 w-4 mr-2" />
+                        <Languages className="h-3.5 w-3.5 mr-1.5" />
                         {lang === 'en' ? 'KH' : 'EN'}
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={toggleTheme}
-                        className="text-slate-300 hover:text-white hover:bg-slate-800"
+                        className="text-slate-300 hover:text-white hover:bg-slate-800 text-xs h-8"
                       >
-                        {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                        {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
                       </Button>
                     </div>
                     <DropdownMenuSeparator className="bg-slate-700" />
 
                     <DropdownMenuItem
                       onClick={handleSignOut}
-                      className="text-red-400 hover:bg-slate-800 hover:text-red-300 cursor-pointer"
+                      className="text-red-400 hover:bg-slate-800 hover:text-red-300 cursor-pointer text-xs"
                     >
-                      <LogOut className="h-4 w-4 mr-3" />
+                      <LogOut className="h-4 w-4 mr-2.5" />
                       {t('nav.signOut')}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
                 <div className="hidden md:flex items-center gap-2 font-khmer">
-                  <Button variant="ghost" size="sm" onClick={() => navigate('/signin')} className="text-white hover:bg-white/10">
-                    <LogIn className="h-4 w-4 mr-2" />
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/signin')} className="text-white hover:bg-white/10 text-xs">
+                    <LogIn className="h-3.5 w-3.5 mr-1.5" />
                     {t('nav.signIn')}
                   </Button>
-                  <Button size="sm" onClick={() => navigate('/signup')} className="bg-[#3b82f6] hover:bg-[#2563eb] text-white font-semibold">
-                    <UserPlus className="h-4 w-4 mr-2" />
+                  <Button size="sm" onClick={() => navigate('/signup')} className="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs">
+                    <UserPlus className="h-3.5 w-3.5 mr-1.5" />
                     {t('nav.createAccount')}
                   </Button>
                 </div>
@@ -1127,16 +1137,16 @@ export function Header() {
                   >
                     <Avatar className="h-8 w-8 border border-slate-300 dark:border-slate-600 shrink-0">
                       <AvatarImage src={profile?.avatar_url ? profile.avatar_url : undefined} />
-                      <AvatarFallback className="bg-[#3b82f6] text-white font-bold text-xs">
+                      <AvatarFallback className="bg-[#3b82f6] text-white text-xs">
                         {profile?.display_name?.charAt(0).toUpperCase() || 'U'}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                        <span className="text-xs text-slate-900 dark:text-white truncate">
                           {profile?.display_name || 'User'}
                         </span>
-                        <span className="px-1.5 py-0.2 rounded-full text-[8px] font-extrabold uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
+                        <span className="px-1.5 py-0.2 rounded-full text-[8px] uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
                           {renderRole(profile?.role)}
                         </span>
                       </div>
@@ -1152,7 +1162,7 @@ export function Header() {
                       handleSignOut();
                       setMobileOpen(false);
                     }}
-                    className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[10px] font-bold transition-all active:scale-95"
+                    className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[10px] transition-all active:scale-95"
                   >
                     <LogOut className="h-3 w-3" />
                     <span>{t('nav.signOut')}</span>
@@ -1166,7 +1176,7 @@ export function Header() {
                       navigate('/signin');
                       setMobileOpen(false);
                     }}
-                    className="h-8 rounded-xl border-slate-300 dark:border-slate-700 text-xs font-bold bg-white dark:bg-transparent"
+                    className="h-8 rounded-xl border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-transparent"
                   >
                     <LogIn className="h-3.5 w-3.5 mr-1" /> {t('nav.signIn')}
                   </Button>
@@ -1175,7 +1185,7 @@ export function Header() {
                       navigate('/signup');
                       setMobileOpen(false);
                     }}
-                    className="h-8 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-bold"
+                    className="h-8 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs"
                   >
                     <UserPlus className="h-3.5 w-3.5 mr-1" /> {t('nav.createAccount')}
                   </Button>
@@ -1187,7 +1197,7 @@ export function Header() {
                   variant="outline"
                   size="sm"
                   onClick={() => setLang(lang === 'en' ? 'km' : 'en')}
-                  className="flex items-center justify-center gap-1.5 h-8 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-[11px] font-bold"
+                  className="flex items-center justify-center gap-1.5 h-8 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-[11px]"
                 >
                   <Languages className="h-3.5 w-3.5 text-blue-500" />
                   {lang === 'en' ? 'ខ្មែរ' : 'En'}
@@ -1196,7 +1206,7 @@ export function Header() {
                   variant="outline"
                   size="sm"
                   onClick={toggleTheme}
-                  className="flex items-center justify-center gap-1.5 h-8 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-[11px] font-bold"
+                  className="flex items-center justify-center gap-1.5 h-8 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-[11px]"
                 >
                   {theme === 'light' ? (
                     <Moon className="h-3.5 w-3.5 text-amber-500" />
@@ -1218,12 +1228,12 @@ export function Header() {
                     className={cn(
                       'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-all active:scale-90',
                       isActive('/dashboard')
-                        ? 'text-blue-500 font-black'
+                        ? 'text-blue-500'
                         : 'text-slate-700 dark:text-slate-200 hover:text-blue-400'
                     )}
                   >
                     <LayoutDashboard className="h-5 w-5 text-[#3b82f6]" />
-                    <span className="text-[10px] font-bold leading-none">
+                    <span className="text-[10px] leading-none">
                       {lang === 'km' ? 'គ្រប់គ្រង' : 'Dashboard'}
                     </span>
                   </button>
@@ -1242,7 +1252,7 @@ export function Header() {
                       ) : (
                         <Shield className="h-5 w-5 text-[#eab308]" />
                       )}
-                      <span className="text-[10px] font-bold leading-none">
+                      <span className="text-[10px] leading-none">
                         {isAdminRoute ? 'ទំព័រដើម' : 'Admin'}
                       </span>
                     </button>
@@ -1259,12 +1269,12 @@ export function Header() {
                       className={cn(
                         'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-all active:scale-90',
                         isActive(item.path)
-                          ? 'text-blue-500 font-black'
+                          ? 'text-blue-500'
                           : 'text-slate-700 dark:text-slate-200 hover:text-blue-400'
                       )}
                     >
                       <item.icon className={cn('h-5 w-5', item.color)} />
-                      <span className="text-[10px] font-bold leading-none">
+                      <span className="text-[10px] leading-none">
                         {lang === 'km' ? item.labelKm : item.labelEn}
                       </span>
                     </button>
@@ -1280,7 +1290,7 @@ export function Header() {
                       className="flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl text-amber-500 hover:text-amber-400 transition-all active:scale-90"
                     >
                       <KeyRound className="h-5 w-5 text-amber-400" />
-                      <span className="text-[10px] font-bold leading-none">កូដសិស្ស</span>
+                      <span className="text-[10px] leading-none">កូដសិស្ស</span>
                     </button>
                   )}
                 </div>
@@ -1302,8 +1312,8 @@ export function Header() {
             isActive('/') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
-          <Home className="h-[22px] w-[22px]" />
-          <span className="text-[10px] font-medium">{lang === 'km' ? 'ផ្ទះ' : 'Home'}</span>
+          <Home className="h-[20px] w-[20px]" />
+          <span className="text-[10px]">{lang === 'km' ? 'ផ្ទះ' : 'Home'}</span>
         </button>
 
         <button
@@ -1319,13 +1329,13 @@ export function Header() {
         >
           <div
             className={cn(
-              'p-1.5 rounded-full transition-colors',
+              'p-1 rounded-full transition-colors',
               isActive('/attendance') && !mobileOpen ? 'bg-blue-50 dark:bg-blue-950/60' : ''
             )}
           >
             <UserCheck className="h-[20px] w-[20px]" />
           </div>
-          <span className="text-[10px] font-bold">{lang === 'km' ? 'វត្តមាន' : 'Attendance'}</span>
+          <span className="text-[10px]">{lang === 'km' ? 'វត្តមាន' : 'Attendance'}</span>
         </button>
 
         <button
@@ -1335,16 +1345,16 @@ export function Header() {
         >
           <div
             className={cn(
-              'text-white h-[52px] w-[52px] flex items-center justify-center rounded-full shadow-lg border-[4px] border-white dark:border-[#0f172a] transition-all active:scale-95',
+              'text-white h-[50px] w-[50px] flex items-center justify-center rounded-full shadow-lg border-[4px] border-white dark:border-[#0f172a] transition-all active:scale-95',
               mobileOpen ? 'bg-[#3b82f6]' : 'bg-[#1e293b]'
             )}
           >
-            {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </div>
           <span
             className={cn(
-              'text-[10px] font-medium mt-1',
-              mobileOpen ? 'text-[#3b82f6] font-bold' : 'text-slate-600 dark:text-slate-300'
+              'text-[10px] mt-1',
+              mobileOpen ? 'text-[#3b82f6]' : 'text-slate-600 dark:text-slate-300'
             )}
           >
             {lang === 'km' ? 'ម៉ឺនុយ' : 'Menu'}
@@ -1362,8 +1372,8 @@ export function Header() {
             isActive('/leave') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
-          <FileText className="h-[22px] w-[22px]" />
-          <span className="text-[10px] font-medium">{lang === 'km' ? 'សុំច្បាប់' : 'Leave'}</span>
+          <FileText className="h-[20px] w-[20px]" />
+          <span className="text-[10px]">{lang === 'km' ? 'សុំច្បាប់' : 'Leave'}</span>
         </button>
 
         <button
@@ -1377,8 +1387,8 @@ export function Header() {
             isActive('/about') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
-          <Info className="h-[22px] w-[22px]" />
-          <span className="text-[10px] font-medium">{lang === 'km' ? 'អំពីយើង' : 'About'}</span>
+          <Info className="h-[20px] w-[20px]" />
+          <span className="text-[10px]">{lang === 'km' ? 'អំពីយើង' : 'About'}</span>
         </button>
       </div>
 

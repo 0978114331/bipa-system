@@ -487,29 +487,8 @@ export function GlobalRiceBadgeEnhancer() {
   return (
     <div
       style={{ height: 'calc(100dvh - 4rem)' }}
-      className="fixed top-16 sm:top-20 left-0 right-0 z-[90] bg-[#f4f6fb] dark:bg-[#0b1120] overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin animate-in fade-in duration-200"
+      className="bipa-glass-overlay fixed top-16 sm:top-20 left-0 right-0 z-[85] bg-[#f4f6fb]/80 dark:bg-[#0b1120]/80 backdrop-blur-md overflow-y-auto p-3 sm:p-6 pb-28 scrollbar-thin"
     >
-      <div className="max-w-xl mx-auto mb-2 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => navigate('/')}
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#162033] border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white text-xs font-extrabold shadow-sm active:scale-95"
-        >
-          <ArrowLeft className="h-3.5 w-3.5 text-orange-500" />
-          <span>ត្រឡប់ទៅវិញ</span>
-        </button>
-
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => navigate('/admin/assets')}
-            className="px-3.5 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-extrabold shadow-sm"
-          >
-            គ្រប់គ្រងក្នុងផ្ទាំង Admin →
-          </button>
-        )}
-      </div>
-
       <RiceStudentView
         onSwitchToAdmin={isAdmin ? () => navigate('/admin/assets') : undefined}
       />

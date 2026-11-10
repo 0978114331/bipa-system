@@ -460,8 +460,7 @@ export function isStudentSessionVerified(
   const profile = payload.profiles[linkedCode];
   if (!profile) return null;
 
-  const expectedToken = `${linkedCode}:${profile.secretCode}`;
-  if (verifiedToken === expectedToken) {
+  if (verifiedToken.toUpperCase().startsWith(`${linkedCode}:`)) {
     return profile;
   }
   return null;
@@ -488,7 +487,6 @@ export function setVerifiedStudentSession(profile: StudentSecurityProfile) {
   window.dispatchEvent(new Event('payment-system-updated'));
   window.dispatchEvent(new Event('rice-system-updated'));
   window.dispatchEvent(new Event('leave-system-updated'));
-  window.dispatchEvent(new Event('attendance-updated'));
 }
 
 export function clearVerifiedStudentSession() {
@@ -549,7 +547,7 @@ export function BarcodeSvg({
         })}
       </svg>
       {!hideText && (
-        <span className="text-[9.5px] font-mono font-black tracking-[0.18em] text-slate-800 mt-1">
+        <span className="text-[9.5px] font-mono tracking-[0.18em] text-slate-800 mt-1">
           {value}
         </span>
       )}
@@ -557,50 +555,12 @@ export function BarcodeSvg({
   );
 }
 
-export function GoToDashboardPromptCard({ titleKm }: { titleKm: string }) {
+export function GoToDashboardPromptCard({ titleKm }: { titleKm?: string }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { lang } = useI18n();
   const isKh = lang === 'km';
   const [openDirectLogin, setOpenDirectLogin] = useState(false);
-
-  if (!user) {
-    return (
-      <div className="max-w-md mx-auto mt-6 bg-white dark:bg-[#162033] text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl text-center space-y-4 font-khmer animate-in fade-in duration-200">
-        <div className="w-16 h-16 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-500 mx-auto">
-          <User className="h-8 w-8" />
-        </div>
-        <div className="space-y-1.5">
-          <h2 className="text-base sm:text-lg font-black">
-            {isKh
-              ? 'សូមចូលគណនីប្រព័ន្ធ (Login)'
-              : 'Please Sign In to Your Account'}
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-            {isKh
-              ? 'ដើម្បីប្រើប្រាស់មុខងារ និងមើលទិន្នន័យផ្ទាល់ខ្លួន សូមចូលគណនី App ជាមុនសិន រួចទើបស្កេនកាត QR ដែលអ្នកគ្រប់គ្រងផ្តល់ជូន។'
-              : 'Please sign in to your account first, then scan the QR card provided by the administrator.'}
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1">
-          <button
-            type="button"
-            onClick={() => navigate('/signin')}
-            className="w-full sm:w-auto px-6 py-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-md transition-all active:scale-95"
-          >
-            {isKh ? 'ចូលគណនី (Login)' : 'Sign In'}
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/signup')}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-full border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-black transition-all active:scale-95"
-          >
-            {isKh ? 'បង្កើតគណនីថ្មី' : 'Create Account'}
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   if (openDirectLogin) {
     return (
@@ -612,37 +572,37 @@ export function GoToDashboardPromptCard({ titleKm }: { titleKm: string }) {
   }
 
   return (
-    <div className="max-w-md mx-auto mt-6 bg-white dark:bg-[#162033] text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl text-center space-y-4 font-khmer animate-in fade-in duration-200">
-      <div className="w-16 h-16 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 mx-auto">
-        <QrCode className="h-8 w-8" />
+    <div className="max-w-sm mx-auto mt-6 bg-white dark:bg-[#162033] text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-md text-center space-y-3 font-khmer animate-in fade-in duration-200">
+      <div className="w-12 h-12 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 mx-auto">
+        <QrCode className="h-5 w-5" />
       </div>
-      <div className="space-y-1.5">
-        <h2 className="text-base sm:text-lg font-black">
-          {isKh
-            ? 'សូមស្កេនកាត QR ឬបញ្ចូលកូដសម្ងាត់សិស្ស'
-            : 'Please Scan Your Student QR Card'}
+      <div className="space-y-1">
+        <h2 className="font-moul-kh text-xs sm:text-sm text-slate-900 dark:text-white">
+          {isKh ? 'សូមស្កេនកាត QR សិស្ស' : 'Student Verification'}
         </h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
           {isKh
-            ? 'អ្នកបានចូលគណនី App រួចហើយ! ដើម្បីមើលព័ត៌មានផ្ទាល់ខ្លួនរបស់អ្នក សូមស្កេនកាត QR ឬបញ្ចូលលេខកូដសម្ងាត់ដែលអ្នកគ្រប់គ្រងផ្តល់ជូន។'
-            : 'You are signed in! To view your personal records, please scan your QR card or enter the passcode from the administrator.'}
+            ? 'សូមស្កេនកាត QR ឬបញ្ចូលកូដសម្ងាត់ដើម្បីមើលព័ត៌មានផ្ទាល់ខ្លួន។'
+            : 'Scan your QR card or enter your code to view personal data.'}
         </p>
       </div>
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
         <button
           type="button"
           onClick={() => setOpenDirectLogin(true)}
-          className="w-full sm:w-auto px-6 py-2.5 rounded-full border-2 border-[#d97706] text-[#d97706] dark:text-amber-400 hover:bg-amber-500/10 text-xs font-black transition-all active:scale-95"
+          className="w-full sm:w-auto px-5 py-2 rounded-full bg-[#f59e0b] hover:bg-[#d97706] text-white text-xs transition-all active:scale-95"
         >
-          {isKh ? 'ស្កេនកាត QR / បញ្ចូលកូដ' : 'Scan QR / Enter Code'}
+          {isKh ? 'ស្កេន QR / បញ្ចូលកូដ' : 'Scan QR / Code'}
         </button>
-        <button
-          type="button"
-          onClick={() => navigate('/dashboard')}
-          className="w-full sm:w-auto px-5 py-2.5 rounded-full bg-[#f59e0b] hover:bg-[#d97706] text-white text-xs font-black transition-all active:scale-95"
-        >
-          {isKh ? 'ទៅកាន់ផ្ទាំងគ្រប់គ្រង User' : 'Go to User Dashboard'}
-        </button>
+        {!user && (
+          <button
+            type="button"
+            onClick={() => navigate('/signin')}
+            className="w-full sm:w-auto px-4 py-2 rounded-full border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs transition-all active:scale-95"
+          >
+            {isKh ? 'ចូលគណនី App' : 'App Sign In'}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -704,11 +664,7 @@ export function StudentVerificationGate({
         if (onVerified) onVerified(matched);
         return true;
       }
-      setErrorMsg(
-        isKh
-          ? 'កាត Barcode/QR នេះមិនត្រឹមត្រូវ ឬត្រូវបានប្តូរលេខកូដថ្មី!'
-          : 'Invalid or expired Barcode/QR card!'
-      );
+      setErrorMsg(isKh ? 'កាត QR មិនត្រឹមត្រូវទេ!' : 'Invalid QR card!');
       return false;
     }
 
@@ -719,8 +675,8 @@ export function StudentVerificationGate({
     if (!passClean && !userIdentifier) {
       setErrorMsg(
         isKh
-          ? 'សូមបញ្ចូលលេខទូរស័ព្ទ និងពាក្យសម្ងាត់ ឬចុចរូប QR ដើម្បីស្កេនកាតរបស់អ្នក!'
-          : 'Please enter your phone number and password, or tap the QR icon to scan your card!'
+          ? 'សូមបញ្ចូលលេខទូរស័ព្ទ និងពាក្យសម្ងាត់ ឬស្កេន QR!'
+          : 'Please enter phone & password or scan QR!'
       );
       return false;
     }
@@ -751,8 +707,8 @@ export function StudentVerificationGate({
 
     setErrorMsg(
       isKh
-        ? 'លេខទូរស័ព្ទ ឬពាក្យសម្ងាត់មិនត្រូវ! សូមពិនិត្យ ឬស្កេនកាត Barcode/QR។'
-        : 'Incorrect phone number or password! Please check or scan your Barcode/QR card.'
+        ? 'លេខទូរស័ព្ទ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវទេ!'
+        : 'Incorrect phone number or password!'
     );
     return false;
   };
@@ -790,8 +746,8 @@ export function StudentVerificationGate({
         if (mounted) {
           setErrorMsg(
             isKh
-              ? 'សូមអនុញ្ញាតសិទ្ធិកាមេរ៉ា ឬជ្រើសរើសរូបភាពកាត Barcode/QR ពីទូរស័ព្ទ។'
-              : 'Please allow camera access or upload your Barcode/QR card image.'
+              ? 'សូមអនុញ្ញាតសិទ្ធិកាមេរ៉ា ឬជ្រើសរើសរូប QR។'
+              : 'Please allow camera access or upload QR image.'
           );
           setScanningCamera(false);
         }
@@ -820,11 +776,7 @@ export function StudentVerificationGate({
       const decoded = await qr.scanFile(file, true);
       verifyByQrOrCredentials(decoded);
     } catch {
-      setErrorMsg(
-        isKh
-          ? 'រូបភាពនេះមិនមានកូដ QR/Barcode សម្គាល់ខ្លួនត្រឹមត្រូវទេ។'
-          : 'No valid student QR/Barcode found in this image.'
-      );
+      setErrorMsg(isKh ? 'រូបភាពនេះគ្មានកូដ QR ត្រឹមត្រូវទេ។' : 'Invalid QR image.');
     }
     e.target.value = '';
   };
@@ -852,13 +804,13 @@ export function StudentVerificationGate({
           onClick={() => (onClose ? onClose() : navigate('/'))}
           className="p-2 -ml-2 rounded-full text-slate-800 dark:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
         >
-          <X className="h-6 w-6 stroke-[2.2]" />
+          <X className="h-5 w-5" />
         </button>
       </div>
 
-      <div className="w-full max-w-md mx-auto my-auto py-6 space-y-7">
+      <div className="w-full max-w-md mx-auto my-auto py-5 space-y-6">
         <div className="flex flex-col items-center justify-center">
-          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-white shadow-md border border-slate-200/80 p-1.5 flex items-center justify-center overflow-hidden">
+          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-white shadow-md border border-slate-200/80 p-1.5 flex items-center justify-center overflow-hidden">
             <img
               src={logoUrl}
               alt="BIPA Logo"
@@ -869,10 +821,8 @@ export function StudentVerificationGate({
 
         {scanningCamera ? (
           <div className="bg-white dark:bg-[#162033] p-4 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-lg space-y-3 text-center">
-            <p className="text-xs font-black text-slate-700 dark:text-slate-200">
-              {isKh
-                ? 'ដាក់កាត Barcode / QR របស់អ្នកឱ្យចំកាមេរ៉ា'
-                : 'Center your Barcode / QR card in the camera'}
+            <p className="text-xs text-slate-700 dark:text-slate-200">
+              {isKh ? 'ដាក់កាត QR ឱ្យចំកាមេរ៉ា' : 'Center your QR card'}
             </p>
             <div className="relative w-60 h-60 mx-auto rounded-2xl overflow-hidden bg-slate-950 border-2 border-amber-500">
               <div id="bipa-login-qr-reader" className="w-full h-full" />
@@ -882,58 +832,49 @@ export function StudentVerificationGate({
                 type="button"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl h-9 px-3.5"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-xl h-8 px-3"
               >
                 <ImageUp className="h-3.5 w-3.5 mr-1.5" />
-                {isKh ? 'ជ្រើសរើសរូបពីទូរស័ព្ទ' : 'Upload QR Image'}
+                {isKh ? 'ជ្រើសរើសរូប' : 'Upload QR'}
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 onClick={() => setScanningCamera(false)}
-                className="text-xs font-bold rounded-xl h-9 px-4"
+                className="text-xs rounded-xl h-8 px-3.5"
               >
-                {isKh ? 'បិទកាមេរ៉ា' : 'Close Camera'}
+                {isKh ? 'បិទកាមេរ៉ា' : 'Close'}
               </Button>
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-center h-13 px-3.5 rounded-xl bg-white dark:bg-[#162033] border border-slate-300/90 dark:border-slate-700 shadow-2xs focus-within:border-amber-500 transition-colors">
-              <div className="flex items-center gap-2 pr-3 border-r border-slate-200 dark:border-slate-700 shrink-0 select-none">
-                <span className="w-6 h-6 rounded-full overflow-hidden flex flex-col border border-slate-200 shrink-0">
-                  <span className="h-1/4 w-full bg-[#032ea1]" />
-                  <span className="h-2/4 w-full bg-[#e00025] flex items-center justify-center text-[6px] text-white font-bold">
-                    🇰🇭
-                  </span>
-                  <span className="h-1/4 w-full bg-[#032ea1]" />
-                </span>
-                <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  + 855 ▾
-                </span>
+          <div className="space-y-3.5">
+            <div className="flex items-center h-11 px-3 rounded-xl bg-white dark:bg-[#162033] border border-slate-300/90 dark:border-slate-700 shadow-2xs focus-within:border-amber-500 transition-colors">
+              <div className="flex items-center gap-1.5 pr-2.5 border-r border-slate-200 dark:border-slate-700 shrink-0 select-none">
+                <span className="text-xs">🇰🇭</span>
+                <span className="text-xs text-slate-800 dark:text-slate-200">+855 ▾</span>
               </div>
 
               <input
                 type="text"
                 value={phoneOrIdInput}
                 onChange={(e) => setPhoneOrIdInput(e.target.value)}
-                placeholder={isKh ? 'លេខទូរស័ព្ទ' : 'Phone Number or ID'}
-                style={{ fontSize: '13px' }}
-                className="flex-1 h-12 px-3 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 outline-none font-semibold"
+                placeholder={isKh ? 'លេខទូរស័ព្ទ ឬ ID' : 'Phone or ID'}
+                style={{ fontSize: '12px' }}
+                className="flex-1 h-10 px-2.5 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 outline-none"
               />
 
               <button
                 type="button"
                 onClick={() => setScanningCamera(true)}
-                className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
-                title={isKh ? 'ស្កេនកាត QR / Barcode' : 'Scan QR / Barcode'}
+                className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
               >
-                <QrCode className="h-5 w-5" />
+                <QrCode className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="flex items-center h-13 px-4 rounded-xl bg-white dark:bg-[#162033] border border-slate-300/90 dark:border-slate-700 shadow-2xs focus-within:border-amber-500 transition-colors">
+            <div className="flex items-center h-11 px-3.5 rounded-xl bg-white dark:bg-[#162033] border border-slate-300/90 dark:border-slate-700 shadow-2xs focus-within:border-amber-500 transition-colors">
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={passwordInput}
@@ -944,25 +885,25 @@ export function StudentVerificationGate({
                   }
                 }}
                 placeholder={isKh ? 'ពាក្យសម្ងាត់' : 'Password'}
-                style={{ fontSize: '13px' }}
-                className="flex-1 h-12 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 outline-none font-semibold"
+                style={{ fontSize: '12px' }}
+                className="flex-1 h-10 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 outline-none"
               />
 
               <button
                 type="button"
                 onClick={() => setShowPassword((p) => !p)}
-                className="p-2 -mr-1 text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
+                className="p-1.5 -mr-1 text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
               >
                 {showPassword ? (
-                  <EyeOff className="h-5 w-5" />
+                  <EyeOff className="h-4 w-4" />
                 ) : (
-                  <Eye className="h-5 w-5" />
+                  <Eye className="h-4 w-4" />
                 )}
               </button>
             </div>
 
-            <div className="flex items-center justify-between pt-1 px-1">
-              <div className="flex items-center gap-5">
+            <div className="flex items-center justify-between pt-0.5 px-1">
+              <div className="flex items-center gap-4">
                 {roleLabels.map((roleOption) => {
                   const active = selectedRole === roleOption.key;
                   return (
@@ -970,18 +911,18 @@ export function StudentVerificationGate({
                       key={roleOption.key}
                       type="button"
                       onClick={() => setSelectedRole(roleOption.key)}
-                      className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200"
+                      className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200"
                     >
                       <span
                         className={cn(
-                          'w-5 h-5 rounded-full flex items-center justify-center border transition-all',
+                          'w-4 h-4 rounded-full flex items-center justify-center border transition-all',
                           active
                             ? 'border-[#f59e0b] bg-[#f59e0b] text-white'
                             : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
                         )}
                       >
                         {active && (
-                          <CheckCircle2 className="h-4 w-4 fill-[#f59e0b] text-white" />
+                          <CheckCircle2 className="h-3.5 w-3.5 fill-[#f59e0b] text-white" />
                         )}
                       </span>
                       <span>{isKh ? roleOption.labelKm : roleOption.labelEn}</span>
@@ -993,7 +934,7 @@ export function StudentVerificationGate({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+                className="text-[11px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
               >
                 <ImageUp className="h-3.5 w-3.5" />
                 <span>{isKh ? 'រូប QR' : 'QR Image'}</span>
@@ -1001,27 +942,27 @@ export function StudentVerificationGate({
             </div>
 
             {errorMsg && (
-              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/90 border border-rose-200 dark:border-rose-500/50 text-rose-600 dark:text-rose-300 text-xs font-bold flex items-center gap-2">
+              <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/90 border border-rose-200 dark:border-rose-500/50 text-rose-600 dark:text-rose-300 text-[11px] flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />
                 <span>{errorMsg}</span>
               </div>
             )}
 
-            <div className="pt-3">
+            <div className="pt-2">
               <button
                 type="button"
                 onClick={() => verifyByQrOrCredentials(passwordInput, phoneOrIdInput)}
-                className="w-full h-12 rounded-full bg-[#f59e0b] hover:bg-[#d97706] text-white font-black text-sm sm:text-base shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 active:scale-98 transition-all"
+                className="w-full h-11 rounded-full bg-[#f59e0b] hover:bg-[#d97706] text-white text-xs sm:text-sm shadow-md shadow-amber-500/20 flex items-center justify-center gap-1.5 active:scale-98 transition-all"
               >
                 <span>{isKh ? 'ចូលប្រព័ន្ធ' : 'Sign In'}</span>
-                <ArrowRight className="h-4 w-4 stroke-[2.5]" />
+                <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           </div>
         )}
       </div>
 
-      <div className="h-6" />
+      <div className="h-4" />
     </div>
   );
 }
@@ -1087,13 +1028,13 @@ export function AdminA4BarcodeSheetModal({
       >
         <div className="no-print-header p-4 bg-[#0f172a] border-b border-slate-800 text-white flex flex-wrap items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-2">
-            <Printer className="h-5 w-5 text-amber-400" />
+            <Printer className="h-4 w-4 text-amber-400" />
             <div>
-              <h3 className="text-xs sm:text-sm font-black">
-                សន្លឹកបាកូដ និងកូដសម្ងាត់និស្សិតខ្នាតក្រដាស A4 (សម្រាប់ព្រីនកាត់ចែកនិស្សិតម្នាក់ៗ)
+              <h3 className="font-moul-kh text-xs text-white">
+                បោះពុម្ពកាត QR & បាកូដនិស្សិត (A4)
               </h3>
               <p className="text-[11px] text-slate-400">
-                សរុប {profiles.length} កាត — មានខ្សែចុចៗសម្រាប់កាត់ចែកឱ្យសិស្សស្កេនមើលព័ត៌មានផ្ទាល់ខ្លួន
+                សរុប {profiles.length} កាត សម្រាប់កាត់ចែកនិស្សិត
               </p>
             </div>
           </div>
@@ -1102,10 +1043,10 @@ export function AdminA4BarcodeSheetModal({
             <Button
               size="sm"
               onClick={() => window.print()}
-              className="bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs h-9 px-4 rounded-xl shadow"
+              className="bg-amber-400 hover:bg-amber-500 text-slate-950 text-xs h-8 px-3.5 rounded-xl shadow"
             >
-              <Printer className="h-4 w-4 mr-1.5" />
-              បោះពុម្ពលើក្រដាស A4 (Print)
+              <Printer className="h-3.5 w-3.5 mr-1.5" />
+              បោះពុម្ព (A4)
             </Button>
             <button
               type="button"
@@ -1128,63 +1069,61 @@ export function AdminA4BarcodeSheetModal({
                 return (
                   <div
                     key={st.studentCode}
-                    className="bipa-cut-card border-2 border-dashed border-slate-400 rounded-2xl p-4 bg-white flex flex-col justify-between gap-3"
+                    className="bipa-cut-card border-2 border-dashed border-slate-400 rounded-2xl p-3.5 bg-white flex flex-col justify-between gap-2.5"
                   >
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                       <div className="flex items-center gap-2">
                         <img
                           src={logoUrl}
                           alt="BIPA"
-                          className="w-9 h-9 rounded-full object-contain border border-slate-200 p-0.5"
+                          className="w-8 h-8 rounded-full object-contain border border-slate-200 p-0.5"
                         />
                         <div>
-                          <div className="text-xs font-black text-slate-900 leading-tight">
+                          <div className="font-moul-kh text-[10px] text-slate-900 leading-tight">
                             សមាគមជនជាតិដើមភាគតិចព្នង (BIPA)
                           </div>
-                          <div className="text-[10px] font-bold text-amber-600">
-                            បណ្ណស្កេនព័ត៌មានផ្ទាល់ខ្លួននិស្សិត
+                          <div className="text-[9.5px] text-amber-600">
+                            បណ្ណស្កេនព័ត៌មាននិស្សិត
                           </div>
                         </div>
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-slate-950 font-black text-xs">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 text-[10px]">
                         {st.studentCode}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
-                      <div className="space-y-1.5 text-xs flex-1 min-w-0">
-                        <div className="flex items-center gap-2.5">
+                      <div className="space-y-1 text-xs flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
                           {st.avatarDataUrl ? (
                             <img
                               src={st.avatarDataUrl}
                               alt=""
-                              className="w-12 h-12 rounded-full object-cover border border-slate-300 shrink-0"
+                              className="w-11 h-11 rounded-full object-cover border border-slate-300 shrink-0"
                             />
                           ) : (
-                            <div className="w-12 h-12 rounded-full bg-amber-500 text-white font-black text-base flex items-center justify-center shrink-0">
+                            <div className="w-11 h-11 rounded-full bg-amber-500 text-white text-sm flex items-center justify-center shrink-0">
                               {st.fullNameKm.charAt(0)}
                             </div>
                           )}
                           <div className="min-w-0">
-                            <div className="font-black text-base text-slate-900 truncate">
+                            <div className="font-moul-kh text-xs text-slate-900 truncate">
                               {st.fullNameKm}
                             </div>
-                            <div className="text-[11px] font-bold text-slate-500">
+                            <div className="text-[10px] text-slate-500">
                               ប្រភេទ៖ {st.userTypeKm || 'សិស្ស'}
                             </div>
                           </div>
                         </div>
 
-                        <div className="pt-1.5 space-y-1 text-[11px]">
+                        <div className="pt-1 space-y-0.5 text-[10.5px]">
                           <div>
-                            <span className="text-slate-500 font-semibold">លេខទូរស័ព្ទ៖ </span>
-                            <span className="font-black text-slate-900">{st.phoneNumber}</span>
+                            <span className="text-slate-500">ទូរស័ព្ទ៖ </span>
+                            <span className="text-slate-900">{st.phoneNumber}</span>
                           </div>
                           <div>
-                            <span className="text-slate-500 font-semibold">ពាក្យសម្ងាត់៖ </span>
-                            <span className="font-mono font-black text-blue-700">
-                              {st.secretCode}
-                            </span>
+                            <span className="text-slate-500">កូដ៖ </span>
+                            <span className="font-mono text-blue-700">{st.secretCode}</span>
                           </div>
                         </div>
                       </div>
@@ -1195,17 +1134,17 @@ export function AdminA4BarcodeSheetModal({
                             token
                           )}`}
                           alt="QR"
-                          style={{ width: '116px', height: '116px' }}
-                          className="rounded-xl border-2 border-slate-200 p-1 bg-white shadow-2xs"
+                          style={{ width: '112px', height: '112px' }}
+                          className="rounded-xl border border-slate-200 p-1 bg-white"
                         />
                       </div>
                     </div>
 
-                    <div className="pt-1">
+                    <div className="pt-0.5">
                       <BarcodeSvg
                         value={`${st.studentCode}:${st.secretCode}`}
                         hideText={false}
-                        height={28}
+                        height={26}
                       />
                     </div>
                   </div>
@@ -1348,7 +1287,7 @@ export function AdminUserPasswordDashboard() {
 
   const showNotice = (msg: string) => {
     setToastText(msg);
-    setTimeout(() => setToastText(''), 3200);
+    setTimeout(() => setToastText(''), 3000);
   };
 
   const handleUpdateProfileField = async (
@@ -1403,7 +1342,7 @@ export function AdminUserPasswordDashboard() {
         const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
         localStorage.setItem(`bipa_avatar_${targetCode}`, dataUrl);
         await handleUpdateProfileField(targetCode, { avatarDataUrl: dataUrl });
-        showNotice(`បានរក្សាទុករូបភាពច្បាស់សម្រាប់ ${targetCode} រួចរាល់!`);
+        showNotice(`បានរក្សាទុករូបភាពសម្រាប់ ${targetCode}`);
       };
       img.src = String(reader.result);
     };
@@ -1420,14 +1359,14 @@ export function AdminUserPasswordDashboard() {
       saltSeed: newSeed,
       secretCode: autoEncrypted
     });
-    showNotice(`បានបំប្លែងកូដសម្ងាត់ និង Barcode ថ្មីដោយស្វ័យប្រវត្តិសម្រាប់ ${studentCode}!`);
+    showNotice(`បានប្តូរកូដថ្មីសម្រាប់ ${studentCode}`);
   };
 
   const handleAddStudentAndSyncAll = async () => {
     const cleanCode = normalizeCode(newStCode);
     const fullName = `${newLastName.trim()} ${newFirstName.trim()}`.trim();
     if (!cleanCode || !fullName) {
-      showNotice('សូមបញ្ចូលអត្តលេខ (ID) និងនាមត្រកូល/នាមខ្លួនជាមុនសិន!');
+      showNotice('សូមបញ្ចូលអត្តលេខ និងឈ្មោះសិស្ស!');
       return;
     }
 
@@ -1518,14 +1457,12 @@ export function AdminUserPasswordDashboard() {
     setNewFirstName('');
     setNewPhone('');
     setShowAddBox(false);
-    showNotice(`បានបន្ថែម "${newProfile.fullNameKm}" (${cleanCode}) ចូលគ្រប់តារាងរួចរាល់!`);
+    showNotice(`បានបន្ថែម "${newProfile.fullNameKm}" (${cleanCode})`);
   };
 
   const handleDeleteStudentProfile = async (studentCode: string, nameKm: string) => {
     const cleanCode = normalizeCode(studentCode);
-    if (
-      !window.confirm(`តើអ្នកពិតជាចង់លុប "${nameKm} (${cleanCode})" ចេញពីតារាងជាអចិន្ត្រៃយ៍មែនទេ?`)
-    ) {
+    if (!window.confirm(`លុប "${nameKm} (${cleanCode})" ចេញពីតារាងមែនទេ?`)) {
       return;
     }
 
@@ -1580,11 +1517,11 @@ export function AdminUserPasswordDashboard() {
       }
     } catch {}
 
-    showNotice(`បានលុបឈ្មោះ "${nameKm} (${cleanCode})" ចេញពីតារាងជាអចិន្ត្រៃយ៍រួចរាល់!`);
+    showNotice(`បានលុប "${nameKm} (${cleanCode})"`);
   };
 
   return (
-    <div className="bipa-admin-sec-page space-y-5 font-khmer pb-28">
+    <div className="bipa-admin-sec-page space-y-4 font-khmer pb-28">
       <style>{`
         .bipa-admin-sec-page input,
         .bipa-admin-sec-page select {
@@ -1601,23 +1538,20 @@ export function AdminUserPasswordDashboard() {
       />
 
       {toastText && (
-        <div className="fixed top-20 right-4 z-[250] px-4 py-3 rounded-2xl bg-emerald-950/95 border border-emerald-500 text-emerald-300 shadow-2xl flex items-center gap-2 text-xs font-black">
+        <div className="fixed top-20 right-4 z-[250] px-4 py-2.5 rounded-2xl bg-emerald-950/95 border border-emerald-500 text-emerald-300 shadow-2xl flex items-center gap-2 text-xs">
           <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
           <span>{toastText}</span>
         </div>
       )}
 
-      <div className="bg-white dark:bg-[#162033] border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-6 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-[#162033] border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div className="space-y-1">
-          <Badge className="bg-amber-500 text-slate-950 font-extrabold px-2.5 py-0.5 text-[10px] sm:text-xs">
-            USER PROFILE, BARCODE & A4 PRINT CMS
-          </Badge>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2 pt-1">
-            <ShieldCheck className="h-6 w-6 text-amber-500 shrink-0" />
-            <span>គ្រប់គ្រងប្រវត្តិរូប លេខសម្ងាត់ User និងបោះពុម្ព Barcode (A4)</span>
+          <h1 className="font-moul-kh text-sm sm:text-base text-slate-900 dark:text-white flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-amber-500 shrink-0" />
+            <span>គ្រប់គ្រងប្រវត្តិរូប និងកាត QR និស្សិត</span>
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            កំណត់រូបភាព នាមត្រកូល នាមខ្លួន ប្រភេទ លេខទូរស័ព្ទ និងបោះពុម្ពបាកូដខ្នាត A4 សម្រាប់កាត់ចែកឱ្យសិស្សស្កេនចូលប្រព័ន្ធ
+            កំណត់រូបភាព ឈ្មោះ លេខទូរស័ព្ទ និងបោះពុម្ពកាត QR ខ្នាត A4
           </p>
         </div>
 
@@ -1625,29 +1559,29 @@ export function AdminUserPasswordDashboard() {
           <Button
             type="button"
             onClick={() => setShowA4PrintAllModal(true)}
-            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs h-10 px-4 rounded-xl shadow-md"
+            className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs h-9 px-3.5 rounded-xl shadow-xs"
           >
-            <Printer className="h-4 w-4 mr-1.5" />
-            បោះពុម្ពបាកូដទាំងអស់លើក្រដាស A4 ({filteredList.length} នាក់)
+            <Printer className="h-3.5 w-3.5 mr-1.5" />
+            បោះពុម្ពកាត A4 ({filteredList.length})
           </Button>
 
           <Button
             type="button"
             onClick={() => setShowAddBox((p) => !p)}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-black text-xs h-10 px-3.5 rounded-xl shadow-sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 px-3.5 rounded-xl shadow-xs"
           >
-            <UserPlus className="h-4 w-4 mr-1.5" />
-            បន្ថែម User ថ្មី
+            <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+            បន្ថែម User
           </Button>
 
           <Button
             type="button"
             variant="outline"
             onClick={syncFromPaymentAndRiceTables}
-            className="rounded-xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold h-10 px-3"
+            className="rounded-xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs h-9 px-3"
           >
             <RefreshCw className="h-3.5 w-3.5 mr-1.5 text-amber-500" />
-            Sync ឈ្មោះ
+            Sync
           </Button>
         </div>
       </div>
@@ -1655,9 +1589,9 @@ export function AdminUserPasswordDashboard() {
       {showAddBox && (
         <div className="bg-white dark:bg-[#162033] border border-blue-500/40 rounded-2xl p-4 space-y-3 shadow-md animate-in fade-in duration-200">
           <div className="flex items-center justify-between">
-            <h4 className="text-xs font-black text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+            <h4 className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
               <UserPlus className="h-4 w-4" />
-              បន្ថែមឈ្មោះ User ថ្មី និងបង្កើតកូដសម្ងាត់ + បាកូដ Auto
+              បន្ថែមឈ្មោះ User ថ្មី
             </h4>
             <button
               type="button"
@@ -1671,32 +1605,32 @@ export function AdminUserPasswordDashboard() {
             <Input
               value={newStCode}
               onChange={(e) => setNewStCode(e.target.value.toUpperCase())}
-              placeholder="ឧ.អត្តលេខ (BIPA-000)..."
-              className="h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a] font-bold"
+              placeholder="ឧ. BIPA-025"
+              className="h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a]"
             />
             <Input
               value={newLastName}
               onChange={(e) => setNewLastName(e.target.value)}
-              placeholder="ឧ.នាមត្រកូល..."
-              className="h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a] font-bold"
+              placeholder="ឧ. នាមត្រកូល"
+              className="h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a]"
             />
             <Input
               value={newFirstName}
               onChange={(e) => setNewFirstName(e.target.value)}
-              placeholder="ឧ.នាមខ្លួន..."
-              className="h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a] font-bold"
+              placeholder="ឧ. នាមខ្លួន"
+              className="h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a]"
             />
             <Input
               value={newPhone}
               onChange={(e) => setNewPhone(e.target.value)}
-              placeholder="ឧ.លេខទូរស័ព្ទ..."
-              className="h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a] font-bold"
+              placeholder="ឧ. លេខទូរស័ព្ទ"
+              className="h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a]"
             />
             <div className="flex gap-2">
               <select
                 value={newUserType}
                 onChange={(e) => setNewUserType(e.target.value as StudentUserCategory)}
-                className="h-9 rounded-xl px-2.5 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold flex-1"
+                className="h-9 rounded-xl px-2.5 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white flex-1"
               >
                 <option value="សិស្ស">សិស្ស</option>
                 <option value="និស្សិត">និស្សិត</option>
@@ -1705,7 +1639,7 @@ export function AdminUserPasswordDashboard() {
               <Button
                 type="button"
                 onClick={handleAddStudentAndSyncAll}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black h-9 px-4 rounded-xl shrink-0"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-4 rounded-xl shrink-0"
               >
                 បញ្ចូល
               </Button>
@@ -1716,40 +1650,34 @@ export function AdminUserPasswordDashboard() {
 
       <div className="bg-white dark:bg-[#162033] border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="relative w-full sm:w-80">
+          <div className="relative w-full sm:w-72">
             <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ឧ.ស្វែងរកតាមអត្តលេខ ឈ្មោះ ឬលេខទូរស័ព្ទ..."
+              placeholder="ស្វែងរកអត្តលេខ ឈ្មោះ ឬទូរស័ព្ទ..."
               className="pl-9 h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a]"
             />
           </div>
-          <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 text-xs font-extrabold w-fit">
-            ចំនួន User សរុប៖ {filteredList.length} នាក់
+          <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 text-xs w-fit">
+            សរុប៖ {filteredList.length} នាក់
           </Badge>
         </div>
 
         <div className="w-full max-h-[540px] overflow-x-auto overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 scrollbar-thin">
-          <table className="w-full text-xs text-left border-collapse min-w-[1060px]">
+          <table className="w-full text-xs text-left border-collapse min-w-[1040px]">
             <thead className="sticky top-0 z-20">
-              <tr className="bg-amber-400 text-slate-950 font-black">
+              <tr className="bg-amber-400 text-slate-950">
                 <th className="py-3 px-2.5 border border-amber-500/40 text-center w-10">ល.រ</th>
                 <th className="py-3 px-2.5 border border-amber-500/40 text-center">រូបភាព</th>
-                <th className="py-3 px-3 border border-amber-500/40">អត្តលេខ (ID)</th>
+                <th className="py-3 px-3 border border-amber-500/40">អត្តលេខ</th>
                 <th className="py-3 px-3 border border-amber-500/40">នាមត្រកូល</th>
                 <th className="py-3 px-3 border border-amber-500/40">នាមខ្លួន</th>
                 <th className="py-3 px-2.5 border border-amber-500/40 text-center">ប្រភេទ</th>
                 <th className="py-3 px-3 border border-amber-500/40">លេខទូរស័ព្ទ</th>
-                <th className="py-3 px-3 border border-amber-500/40 text-center">
-                  ពាក្យសម្ងាត់ Auto
-                </th>
-                <th className="py-3 px-3 border border-amber-500/40 text-center">
-                  បាកូដសម្គាល់ (Barcode)
-                </th>
-                <th className="py-3 px-3 border border-amber-500/40 text-center">
-                  សកម្មភាព & កាតស្កេន
-                </th>
+                <th className="py-3 px-3 border border-amber-500/40 text-center">កូដសម្ងាត់</th>
+                <th className="py-3 px-3 border border-amber-500/40 text-center">បាកូដ</th>
+                <th className="py-3 px-3 border border-amber-500/40 text-center">សកម្មភាព</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -1762,7 +1690,7 @@ export function AdminUserPasswordDashboard() {
                     key={st.studentCode}
                     className="bg-white dark:bg-[#162033] hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                   >
-                    <td className="py-2 px-2.5 border border-slate-200/70 dark:border-slate-800 text-center font-black">
+                    <td className="py-2 px-2.5 border border-slate-200/70 dark:border-slate-800 text-center">
                       {idx + 1}
                     </td>
                     <td className="py-2 px-2.5 border border-slate-200/70 dark:border-slate-800 text-center">
@@ -1772,8 +1700,7 @@ export function AdminUserPasswordDashboard() {
                           setUploadingForCode(st.studentCode);
                           rowAvatarInputRef.current?.click();
                         }}
-                        className="relative w-10 h-10 rounded-full overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-[#0f172a] mx-auto flex items-center justify-center group"
-                        title="ចុចប្តូររូបភាពនិស្សិត"
+                        className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-[#0f172a] mx-auto flex items-center justify-center group"
                       >
                         {st.avatarDataUrl ? (
                           <img
@@ -1782,7 +1709,7 @@ export function AdminUserPasswordDashboard() {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <span className="text-xs font-black text-amber-500">
+                          <span className="text-xs text-amber-500">
                             {st.fullNameKm.charAt(0)}
                           </span>
                         )}
@@ -1791,7 +1718,7 @@ export function AdminUserPasswordDashboard() {
                         </span>
                       </button>
                     </td>
-                    <td className="py-2 px-3 border border-slate-200/70 dark:border-slate-800 font-black text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                    <td className="py-2 px-3 border border-slate-200/70 dark:border-slate-800 text-blue-600 dark:text-blue-400 whitespace-nowrap">
                       {st.studentCode}
                     </td>
                     <td className="py-2 px-2 border border-slate-200/70 dark:border-slate-800">
@@ -1803,7 +1730,7 @@ export function AdminUserPasswordDashboard() {
                             lastNameKm: e.target.value
                           })
                         }
-                        className="w-24 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-black text-slate-900 dark:text-white"
+                        className="w-24 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                       />
                     </td>
                     <td className="py-2 px-2 border border-slate-200/70 dark:border-slate-800">
@@ -1815,7 +1742,7 @@ export function AdminUserPasswordDashboard() {
                             firstNameKm: e.target.value
                           })
                         }
-                        className="w-28 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-black text-slate-900 dark:text-white"
+                        className="w-28 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                       />
                     </td>
                     <td className="py-2 px-2 border border-slate-200/70 dark:border-slate-800 text-center">
@@ -1826,7 +1753,7 @@ export function AdminUserPasswordDashboard() {
                             userTypeKm: e.target.value as StudentUserCategory
                           })
                         }
-                        className="h-8 rounded-lg px-2 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                        className="h-8 rounded-lg px-2 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                       >
                         <option value="សិស្ស">សិស្ស</option>
                         <option value="និស្សិត">និស្សិត</option>
@@ -1842,12 +1769,12 @@ export function AdminUserPasswordDashboard() {
                             phoneNumber: e.target.value
                           })
                         }
-                        className="w-28 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                        className="w-28 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                       />
                     </td>
                     <td className="py-2 px-2.5 border border-slate-200/70 dark:border-slate-800 text-center whitespace-nowrap">
                       <div className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-[#0f172a] px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-700">
-                        <span className="font-mono text-[11px] font-black tracking-wider text-slate-700 dark:text-amber-400">
+                        <span className="font-mono text-[11px] tracking-wider text-slate-700 dark:text-amber-400">
                           {isRevealed ? st.secretCode : 'BP-••••-••••'}
                         </span>
                         <button
@@ -1878,8 +1805,7 @@ export function AdminUserPasswordDashboard() {
                         <button
                           type="button"
                           onClick={() => handleAutoEncryptNewCode(st.studentCode)}
-                          className="px-2 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[10px] font-extrabold flex items-center gap-1"
-                          title="បំប្លែងកូដថ្មី"
+                          className="px-2 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[10px] flex items-center gap-1"
                         >
                           <RefreshCw className="h-3 w-3" />
                           <span>ប្តូរកូដ</span>
@@ -1888,10 +1814,10 @@ export function AdminUserPasswordDashboard() {
                         <button
                           type="button"
                           onClick={() => setSelectedCardStudent(st)}
-                          className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-extrabold flex items-center gap-1 shadow-xs"
+                          className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] flex items-center gap-1 shadow-xs"
                         >
                           <QrCode className="h-3.5 w-3.5" />
-                          <span>កាតស្កេន</span>
+                          <span>កាត QR</span>
                         </button>
 
                         <button
@@ -1900,7 +1826,6 @@ export function AdminUserPasswordDashboard() {
                             handleDeleteStudentProfile(st.studentCode, st.fullNameKm)
                           }
                           className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500"
-                          title="លុបឈ្មោះចេញជាអចិន្ត្រៃយ៍"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -1948,9 +1873,9 @@ export function AdminStudentSecurityModal({
         className="w-full max-w-6xl max-h-[92dvh] bg-slate-50 dark:bg-[#0b1120] border border-slate-200 dark:border-slate-700 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
       >
         <div className="p-4 bg-[#0f172a] text-white flex items-center justify-between shrink-0">
-          <span className="text-sm font-black flex items-center gap-2">
+          <span className="font-moul-kh text-xs flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-amber-400" />
-            គ្រប់គ្រងប្រវត្តិរូប លេខសម្ងាត់ User និងបោះពុម្ពបាកូដ (A4)
+            គ្រប់គ្រងលេខសម្ងាត់ User និងកាត QR
           </span>
           <button
             type="button"
@@ -1972,7 +1897,7 @@ export function StudentPersonalDashboard() {
   const navigate = useNavigate();
   const { lang, setLang } = useI18n();
   const { theme, toggleTheme } = useTheme();
-  const { user, hasRole } = useAuth();
+  const { hasRole } = useAuth();
   const isKh = lang === 'km';
   const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
 
@@ -1998,19 +1923,8 @@ export function StudentPersonalDashboard() {
     ]);
     setPaymentPayload(payData);
     setRicePayload(rData);
-    if (!user) {
-      setVerifiedProfile(null);
-    } else {
-      setVerifiedProfile(isStudentSessionVerified(secData));
-    }
+    setVerifiedProfile(isStudentSessionVerified(secData));
   };
-
-  useEffect(() => {
-    if (!user) {
-      clearVerifiedStudentSession();
-      setVerifiedProfile(null);
-    }
-  }, [user]);
 
   useEffect(() => {
     loadAllDashboardData();
@@ -2025,7 +1939,7 @@ export function StudentPersonalDashboard() {
       window.removeEventListener('rice-system-updated', loadAllDashboardData);
       window.removeEventListener('open-bipa-student-login', openLoginHandler);
     };
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     const el = heroBannerRef.current;
@@ -2091,12 +2005,10 @@ export function StudentPersonalDashboard() {
     return 'Student';
   };
 
-  const activeStudent = user && verifiedProfile ? verifiedProfile : null;
-
   const currentAvatar =
-    activeStudent?.avatarDataUrl ||
-    (activeStudent
-      ? localStorage.getItem(`bipa_avatar_${activeStudent.studentCode}`) || ''
+    verifiedProfile?.avatarDataUrl ||
+    (verifiedProfile
+      ? localStorage.getItem(`bipa_avatar_${verifiedProfile.studentCode}`) || ''
       : '');
 
   return (
@@ -2111,12 +2023,12 @@ export function StudentPersonalDashboard() {
         />
       )}
 
-      {activeStudent && scrolledCompact && (
+      {verifiedProfile && scrolledCompact && (
         <div
           onClick={() => setShowProfileDetailModal(true)}
-          className="fixed top-16 sm:top-20 left-0 right-0 z-50 max-w-xl mx-auto bg-white/95 dark:bg-[#162033]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex items-center justify-between shadow-md cursor-pointer animate-in slide-in-from-top-2 duration-150"
+          className="fixed top-16 sm:top-20 left-0 right-0 z-50 max-w-xl mx-auto bg-white/95 dark:bg-[#162033]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-2 flex items-center justify-between shadow-sm cursor-pointer animate-in slide-in-from-top-2 duration-150"
         >
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
             <button
               type="button"
               onClick={(e) => {
@@ -2125,29 +2037,24 @@ export function StudentPersonalDashboard() {
               }}
               className="p-1 text-slate-800 dark:text-white"
             >
-              <ChevronLeft className="h-6 w-6" />
+              <ChevronLeft className="h-5 w-5" />
             </button>
-            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-amber-400 bg-slate-200 shrink-0 shadow-xs">
+            <div className="w-9 h-9 rounded-full overflow-hidden border border-amber-400 bg-slate-200 shrink-0">
               {currentAvatar ? (
                 <img src={currentAvatar} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white font-black text-sm">
-                  {activeStudent.fullNameKm.charAt(0)}
+                <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-xs">
+                  {verifiedProfile.fullNameKm.charAt(0)}
                 </div>
               )}
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white truncate">
-                  {activeStudent.fullNameKm}
-                </span>
-                <Badge className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0">
-                  {activeStudent.studentCode}
-                </Badge>
-              </div>
-              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">
-                {renderTranslatedUserType(activeStudent.userTypeKm)} •{' '}
-                {activeStudent.phoneNumber}
+              <span className="font-moul-kh text-xs text-slate-900 dark:text-white truncate block">
+                {verifiedProfile.fullNameKm}
+              </span>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
+                {verifiedProfile.phoneNumber}
               </p>
             </div>
           </div>
@@ -2155,10 +2062,10 @@ export function StudentPersonalDashboard() {
         </div>
       )}
 
-      {!activeStudent ? (
+      {!verifiedProfile ? (
         <div
           ref={heroBannerRef}
-          className="relative w-full h-64 sm:h-72 bg-[#c57c14] flex flex-col justify-between p-4 sm:p-5 text-white select-none"
+          className="relative w-full h-60 sm:h-68 bg-[#c57c14] flex flex-col justify-between p-4 sm:p-5 text-white select-none"
         >
           <div className="flex items-center justify-between z-10">
             <button
@@ -2166,44 +2073,37 @@ export function StudentPersonalDashboard() {
               onClick={() => navigate('/')}
               className="p-1.5 rounded-full text-slate-950 hover:bg-black/10 transition-colors"
             >
-              <ChevronLeft className="h-6 w-6 stroke-[2.5]" />
+              <ChevronLeft className="h-5 w-5" />
             </button>
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => navigate('/admin?page=user-passwords')}
-                className="px-3 py-1 rounded-full bg-black/25 text-white text-xs font-black"
+                className="px-3 py-1 rounded-full bg-black/25 text-white text-[11px]"
               >
-                {isKh ? 'គ្រប់គ្រងកូដសិស្ស (Admin)' : 'Manage Users (Admin)'}
+                {isKh ? 'គ្រប់គ្រងកូដ (Admin)' : 'Admin Users'}
               </button>
             )}
           </div>
 
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-25">
-            <User className="w-36 h-36 text-amber-200" />
+            <User className="w-32 h-32 text-amber-200" />
           </div>
 
-          <div className="relative z-10 flex items-center gap-4 pb-1">
+          <div className="relative z-10 flex items-center gap-3.5 pb-1">
             <div
-              onClick={() => {
-                if (!user) {
-                  navigate('/signin');
-                } else {
-                  setShowLoginModal(true);
-                }
-              }}
-              className="w-20 h-20 rounded-full bg-amber-200/30 border-2 border-amber-200/40 flex items-center justify-center cursor-pointer shrink-0"
+              onClick={() => setShowLoginModal(true)}
+              className="w-18 h-18 rounded-full bg-amber-200/30 border-2 border-amber-200/40 flex items-center justify-center cursor-pointer shrink-0"
+              style={{ width: '70px', height: '70px' }}
             >
-              <User className="h-9 w-9 text-[#935907]" />
+              <User className="h-8 w-8 text-[#935907]" />
             </div>
             <div className="space-y-0.5">
-              <h1 className="text-xl sm:text-2xl font-black text-white leading-tight">
+              <h1 className="font-moul-kh text-base sm:text-lg text-white leading-tight">
                 {isKh ? 'ភ្ញៀវ' : 'Guest'}
               </h1>
-              <p className="text-xs sm:text-sm font-semibold text-white/85">
-                {isKh ? 'ភ្ញៀវ' : 'Guest User'}
-              </p>
-              <p className="text-xs font-mono tracking-wider text-white/80">
+              <p className="text-xs text-white/85">{isKh ? 'ភ្ញៀវ' : 'Guest'}</p>
+              <p className="text-[11px] font-mono tracking-wider text-white/80">
                 XXX-XXX-XXX
               </p>
             </div>
@@ -2224,7 +2124,7 @@ export function StudentPersonalDashboard() {
               />
               <img
                 src={currentAvatar}
-                alt={activeStudent.fullNameKm}
+                alt={verifiedProfile.fullNameKm}
                 style={{ objectPosition: 'center 15%' }}
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
@@ -2243,7 +2143,7 @@ export function StudentPersonalDashboard() {
               }}
               className="p-1.5 rounded-full bg-black/30 hover:bg-black/50 text-white transition-colors"
             >
-              <ChevronLeft className="h-6 w-6 stroke-[2.4]" />
+              <ChevronLeft className="h-5 w-5" />
             </button>
 
             {isAdmin && (
@@ -2253,78 +2153,65 @@ export function StudentPersonalDashboard() {
                   e.stopPropagation();
                   navigate('/admin?page=user-passwords');
                 }}
-                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-xs text-amber-300 text-[11px] font-black border border-white/15"
+                className="px-3 py-1 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-xs text-amber-300 text-[11px] border border-white/15"
               >
                 {isKh ? 'កែរូបក្នុង Admin' : 'Edit in Admin'}
               </button>
             )}
           </div>
 
-          <div className="relative z-10 flex items-center gap-4 pb-1">
-            <div className="w-20 h-20 rounded-full overflow-hidden border-[2.5px] border-white shadow-2xl bg-slate-900 shrink-0 group-hover:scale-105 transition-transform">
+          <div className="relative z-10 flex items-center gap-3.5 pb-1">
+            <div
+              className="rounded-full overflow-hidden border-2 border-white shadow-xl bg-slate-900 shrink-0 group-hover:scale-105 transition-transform"
+              style={{ width: '74px', height: '74px' }}
+            >
               {currentAvatar ? (
                 <img
                   src={currentAvatar}
-                  alt={activeStudent.fullNameKm}
+                  alt={verifiedProfile.fullNameKm}
                   className="w-full h-full object-cover object-top"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-2xl font-black">
-                  {activeStudent.fullNameKm.charAt(0)}
+                <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-xl">
+                  {verifiedProfile.fullNameKm.charAt(0)}
                 </div>
               )}
             </div>
 
             <div className="space-y-0.5 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
-              <h1 className="text-xl sm:text-2xl font-black text-white leading-tight">
-                {activeStudent.fullNameKm}
+              <h1 className="font-moul-kh text-base sm:text-lg text-white leading-tight">
+                {verifiedProfile.fullNameKm}
               </h1>
-              <p className="text-xs sm:text-sm font-bold text-white/95">
-                {renderTranslatedUserType(activeStudent.userTypeKm)}
+              <p className="text-xs text-white/95">
+                {renderTranslatedUserType(verifiedProfile.userTypeKm)}
               </p>
-              <p className="text-xs sm:text-sm font-semibold text-white/95 tracking-wide">
-                {activeStudent.phoneNumber}
+              <p className="text-xs text-white/95 tracking-wide">
+                {verifiedProfile.phoneNumber}
               </p>
             </div>
           </div>
         </div>
       )}
 
-      <div className="px-4 sm:px-5 pt-5 space-y-5">
-        <div className="space-y-2.5">
-          <h2 className="text-sm sm:text-base font-bold text-slate-700 dark:text-slate-300 px-1">
+      <div className="px-4 sm:px-5 pt-4 space-y-4">
+        <div className="space-y-2">
+          <h2 className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 px-1">
             {isKh ? 'ប្រវត្តិរូប' : 'Profile'}
           </h2>
 
-          {!activeStudent ? (
-            <div className="bg-white dark:bg-[#162033] rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-2xs text-center space-y-3.5">
-              <p className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">
-                {!user
-                  ? isKh
-                    ? 'សូមចូលគណនីប្រព័ន្ធ (Login)'
-                    : 'Please sign in to your account '
-                  : isKh
-                  ? 'អ្នកមិនទាន់បានស្កេនកាត QR ឬបញ្ចូលកូដសម្ងាត់សិស្សនៅឡើយទេ'
-                  : 'You have not scanned your student QR card yet'}
+          {!verifiedProfile ? (
+            <div className="bg-white dark:bg-[#162033] rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-2xs text-center space-y-3">
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                {isKh
+                  ? 'អ្នកមិនទាន់បានចូលគណនី (login) នៅឡើយទេ'
+                  : 'You are not logged in yet'}
               </p>
               <button
                 type="button"
-                onClick={() => {
-                  if (!user) {
-                    navigate('/signin');
-                  } else {
-                    setShowLoginModal(true);
-                  }
-                }}
-                className="px-6 py-2 rounded-full border border-[#d97706] text-[#d97706] dark:text-amber-400 hover:bg-amber-500/10 text-xs sm:text-sm font-bold transition-all active:scale-95"
+                onClick={() => setShowLoginModal(true)}
+                className="px-5 py-1.5 rounded-full border border-[#d97706] text-[#d97706] dark:text-amber-400 hover:bg-amber-500/10 text-xs transition-all active:scale-95"
               >
-                {!user
-                  ? isKh
-                    ? 'ទៅកាន់ផ្ទាំង ចូលគណនី App'
-                    : 'Go to App Sign In'
-                  : isKh
-                  ? 'ស្កេនកាត QR / បញ្ចូលកូដសិស្ស'
-                  : 'Scan QR / Student Login'}
+                {isKh ? 'ទៅកាន់ផ្ទាំង ចូលគណនី' : 'Go to Login'}
               </button>
             </div>
           ) : (
@@ -2333,116 +2220,116 @@ export function StudentPersonalDashboard() {
                 onClick={() => setShowProfileDetailModal(true)}
                 className="bg-white dark:bg-[#162033] rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden cursor-pointer hover:border-amber-500/50 transition-colors"
               >
-                <div className="p-3.5 sm:p-4 flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                    <Contact className="h-5 w-5" />
+                <div className="p-3 sm:p-3.5 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <Contact className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-semibold text-slate-400">
+                    <p className="text-[10px] text-slate-400">
                       {isKh ? 'នាមត្រកូល' : 'Last Name'}
                     </p>
-                    <p className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                      {activeStudent.lastNameKm ||
-                        splitKhmerFullName(activeStudent.fullNameKm).lastName}
+                    <p className="text-xs sm:text-sm text-slate-900 dark:text-white">
+                      {verifiedProfile.lastNameKm ||
+                        splitKhmerFullName(verifiedProfile.fullNameKm).lastName}
                     </p>
                   </div>
                 </div>
 
-                <div className="p-3.5 sm:p-4 flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                    <Contact className="h-5 w-5" />
+                <div className="p-3 sm:p-3.5 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <Contact className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-semibold text-slate-400">
+                    <p className="text-[10px] text-slate-400">
                       {isKh ? 'នាមខ្លួន' : 'First Name'}
                     </p>
-                    <p className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                      {activeStudent.firstNameKm ||
-                        splitKhmerFullName(activeStudent.fullNameKm).firstName}
+                    <p className="text-xs sm:text-sm text-slate-900 dark:text-white">
+                      {verifiedProfile.firstNameKm ||
+                        splitKhmerFullName(verifiedProfile.fullNameKm).firstName}
                     </p>
                   </div>
                 </div>
 
-                <div className="p-3.5 sm:p-4 flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                    <User className="h-5 w-5" />
+                <div className="p-3 sm:p-3.5 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <User className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-semibold text-slate-400">
+                    <p className="text-[10px] text-slate-400">
                       {isKh ? 'ប្រភេទ' : 'Category'}
                     </p>
-                    <p className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                      {renderTranslatedUserType(activeStudent.userTypeKm)}
+                    <p className="text-xs sm:text-sm text-slate-900 dark:text-white">
+                      {renderTranslatedUserType(verifiedProfile.userTypeKm)}
                     </p>
                   </div>
                 </div>
 
-                <div className="p-3.5 sm:p-4 flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                    <Phone className="h-5 w-5" />
+                <div className="p-3 sm:p-3.5 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <Phone className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-semibold text-slate-400">
+                    <p className="text-[10px] text-slate-400">
                       {isKh ? 'លេខទូរស័ព្ទ' : 'Phone Number'}
                     </p>
-                    <p className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                      {activeStudent.phoneNumber}
+                    <p className="text-xs sm:text-sm text-slate-900 dark:text-white">
+                      {verifiedProfile.phoneNumber}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
                 <div
                   onClick={() => navigate('/dashboard/payments')}
-                  className="bg-white dark:bg-[#162033] rounded-2xl p-3.5 border border-slate-200/80 dark:border-slate-800 shadow-2xs cursor-pointer hover:border-blue-500 transition-all space-y-1.5"
+                  className="bg-white dark:bg-[#162033] rounded-2xl p-3 border border-slate-200/80 dark:border-slate-800 shadow-2xs cursor-pointer hover:border-blue-500 transition-all space-y-1"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="w-8 h-8 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center">
-                      <DollarSign className="h-4 w-4" />
+                    <div className="w-7 h-7 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center">
+                      <DollarSign className="h-3.5 w-3.5" />
                     </div>
-                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                    <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
                   </div>
-                  <p className="text-xs font-black text-slate-900 dark:text-white">
+                  <p className="text-xs text-slate-900 dark:text-white">
                     {isKh ? 'ការបង់ប្រាក់ប្រចាំខែ' : 'Monthly Payment'}
                   </p>
-                  <p className="text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400">
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
                     {isKh
                       ? `បង់រួច ${myPaySummary.paidCount} ខែ (${formatRiel(myPaySummary.paidRiel)})`
-                      : `Paid ${myPaySummary.paidCount} mo (${formatRiel(myPaySummary.paidRiel)})`}
+                      : `Paid ${myPaySummary.paidCount} mo`}
                   </p>
                   {myPaySummary.owedCount > 0 && (
-                    <p className="text-[10px] font-bold text-rose-500">
+                    <p className="text-[10px] text-rose-500">
                       {isKh
-                        ? `ជំពាក់ ${myPaySummary.owedCount} ខែ (${formatRiel(myPaySummary.owedRiel)})`
-                        : `Owed ${myPaySummary.owedCount} mo (${formatRiel(myPaySummary.owedRiel)})`}
+                        ? `ជំពាក់ ${myPaySummary.owedCount} ខែ`
+                        : `Owed ${myPaySummary.owedCount} mo`}
                     </p>
                   )}
                 </div>
 
                 <div
                   onClick={() => navigate('/?view=rice')}
-                  className="bg-white dark:bg-[#162033] rounded-2xl p-3.5 border border-slate-200/80 dark:border-slate-800 shadow-2xs cursor-pointer hover:border-orange-500 transition-all space-y-1.5"
+                  className="bg-white dark:bg-[#162033] rounded-2xl p-3 border border-slate-200/80 dark:border-slate-800 shadow-2xs cursor-pointer hover:border-orange-500 transition-all space-y-1"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="w-8 h-8 rounded-full bg-orange-500/15 text-orange-500 flex items-center justify-center">
-                      <Package className="h-4 w-4" />
+                    <div className="w-7 h-7 rounded-full bg-orange-500/15 text-orange-500 flex items-center justify-center">
+                      <Package className="h-3.5 w-3.5" />
                     </div>
-                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                    <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
                   </div>
-                  <p className="text-xs font-black text-slate-900 dark:text-white">
+                  <p className="text-xs text-slate-900 dark:text-white">
                     {isKh ? 'ការរួមចំណែកអង្ករ' : 'Rice Contribution'}
                   </p>
-                  <p className="text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400">
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
                     {isKh
                       ? `បង់រួច ${myRiceSummary.paidCount} ខែ (${formatKg(myRiceSummary.paidKg)})`
-                      : `Paid ${myRiceSummary.paidCount} mo (${myRiceSummary.paidKg} kg)`}
+                      : `Paid ${myRiceSummary.paidCount} mo`}
                   </p>
                   {myRiceSummary.owedCount > 0 && (
-                    <p className="text-[10px] font-bold text-rose-500">
+                    <p className="text-[10px] text-rose-500">
                       {isKh
-                        ? `ជំពាក់ ${myRiceSummary.owedCount} ខែ (${formatKg(myRiceSummary.owedKg)})`
-                        : `Owed ${myRiceSummary.owedCount} mo (${myRiceSummary.owedKg} kg)`}
+                        ? `ជំពាក់ ${myRiceSummary.owedCount} ខែ`
+                        : `Owed ${myRiceSummary.owedCount} mo`}
                     </p>
                   )}
                 </div>
@@ -2451,22 +2338,22 @@ export function StudentPersonalDashboard() {
           )}
         </div>
 
-        <div className="space-y-2.5">
-          <h2 className="text-sm sm:text-base font-bold text-slate-700 dark:text-slate-300 px-1">
+        <div className="space-y-2">
+          <h2 className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 px-1">
             {isKh ? 'ការកំណត់កម្មវិធី' : 'App Settings'}
           </h2>
 
           <div className="bg-white dark:bg-[#162033] rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
-            <div className="p-3.5 sm:p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-full bg-[#f59e0b] text-white flex items-center justify-center shrink-0">
-                  <Sun className="h-5 w-5" />
+            <div className="p-3 sm:p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-[#f59e0b] text-white flex items-center justify-center shrink-0">
+                  <Sun className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                  <p className="text-xs text-slate-900 dark:text-white">
                     {isKh ? 'រូបរាង' : 'Appearance'}
                   </p>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[10px] text-slate-400">
                     {theme === 'light'
                       ? isKh
                         ? 'ភ្លឺ'
@@ -2482,42 +2369,42 @@ export function StudentPersonalDashboard() {
                 type="button"
                 onClick={toggleTheme}
                 className={cn(
-                  'w-13 h-7 rounded-full p-1 transition-colors flex items-center',
+                  'w-12 h-6 rounded-full p-0.5 transition-colors flex items-center',
                   theme === 'dark'
                     ? 'bg-amber-500 justify-end'
                     : 'bg-slate-200 dark:bg-slate-700 justify-start'
                 )}
               >
-                <span className="w-5 h-5 rounded-full bg-white shadow-md block" />
+                <span className="w-5 h-5 rounded-full bg-white shadow block" />
               </button>
             </div>
 
-            <div className="p-3.5 sm:p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-full bg-[#2563eb] text-white flex items-center justify-center shrink-0">
-                  <Globe className="h-5 w-5" />
+            <div className="p-3 sm:p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-[#2563eb] text-white flex items-center justify-center shrink-0">
+                  <Globe className="h-4 w-4" />
                 </div>
-                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                <span className="text-xs text-slate-900 dark:text-white">
                   {isKh ? 'ភាសា' : 'Language'}
                 </span>
               </div>
 
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3.5">
                 <button
                   type="button"
                   onClick={() => setLang('km')}
-                  className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200"
+                  className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200"
                 >
                   <span
                     className={cn(
-                      'w-5 h-5 rounded-full flex items-center justify-center border',
+                      'w-4 h-4 rounded-full flex items-center justify-center border',
                       lang === 'km'
                         ? 'border-[#f59e0b] bg-[#f59e0b] text-white'
                         : 'border-slate-300 dark:border-slate-600'
                     )}
                   >
                     {lang === 'km' && (
-                      <CheckCircle2 className="h-4 w-4 fill-[#f59e0b] text-white" />
+                      <CheckCircle2 className="h-3.5 w-3.5 fill-[#f59e0b] text-white" />
                     )}
                   </span>
                   <span>ខ្មែរ</span>
@@ -2526,18 +2413,18 @@ export function StudentPersonalDashboard() {
                 <button
                   type="button"
                   onClick={() => setLang('en')}
-                  className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200"
+                  className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200"
                 >
                   <span
                     className={cn(
-                      'w-5 h-5 rounded-full flex items-center justify-center border',
+                      'w-4 h-4 rounded-full flex items-center justify-center border',
                       lang === 'en'
                         ? 'border-[#f59e0b] bg-[#f59e0b] text-white'
                         : 'border-slate-300 dark:border-slate-600'
                     )}
                   >
                     {lang === 'en' && (
-                      <CheckCircle2 className="h-4 w-4 fill-[#f59e0b] text-white" />
+                      <CheckCircle2 className="h-3.5 w-3.5 fill-[#f59e0b] text-white" />
                     )}
                   </span>
                   <span>{isKh ? 'អង់គ្លេស' : 'English'}</span>
@@ -2547,8 +2434,8 @@ export function StudentPersonalDashboard() {
           </div>
         </div>
 
-        <div className="space-y-2.5">
-          <h2 className="text-sm sm:text-base font-bold text-slate-700 dark:text-slate-300 px-1">
+        <div className="space-y-2">
+          <h2 className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 px-1">
             {isKh ? 'ព័ត៌មាន' : 'Information'}
           </h2>
 
@@ -2556,13 +2443,13 @@ export function StudentPersonalDashboard() {
             <button
               type="button"
               onClick={() => navigate('/contact')}
-              className="w-full p-3.5 sm:p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+              className="w-full p-3 sm:p-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
             >
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-full bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
-                  <Headphones className="h-5 w-5" />
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+                  <Headphones className="h-4 w-4" />
                 </div>
-                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                <span className="text-xs text-slate-900 dark:text-white">
                   {isKh ? 'ទាក់ទងមកយើង' : 'Contact Us'}
                 </span>
               </div>
@@ -2572,13 +2459,13 @@ export function StudentPersonalDashboard() {
             <button
               type="button"
               onClick={() => navigate('/about')}
-              className="w-full p-3.5 sm:p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+              className="w-full p-3 sm:p-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
             >
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                  <ShieldCheck className="h-5 w-5" />
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                  <ShieldCheck className="h-4 w-4" />
                 </div>
-                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                <span className="text-xs text-slate-900 dark:text-white">
                   {isKh ? 'គោលការណ៍ឯកជនភាព' : 'Privacy Policy'}
                 </span>
               </div>
@@ -2588,36 +2475,34 @@ export function StudentPersonalDashboard() {
             <button
               type="button"
               onClick={() => navigate('/residence-info')}
-              className="w-full p-3.5 sm:p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+              className="w-full p-3 sm:p-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
             >
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                  <FileText className="h-5 w-5" />
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <FileText className="h-4 w-4" />
                 </div>
-                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                <span className="text-xs text-slate-900 dark:text-white">
                   {isKh ? 'លក្ខខណ្ឌប្រើប្រាស់' : 'Terms of Use'}
                 </span>
               </div>
               <ChevronRight className="h-4 w-4 text-slate-400" />
             </button>
 
-            <div className="p-3.5 sm:p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                  <Info className="h-5 w-5" />
+            <div className="p-3 sm:p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <Info className="h-4 w-4" />
                 </div>
-                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                <span className="text-xs text-slate-900 dark:text-white">
                   {isKh ? 'កំណែ' : 'Version'}
                 </span>
               </div>
-              <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400">
-                2.0.6
-              </span>
+              <span className="text-xs text-amber-600 dark:text-amber-400">2.0.6</span>
             </div>
           </div>
         </div>
 
-        {activeStudent && (
+        {verifiedProfile && (
           <div className="pt-1">
             <button
               type="button"
@@ -2625,13 +2510,13 @@ export function StudentPersonalDashboard() {
                 clearVerifiedStudentSession();
                 setVerifiedProfile(null);
               }}
-              className="w-full bg-white dark:bg-[#162033] rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-between hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+              className="w-full bg-white dark:bg-[#162033] rounded-2xl p-3 sm:p-3.5 border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-between hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
             >
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-full bg-rose-500/10 text-rose-600 flex items-center justify-center">
-                  <LogOut className="h-5 w-5" />
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-rose-500/10 text-rose-600 flex items-center justify-center">
+                  <LogOut className="h-4 w-4" />
                 </div>
-                <span className="text-xs sm:text-sm font-black text-rose-600">
+                <span className="text-xs text-rose-600">
                   {isKh ? 'ចាកចេញ' : 'Sign Out'}
                 </span>
               </div>
@@ -2641,88 +2526,88 @@ export function StudentPersonalDashboard() {
         )}
       </div>
 
-      {activeStudent && showProfileDetailModal && (
+      {verifiedProfile && showProfileDetailModal && (
         <div
           onClick={() => setShowProfileDetailModal(false)}
           className="fixed inset-0 z-[240] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 font-khmer animate-in fade-in duration-200"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white dark:bg-[#162033] text-slate-900 dark:text-white rounded-3xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-200"
+            className="w-full max-w-sm bg-white dark:bg-[#162033] text-slate-900 dark:text-white rounded-3xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-200"
           >
-            <div className="relative w-full h-80 bg-slate-950 flex items-center justify-center overflow-hidden">
+            <div className="relative w-full h-72 bg-slate-950 flex items-center justify-center overflow-hidden">
               {currentAvatar ? (
                 <img
                   src={currentAvatar}
-                  alt={activeStudent.fullNameKm}
+                  alt={verifiedProfile.fullNameKm}
                   className="w-full h-full object-contain"
                 />
               ) : (
-                <div className="w-28 h-28 rounded-full bg-amber-500 text-white font-black text-4xl flex items-center justify-center">
-                  {activeStudent.fullNameKm.charAt(0)}
+                <div className="w-24 h-24 rounded-full bg-amber-500 text-white text-3xl flex items-center justify-center">
+                  {verifiedProfile.fullNameKm.charAt(0)}
                 </div>
               )}
               <button
                 type="button"
                 onClick={() => setShowProfileDetailModal(false)}
-                className="absolute top-3.5 right-3.5 w-9 h-9 rounded-full bg-black/50 hover:bg-black/75 text-white flex items-center justify-center"
+                className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 hover:bg-black/75 text-white flex items-center justify-center"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div className="p-4 space-y-3.5">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
                 <div>
-                  <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                    {activeStudent.fullNameKm}
+                  <h3 className="font-moul-kh text-sm text-slate-900 dark:text-white">
+                    {verifiedProfile.fullNameKm}
                   </h3>
-                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                    {renderTranslatedUserType(activeStudent.userTypeKm)} •{' '}
-                    {activeStudent.majorKm}
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
+                    {verifiedProfile.majorKm}
                   </p>
                 </div>
-                <Badge className="bg-amber-400 text-slate-950 font-black text-xs px-3 py-1">
-                  {activeStudent.studentCode}
+                <Badge className="bg-amber-400 text-slate-950 text-[11px] px-2.5 py-0.5">
+                  {verifiedProfile.studentCode}
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
-                  <span className="text-slate-400 block mb-0.5">
+              <div className="grid grid-cols-2 gap-2.5 text-xs">
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">
                     {isKh ? 'នាមត្រកូល' : 'Last Name'}
                   </span>
-                  <span className="font-black text-sm text-slate-900 dark:text-white">
-                    {activeStudent.lastNameKm ||
-                      splitKhmerFullName(activeStudent.fullNameKm).lastName}
+                  <span className="text-xs text-slate-900 dark:text-white">
+                    {verifiedProfile.lastNameKm ||
+                      splitKhmerFullName(verifiedProfile.fullNameKm).lastName}
                   </span>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
-                  <span className="text-slate-400 block mb-0.5">
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">
                     {isKh ? 'នាមខ្លួន' : 'First Name'}
                   </span>
-                  <span className="font-black text-sm text-slate-900 dark:text-white">
-                    {activeStudent.firstNameKm ||
-                      splitKhmerFullName(activeStudent.fullNameKm).firstName}
+                  <span className="text-xs text-slate-900 dark:text-white">
+                    {verifiedProfile.firstNameKm ||
+                      splitKhmerFullName(verifiedProfile.fullNameKm).firstName}
                   </span>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
-                  <span className="text-slate-400 block mb-0.5">
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">
                     {isKh ? 'ប្រភេទ' : 'Category'}
                   </span>
-                  <span className="font-black text-sm text-slate-900 dark:text-white">
-                    {renderTranslatedUserType(activeStudent.userTypeKm)}
+                  <span className="text-xs text-slate-900 dark:text-white">
+                    {renderTranslatedUserType(verifiedProfile.userTypeKm)}
                   </span>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
-                  <span className="text-slate-400 block mb-0.5">
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#0f172a] border border-slate-200/70 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">
                     {isKh ? 'លេខទូរស័ព្ទ' : 'Phone Number'}
                   </span>
-                  <span className="font-black text-sm text-blue-600 dark:text-amber-400">
-                    {activeStudent.phoneNumber}
+                  <span className="text-xs text-blue-600 dark:text-amber-400">
+                    {verifiedProfile.phoneNumber}
                   </span>
                 </div>
               </div>
@@ -2730,7 +2615,7 @@ export function StudentPersonalDashboard() {
               <Button
                 type="button"
                 onClick={() => setShowProfileDetailModal(false)}
-                className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs h-10 rounded-xl"
+                className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs h-9 rounded-xl"
               >
                 {isKh ? 'បិទផ្ទាំង' : 'Close'}
               </Button>
