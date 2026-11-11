@@ -452,6 +452,12 @@ export function Header() {
   }, []);
 
   useEffect(() => {
+    const openScannerHandler = () => setShowScanner(true);
+    window.addEventListener('open-bipa-qr-scanner', openScannerHandler);
+    return () => window.removeEventListener('open-bipa-qr-scanner', openScannerHandler);
+  }, []);
+
+  useEffect(() => {
     const fetchSettings = async () => {
       try {
         const { data } = await supabase.from('bipa_settings').select('*').eq('id', '1').single();
@@ -494,16 +500,10 @@ export function Header() {
   }, [location.pathname, navigate]);
 
   useEffect(() => {
-    const openScannerHandler = () => setShowScanner(true);
-    window.addEventListener('open-bipa-qr-scanner', openScannerHandler);
-    return () => window.removeEventListener('open-bipa-qr-scanner', openScannerHandler);
-  }, []);
-
-  useEffect(() => {
     const cleanUpButtonsAndDuplicates = () => {
       const buttons = Array.from(document.querySelectorAll('button, a'));
       buttons.forEach((btn) => {
-        const txt = (btn.textContent || '').trim();
+        const txt = (btn.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
         if (
           txt === 'ត្រឡប់ទៅវិញ' ||
           txt === '← ត្រឡប់ទៅវិញ' ||
@@ -521,10 +521,113 @@ export function Header() {
           el.style.display = 'none';
         });
       }
+
+      if (location.pathname === '/attendance') {
+        const mainBtns = Array.from(document.querySelectorAll('main button')) as HTMLElement[];
+
+        for (const btn of mainBtns) {
+          if (btn.id === 'bipa-attendance-qr-cam-trigger') continue;
+          const cleanTxt = (btn.textContent || '')
+            .replace(/[\u200B-\u200D\uFEFF]/g, '')
+            .trim();
+
+          if (
+            cleanTxt === 'ផ្លាស់ប្តូរ ID' ||
+            cleanTxt === 'ភ្ជាប់ ID' ||
+            cleanTxt === 'Save ID'
+          ) {
+            const innerBox = btn.parentElement as HTMLElement | null;
+            const outerCard = innerBox?.parentElement as HTMLElement | null;
+            const targetContainer =
+              outerCard &&
+              !outerCard.querySelector('table') &&
+              !outerCard.querySelector('iframe') &&
+              !(outerCard.textContent || '').includes('BIPA Admin')
+                ? outerCard
+                : innerBox;
+
+            if (targetContainer) {
+              Array.from(targetContainer.children).forEach((child) => {
+                const el = child as HTMLElement;
+                if (!el.classList.contains('bipa-custom-qr-cam-box')) {
+                  el.style.display = 'none';
+                }
+              });
+
+              let camBox = targetContainer.querySelector(
+                '.bipa-custom-qr-cam-box'
+              ) as HTMLElement | null;
+
+              if (!camBox) {
+                camBox = document.createElement('div');
+                camBox.className =
+                  'bipa-custom-qr-cam-box flex items-center justify-between gap-3 w-full py-1';
+                camBox.innerHTML = `
+                  <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-10 h-10 rounded-xl bg-[#3b82f6]/15 border border-[#3b82f6]/30 flex items-center justify-center text-[#3b82f6] shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="5" height="5" x="3" y="3" rx="1"/>
+                        <rect width="5" height="5" x="16" y="3" rx="1"/>
+                        <rect width="5" height="5" x="3" y="16" rx="1"/>
+                        <path d="M21 16h-3a2 2 0 0 0-2 2v3"/>
+                        <path d="M21 21v.01"/>
+                        <path d="M12 7v3a2 2 0 0 1-2 2H7"/>
+                        <path d="M3 12h.01"/>
+                        <path d="M12 3h.01"/>
+                        <path d="M12 16v.01"/>
+                        <path d="M16 12h1"/>
+                        <path d="M21 12v.01"/>
+                        <path d="M12 21v-1"/>
+                      </svg>
+                    </div>
+                    <div class="min-w-0">
+                      <div class="text-xs sm:text-sm text-slate-900 dark:text-white truncate">ស្កេនកូដ QR កត់ត្រាវត្តមាន</div>
+                      <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">ចុចប៊ូតុង QR ដើម្បីបើកកាមេរ៉ាស្កេនចេញ-ចូល</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    id="bipa-attendance-qr-cam-trigger"
+                    class="bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.45)] w-11 h-11 border-0 flex items-center justify-center shrink-0 transition-transform active:scale-95 cursor-pointer"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect width="5" height="5" x="3" y="3" rx="1"/>
+                      <rect width="5" height="5" x="16" y="3" rx="1"/>
+                      <rect width="5" height="5" x="3" y="16" rx="1"/>
+                      <path d="M21 16h-3a2 2 0 0 0-2 2v3"/>
+                      <path d="M21 21v.01"/>
+                      <path d="M12 7v3a2 2 0 0 1-2 2H7"/>
+                      <path d="M3 12h.01"/>
+                      <path d="M12 3h.01"/>
+                      <path d="M12 16v.01"/>
+                      <path d="M16 12h1"/>
+                      <path d="M21 12v.01"/>
+                      <path d="M12 21v-1"/>
+                    </svg>
+                  </button>
+                `;
+                targetContainer.appendChild(camBox);
+              }
+
+              const triggerBtn = camBox.querySelector(
+                '#bipa-attendance-qr-cam-trigger'
+              ) as HTMLElement | null;
+              if (triggerBtn) {
+                triggerBtn.onclick = (ev) => {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  setShowScanner(true);
+                };
+              }
+            }
+            break;
+          }
+        }
+      }
     };
 
     cleanUpButtonsAndDuplicates();
-    const timer = setInterval(cleanUpButtonsAndDuplicates, 400);
+    const timer = setInterval(cleanUpButtonsAndDuplicates, 350);
     return () => clearInterval(timer);
   }, [location.pathname, location.search]);
 
@@ -857,7 +960,7 @@ export function Header() {
           height: auto !important;
           overflow-x: hidden !important;
           overflow-y: auto !important;
-          touch-action: pan-y !important;
+          touch-action: pan-x pan-y !important;
           -webkit-overflow-scrolling: touch !important;
           -webkit-tap-highlight-color: transparent;
         }
@@ -870,7 +973,7 @@ export function Header() {
           height: auto !important;
           overflow-x: clip !important;
           overflow-y: visible !important;
-          touch-action: pan-y !important;
+          touch-action: pan-x pan-y !important;
           -webkit-overflow-scrolling: touch !important;
         }
         #root {
@@ -884,7 +987,7 @@ export function Header() {
           padding: 0 !important;
           overflow-x: clip !important;
           overflow-y: visible !important;
-          touch-action: pan-y !important;
+          touch-action: pan-x pan-y !important;
         }
         main {
           font-family: 'Siemreap', sans-serif !important;
@@ -897,16 +1000,17 @@ export function Header() {
           padding: 0 !important;
           overflow-x: clip !important;
           overflow-y: visible !important;
-          touch-action: pan-y !important;
-        }
-        main *,
-        .bipa-single-overlay-box,
-        .bipa-single-overlay-box * {
-          touch-action: pan-y !important;
+          touch-action: pan-x pan-y !important;
         }
         .overflow-x-hidden:not(.bipa-single-overlay-box) {
           overflow-x: clip !important;
           overflow-y: visible !important;
+        }
+        .overflow-x-auto,
+        .overflow-auto,
+        div:has(> table) {
+          -webkit-overflow-scrolling: touch !important;
+          touch-action: pan-x pan-y !important;
         }
         .font-khmer {
           font-family: 'Siemreap', sans-serif !important;
@@ -928,7 +1032,7 @@ export function Header() {
           overflow-x: hidden !important;
           -webkit-overflow-scrolling: touch !important;
           overscroll-behavior-y: auto !important;
-          touch-action: pan-y !important;
+          touch-action: pan-x pan-y !important;
         }
         .bipa-glass-overlay:not(.bipa-single-overlay-box),
         div.fixed.z-\\[90\\]:not(.bipa-single-overlay-box),
@@ -1548,7 +1652,7 @@ export function Header() {
       {isDashboardOverlay && (
         <div
           id="bipa-dashboard-scroll-container"
-          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch' }}
           className="bipa-single-overlay-box fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto scrollbar-thin"
         >
           <StudentPersonalDashboard />
@@ -1558,7 +1662,7 @@ export function Header() {
       {isDutiesOverlay && (
         <div
           id="bipa-active-single-view"
-          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch' }}
           className={cn(
             'bipa-single-overlay-box fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
@@ -1577,7 +1681,7 @@ export function Header() {
       {isPaymentsOverlay && (
         <div
           id="bipa-active-single-view"
-          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch' }}
           className={cn(
             'bipa-single-overlay-box fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
@@ -1596,7 +1700,7 @@ export function Header() {
       {isRiceOverlay && (
         <div
           id="bipa-active-single-view"
-          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch' }}
           className={cn(
             'bipa-single-overlay-box fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
@@ -1615,7 +1719,7 @@ export function Header() {
       {isLeaveOverlay && (
         <div
           id="bipa-active-single-view"
-          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch' }}
           className={cn(
             'bipa-single-overlay-box fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
