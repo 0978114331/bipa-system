@@ -631,11 +631,17 @@ export function StudentVerificationGate({
   const [phoneOrIdInput, setPhoneOrIdInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<StudentUserCategory>('សិស្ស');
+  const [selectedRole, setSelectedRole] = useState<StudentUserCategory>('និស្សិត');
   const [errorMsg, setErrorMsg] = useState('');
   const [scanningCamera, setScanningCamera] = useState(false);
 
+  const [camStage, setCamStage] = useState<
+    'scanning' | 'processing' | 'success' | 'unlinked' | 'error'
+  >('scanning');
+  const [camShortText, setCamShortText] = useState('');
+
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scanLockRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -650,29 +656,125 @@ export function StudentVerificationGate({
       });
   }, []);
 
-  const verifyByQrOrCredentials = (rawScannedOrPass: string, rawPhoneOrId?: string): boolean => {
-    const parsedQr = parseStudentQrToken(rawScannedOrPass);
-    const profilesList = Object.values(securityPayload.profiles);
+  const evaluateQrTokenQuick = (
+    rawText: string,
+    currentPayload: StudentSecurityPayload
+  ): {
+    status: 'success' | 'unlinked' | 'error';
+    shortTitle: string;
+    profile?: StudentSecurityProfile;
+  } => {
+    const cleaned = String(rawText || '').trim();
+    if (!cleaned) {
+      return {
+        status: 'error',
+        shortTitle: isKh ? 'មិនស្គាល់កូដ' : 'Invalid QR'
+      };
+    }
+
+    const profilesList = Object.values(currentPayload.profiles || {});
+    const parsedQr = parseStudentQrToken(cleaned);
 
     if (parsedQr) {
-      const matched = profilesList.find(
-        (p) =>
-          normalizeCode(p.studentCode) === parsedQr.studentCode &&
-          p.secretCode.trim().toUpperCase() === parsedQr.secretCode
+      const byCode = profilesList.find(
+        (p) => normalizeCode(p.studentCode) === parsedQr.studentCode
       );
-      if (matched) {
-        setErrorMsg('');
-        setVerifiedStudentSession(matched);
-        if (onVerified) onVerified(matched);
-        return true;
+      if (!byCode) {
+        return {
+          status: 'unlinked',
+          shortTitle: isKh ? 'មិនទាន់ភ្ជាប់ ID' : 'ID Not Linked'
+        };
       }
-      setErrorMsg(isKh ? 'កាត QR មិនត្រឹមត្រូវទេ!' : 'Invalid QR card!');
-      return false;
+      if (byCode.secretCode.trim().toUpperCase() === parsedQr.secretCode) {
+        return {
+          status: 'success',
+          shortTitle: isKh ? 'ស្កេនជោគជ័យ' : 'Scan Success',
+          profile: byCode
+        };
+      }
+      return {
+        status: 'error',
+        shortTitle: isKh ? 'កាតមិនត្រឹមត្រូវ' : 'Invalid Card'
+      };
+    }
+
+    const upper = cleaned.toUpperCase();
+    const isStationQr =
+      upper.startsWith('BIPA-STATION') ||
+      upper === 'BIPA-QR' ||
+      upper === 'BIPA-ATTENDANCE' ||
+      cleaned.startsWith('http');
+
+    if (isStationQr) {
+      const linkedCode = normalizeCode(localStorage.getItem('bipa_linked_student_id') || '');
+      if (!linkedCode) {
+        return {
+          status: 'unlinked',
+          shortTitle: isKh ? 'មិនទាន់ភ្ជាប់ ID' : 'ID Not Linked'
+        };
+      }
+      const linkedProf = profilesList.find((p) => normalizeCode(p.studentCode) === linkedCode);
+      if (linkedProf) {
+        return {
+          status: 'success',
+          shortTitle: isKh ? 'ស្កេនជោគជ័យ' : 'Scan Success',
+          profile: linkedProf
+        };
+      }
+      return {
+        status: 'unlinked',
+        shortTitle: isKh ? 'មិនទាន់ភ្ជាប់ ID' : 'ID Not Linked'
+      };
+    }
+
+    const matchedBySecret = profilesList.find(
+      (p) => p.secretCode.trim().toUpperCase() === upper
+    );
+    if (matchedBySecret) {
+      return {
+        status: 'success',
+        shortTitle: isKh ? 'ស្កេនជោគជ័យ' : 'Scan Success',
+        profile: matchedBySecret
+      };
+    }
+
+    const matchedByCode = profilesList.find(
+      (p) => normalizeCode(p.studentCode) === normalizeCode(cleaned)
+    );
+    if (matchedByCode) {
+      return {
+        status: 'success',
+        shortTitle: isKh ? 'ស្កេនជោគជ័យ' : 'Scan Success',
+        profile: matchedByCode
+      };
+    }
+
+    if (/^(BIPA|PIBA|\d)/i.test(cleaned)) {
+      return {
+        status: 'unlinked',
+        shortTitle: isKh ? 'មិនទាន់ភ្ជាប់ ID' : 'ID Not Linked'
+      };
+    }
+
+    return {
+      status: 'error',
+      shortTitle: isKh ? 'កាតមិនត្រឹមត្រូវ' : 'Invalid Card'
+    };
+  };
+
+  const verifyByQrOrCredentials = (rawScannedOrPass: string, rawPhoneOrId?: string): boolean => {
+    const quickRes = evaluateQrTokenQuick(rawScannedOrPass, securityPayload);
+    if (quickRes.status === 'success' && quickRes.profile) {
+      setErrorMsg('');
+      setVerifiedStudentSession(quickRes.profile);
+      if (onVerified) onVerified(quickRes.profile);
+      return true;
     }
 
     const passClean = rawScannedOrPass.trim().toUpperCase();
     const userIdentifier = String(rawPhoneOrId || '').trim();
     const digitsOnlyPhone = userIdentifier.replace(/\D/g, '');
+    const profilesList = Object.values(securityPayload.profiles || {});
 
     if (!passClean && !userIdentifier) {
       setErrorMsg(
@@ -717,41 +819,142 @@ export function StudentVerificationGate({
 
   useEffect(() => {
     let mounted = true;
+    let nativeDetectorTimer: ReturnType<typeof setInterval> | null = null;
+
+    const handleDetectedCode = async (decodedText: string) => {
+      if (scanLockRef.current || !mounted) return;
+      scanLockRef.current = true;
+
+      if (navigator.vibrate) {
+        try {
+          navigator.vibrate(35);
+        } catch {}
+      }
+
+      setCamStage('processing');
+      setCamShortText(isKh ? 'កំពុងពិនិត្យ...' : 'Checking...');
+
+      let activePayload = securityPayload;
+      let result = evaluateQrTokenQuick(decodedText, activePayload);
+
+      if (result.status !== 'success') {
+        try {
+          activePayload = await fetchSecurityPayloadFromDb();
+          if (mounted) setSecurityPayload(activePayload);
+          result = evaluateQrTokenQuick(decodedText, activePayload);
+        } catch {}
+      }
+
+      if (!mounted) return;
+
+      if (result.status === 'success' && result.profile) {
+        setCamStage('success');
+        setCamShortText(result.shortTitle);
+        setVerifiedStudentSession(result.profile);
+
+        setTimeout(() => {
+          if (scannerRef.current?.isScanning) {
+            scannerRef.current
+              .stop()
+              .then(() => scannerRef.current?.clear())
+              .catch(() => {});
+          }
+          if (mounted) {
+            setScanningCamera(false);
+            if (onVerified) onVerified(result.profile!);
+          }
+        }, 600);
+      } else {
+        setCamStage(result.status);
+        setCamShortText(result.shortTitle);
+
+        setTimeout(() => {
+          if (!mounted) return;
+          setCamStage('scanning');
+          setCamShortText('');
+          scanLockRef.current = false;
+        }, 1400);
+      }
+    };
 
     const startQrCam = async () => {
       if (!scanningCamera) return;
-      await new Promise((r) => setTimeout(r, 180));
+      scanLockRef.current = false;
+      setCamStage('scanning');
+      setCamShortText('');
+
+      await new Promise((r) => setTimeout(r, 120));
       if (!mounted || !document.getElementById('bipa-login-qr-reader')) return;
 
       try {
         const qr = new Html5Qrcode('bipa-login-qr-reader', {
+          formatsToSupport: [0, 5, 3],
           useBarCodeDetectorIfSupported: true,
           verbose: false
         });
         scannerRef.current = qr;
-        await qr.start(
-          { facingMode: 'environment' },
-          { fps: 24, disableFlip: false },
-          (decoded) => {
-            const ok = verifyByQrOrCredentials(decoded);
-            if (ok && scannerRef.current?.isScanning) {
-              scannerRef.current
-                .stop()
-                .then(() => scannerRef.current?.clear())
-                .catch(() => {});
-              setScanningCamera(false);
-            }
-          },
-          () => {}
-        );
+
+        const fastConfig = {
+          fps: 30,
+          disableFlip: false
+        };
+
+        try {
+          await qr.start(
+            { facingMode: 'environment' },
+            fastConfig,
+            (decoded) => handleDetectedCode(decoded),
+            () => {}
+          );
+        } catch {
+          const cams = await Html5Qrcode.getCameras();
+          if (!cams || cams.length === 0) {
+            setCamStage('error');
+            setCamShortText(isKh ? 'មិនឃើញកាមេរ៉ា' : 'No Camera');
+            return;
+          }
+          const backCam =
+            cams.find(
+              (c) =>
+                c.label.toLowerCase().includes('back') ||
+                c.label.toLowerCase().includes('environment') ||
+                c.label.toLowerCase().includes('rear')
+            ) || cams[cams.length - 1];
+
+          await qr.start(
+            backCam.id,
+            fastConfig,
+            (decoded) => handleDetectedCode(decoded),
+            () => {}
+          );
+        }
+
+        const WinBarcodeDetector = (window as any).BarcodeDetector;
+        if (WinBarcodeDetector) {
+          try {
+            const detector = new WinBarcodeDetector({
+              formats: ['qr_code', 'code_128', 'code_39']
+            });
+            nativeDetectorTimer = setInterval(async () => {
+              if (scanLockRef.current || !mounted) return;
+              const videoEl = document.querySelector(
+                '#bipa-login-qr-reader video'
+              ) as HTMLVideoElement | null;
+              if (videoEl && videoEl.readyState >= 2) {
+                try {
+                  const codes = await detector.detect(videoEl);
+                  if (codes && codes.length > 0 && codes[0].rawValue) {
+                    handleDetectedCode(codes[0].rawValue);
+                  }
+                } catch {}
+              }
+            }, 90);
+          } catch {}
+        }
       } catch {
         if (mounted) {
-          setErrorMsg(
-            isKh
-              ? 'សូមអនុញ្ញាតសិទ្ធិកាមេរ៉ា ឬជ្រើសរើសរូប QR។'
-              : 'Please allow camera access or upload QR image.'
-          );
-          setScanningCamera(false);
+          setCamStage('error');
+          setCamShortText(isKh ? 'សូមបើកសិទ្ធិកាមេរ៉ា' : 'Allow Camera');
         }
       }
     };
@@ -760,25 +963,70 @@ export function StudentVerificationGate({
 
     return () => {
       mounted = false;
+      if (nativeDetectorTimer) clearInterval(nativeDetectorTimer);
       if (scannerRef.current) {
         const sc = scannerRef.current;
         if (sc.isScanning) {
           sc.stop().then(() => sc.clear()).catch(() => {});
+        } else {
+          try {
+            sc.clear();
+          } catch {}
         }
         scannerRef.current = null;
       }
     };
-  }, [scanningCamera, securityPayload]);
+  }, [scanningCamera]);
 
   const handleQrImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (scanningCamera) {
+      setCamStage('processing');
+      setCamShortText(isKh ? 'កំពុងអានរូប...' : 'Reading...');
+    }
+
     try {
       const qr = new Html5Qrcode('bipa-login-qr-hidden');
       const decoded = await qr.scanFile(file, true);
-      verifyByQrOrCredentials(decoded);
+      const activePayload = await fetchSecurityPayloadFromDb();
+      setSecurityPayload(activePayload);
+      const res = evaluateQrTokenQuick(decoded, activePayload);
+
+      if (res.status === 'success' && res.profile) {
+        if (scanningCamera) {
+          setCamStage('success');
+          setCamShortText(res.shortTitle);
+        }
+        setVerifiedStudentSession(res.profile);
+        setTimeout(() => {
+          setScanningCamera(false);
+          if (onVerified) onVerified(res.profile!);
+        }, 550);
+      } else {
+        if (scanningCamera) {
+          setCamStage(res.status);
+          setCamShortText(res.shortTitle);
+          setTimeout(() => {
+            setCamStage('scanning');
+            setCamShortText('');
+          }, 1500);
+        } else {
+          setErrorMsg(res.shortTitle);
+        }
+      }
     } catch {
-      setErrorMsg(isKh ? 'រូបភាពនេះគ្មានកូដ QR ត្រឹមត្រូវទេ។' : 'Invalid QR image.');
+      if (scanningCamera) {
+        setCamStage('error');
+        setCamShortText(isKh ? 'គ្មានកូដ QR ទេ' : 'No QR Found');
+        setTimeout(() => {
+          setCamStage('scanning');
+          setCamShortText('');
+        }, 1500);
+      } else {
+        setErrorMsg(isKh ? 'គ្មានកូដ QR ត្រឹមត្រូវទេ' : 'Invalid QR image');
+      }
     }
     e.target.value = '';
   };
@@ -791,6 +1039,41 @@ export function StudentVerificationGate({
 
   return (
     <div className="fixed inset-0 z-[210] text-white flex flex-col justify-between p-4 sm:p-6 font-khmer overflow-y-auto animate-in fade-in duration-200 select-none">
+      <style>{`
+        @keyframes bipaLoginScanLaser {
+          0% { top: 8%; }
+          50% { top: 90%; }
+          100% { top: 8%; }
+        }
+        .animate-bipa-login-laser {
+          animation: bipaLoginScanLaser 1.9s ease-in-out infinite;
+        }
+        #bipa-login-qr-reader {
+          border: none !important;
+          width: 100% !important;
+          height: 100% !important;
+          position: relative !important;
+          overflow: hidden !important;
+        }
+        #bipa-login-qr-reader video {
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+          border-radius: 1.25rem !important;
+        }
+        #bipa-login-qr-reader canvas {
+          opacity: 0 !important;
+          position: absolute !important;
+          pointer-events: none !important;
+        }
+        #bipa-login-qr-reader img,
+        #bipa-login-qr-reader__dashboard,
+        #bipa-login-qr-reader__header_message,
+        #bipa-login-qr-reader__scan_region > div {
+          display: none !important;
+        }
+      `}</style>
+
       <img
         src="https://i.ibb.co/KY0bJNW/b151bd61-2587-445b-b245-2ddaea928120.png"
         alt=""
@@ -819,7 +1102,10 @@ export function StudentVerificationGate({
 
       <div className="w-full max-w-md mx-auto my-auto py-4 space-y-5">
         <div className="flex flex-col items-center justify-center space-y-2 text-center">
-          <div className="w-22 h-22 sm:w-24 sm:h-24 rounded-full bg-white shadow-[0_0_30px_rgba(59,130,246,0.5)] border-2 border-white p-1.5 flex items-center justify-center overflow-hidden" style={{ width: '88px', height: '88px' }}>
+          <div
+            className="rounded-full bg-white shadow-[0_0_30px_rgba(59,130,246,0.5)] border-2 border-white p-1.5 flex items-center justify-center overflow-hidden"
+            style={{ width: '88px', height: '88px' }}
+          >
             <img
               src={logoUrl}
               alt="BIPA Logo"
@@ -831,16 +1117,73 @@ export function StudentVerificationGate({
           </h2>
         </div>
 
-        <div className="bg-[#091e42]/65 backdrop-blur-xl border border-white/25 rounded-3xl p-4 sm:p-5 shadow-[0_20px_50px_rgba(0,0,0,0.45)] space-y-3.5">
+        <div className="bg-[#091e42]/70 backdrop-blur-xl border border-white/20 rounded-3xl p-4 sm:p-5 shadow-[0_20px_50px_rgba(0,0,0,0.45)] space-y-3.5">
           {scanningCamera ? (
-            <div className="space-y-3 text-center">
+            <div className="space-y-3.5 text-center">
               <p className="text-xs text-sky-100">
                 {isKh ? 'ដាក់កាតឱ្យចំកណ្តាល' : 'Center your QR card'}
               </p>
-              <div className="relative w-60 h-60 mx-auto rounded-2xl overflow-hidden bg-slate-950 border-2 border-amber-400">
+
+              <div className="relative w-64 h-64 mx-auto rounded-[22px] overflow-hidden bg-[#0a0f1d] border-2 border-amber-400/90 shadow-[0_0_35px_rgba(0,0,0,0.75)] flex items-center justify-center">
                 <div id="bipa-login-qr-reader" className="w-full h-full" />
+
+                <div className="absolute top-2.5 left-2.5 w-8 h-8 border-t-[3.5px] border-l-[3.5px] border-white/90 rounded-tl-xl z-10 pointer-events-none" />
+                <div className="absolute top-2.5 right-2.5 w-8 h-8 border-t-[3.5px] border-r-[3.5px] border-white/90 rounded-tr-xl z-10 pointer-events-none" />
+                <div className="absolute bottom-2.5 left-2.5 w-8 h-8 border-b-[3.5px] border-l-[3.5px] border-white/90 rounded-bl-xl z-10 pointer-events-none" />
+                <div className="absolute bottom-2.5 right-2.5 w-8 h-8 border-b-[3.5px] border-r-[3.5px] border-white/90 rounded-br-xl z-10 pointer-events-none" />
+
+                {camStage === 'scanning' && (
+                  <div className="absolute left-4 right-4 h-0.5 bg-emerald-400 shadow-[0_0_12px_#34d399] animate-bipa-login-laser z-20 pointer-events-none" />
+                )}
+
+                {camStage !== 'scanning' && (
+                  <div className="absolute inset-0 z-30 bg-black/70 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center animate-in fade-in duration-150">
+                    {camStage === 'processing' && (
+                      <>
+                        <div className="w-11 h-11 rounded-full border-4 border-white/20 border-t-white animate-spin mb-2.5" />
+                        <span className="text-white text-xs tracking-wide">
+                          {camShortText || 'កំពុងពិនិត្យ...'}
+                        </span>
+                      </>
+                    )}
+
+                    {camStage === 'success' && (
+                      <>
+                        <div className="w-14 h-14 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg mb-2.5 animate-in zoom-in-75 duration-150">
+                          <CheckCircle2 className="h-7 w-7 text-white" />
+                        </div>
+                        <span className="text-emerald-400 text-sm font-bold tracking-wide">
+                          {camShortText || 'ស្កេនជោគជ័យ'}
+                        </span>
+                      </>
+                    )}
+
+                    {camStage === 'unlinked' && (
+                      <>
+                        <div className="w-14 h-14 rounded-full bg-amber-500 flex items-center justify-center shadow-lg mb-2.5 animate-in zoom-in-75 duration-150">
+                          <AlertCircle className="h-7 w-7 text-slate-950" />
+                        </div>
+                        <span className="text-amber-300 text-sm font-bold tracking-wide">
+                          {camShortText || 'មិនទាន់ភ្ជាប់ ID'}
+                        </span>
+                      </>
+                    )}
+
+                    {camStage === 'error' && (
+                      <>
+                        <div className="w-14 h-14 rounded-full bg-rose-600 flex items-center justify-center shadow-lg mb-2.5 animate-in zoom-in-75 duration-150">
+                          <X className="h-7 w-7 text-white" />
+                        </div>
+                        <span className="text-rose-400 text-sm font-bold tracking-wide">
+                          {camShortText || 'កាតមិនត្រឹមត្រូវ'}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center justify-center gap-2 pt-1">
+
+              <div className="flex items-center justify-center gap-2.5 pt-1">
                 <Button
                   type="button"
                   size="sm"
@@ -848,7 +1191,7 @@ export function StudentVerificationGate({
                   className="bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-xl h-9 px-3.5"
                 >
                   <ImageUp className="h-3.5 w-3.5 mr-1.5" />
-                  {isKh ? 'ជ្រើសរូប QR' : 'Upload QR'}
+                  {isKh ? 'ជ្រើសរើសរូប QR' : 'Upload QR'}
                 </Button>
                 <Button
                   type="button"
@@ -863,10 +1206,10 @@ export function StudentVerificationGate({
             </div>
           ) : (
             <div className="space-y-3.5">
-              <div className="w-full flex items-center h-11 px-2.5 rounded-xl bg-slate-950/55 border border-white/25 focus-within:border-amber-400 transition-colors overflow-hidden">
-                <div className="flex items-center gap-1 pr-2 border-r border-white/20 shrink-0 select-none">
+              <div className="relative flex items-center h-12 pl-3 pr-11 rounded-xl bg-slate-950/60 border border-white/25 focus-within:border-amber-400 transition-colors">
+                <div className="flex items-center gap-1.5 pr-2.5 border-r border-white/20 shrink-0 select-none">
                   <span className="text-xs">🇰🇭</span>
-                  <span className="text-[11px] text-sky-100">+855</span>
+                  <span className="text-xs text-sky-100">+855 ▾</span>
                 </div>
 
                 <input
@@ -874,22 +1217,21 @@ export function StudentVerificationGate({
                   value={phoneOrIdInput}
                   onChange={(e) => setPhoneOrIdInput(e.target.value)}
                   placeholder={isKh ? 'លេខទូរស័ព្ទ ឬ ID' : 'Phone or ID'}
-                  style={{ fontSize: '12px' }}
-                  className="min-w-0 w-0 flex-1 h-10 px-2.5 bg-transparent text-white placeholder:text-slate-300/75 outline-none"
+                  style={{ fontSize: '13px' }}
+                  className="min-w-0 w-full flex-1 h-10 pl-2.5 bg-transparent text-white placeholder:text-slate-300/75 outline-none"
                 />
 
                 <button
                   type="button"
                   onClick={() => setScanningCamera(true)}
-                  className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-950 text-[11px] shadow-xs active:scale-95 transition-all"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-sky-200 hover:text-white transition-colors"
                   title={isKh ? 'ស្កេនកាត QR' : 'Scan QR'}
                 >
-                  <QrCode className="h-3.5 w-3.5 shrink-0" />
-                  <span>QR</span>
+                  <QrCode className="h-5 w-5" />
                 </button>
               </div>
 
-              <div className="w-full flex items-center h-11 px-3 rounded-xl bg-slate-950/55 border border-white/25 focus-within:border-amber-400 transition-colors overflow-hidden">
+              <div className="relative flex items-center h-12 pl-3.5 pr-11 rounded-xl bg-slate-950/60 border border-white/25 focus-within:border-amber-400 transition-colors">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={passwordInput}
@@ -899,25 +1241,25 @@ export function StudentVerificationGate({
                       verifyByQrOrCredentials(passwordInput, phoneOrIdInput);
                     }
                   }}
-                  placeholder={isKh ? 'ពាក្យសម្ងាត់ ' : 'Password'}
-                  style={{ fontSize: '12px' }}
-                  className="min-w-0 w-0 flex-1 h-10 bg-transparent text-white placeholder:text-slate-300/75 outline-none"
+                  placeholder={isKh ? 'ពាក្យសម្ងាត់' : 'Password'}
+                  style={{ fontSize: '13px' }}
+                  className="min-w-0 w-full flex-1 h-10 bg-transparent text-white placeholder:text-slate-300/75 outline-none"
                 />
 
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  className="shrink-0 p-1.5 text-sky-200 hover:text-white transition-colors"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-sky-200 hover:text-white transition-colors"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
+                    <EyeOff className="h-5 w-5" />
                   ) : (
-                    <Eye className="h-4 w-4" />
+                    <Eye className="h-5 w-5" />
                   )}
                 </button>
               </div>
 
-              <div className="flex items-center justify-between pt-0.5 px-0.5 flex-wrap gap-2">
+              <div className="flex items-center justify-between pt-0.5 px-1 flex-wrap gap-2">
                 <div className="flex items-center gap-3.5">
                   {roleLabels.map((roleOption) => {
                     const active = selectedRole === roleOption.key;
@@ -952,7 +1294,7 @@ export function StudentVerificationGate({
                   className="text-[11px] text-amber-300 hover:underline flex items-center gap-1"
                 >
                   <ImageUp className="h-3.5 w-3.5" />
-                  <span>{isKh ? 'ជ្រើសរូប QR' : 'QR'}</span>
+                  <span>{isKh ? 'រូប QR' : 'QR Image'}</span>
                 </button>
               </div>
 
@@ -963,23 +1305,22 @@ export function StudentVerificationGate({
                 </div>
               )}
 
-              <div className="space-y-2 pt-1">
+              <div className="pt-1">
                 <button
                   type="button"
                   onClick={() => verifyByQrOrCredentials(passwordInput, phoneOrIdInput)}
-                  className="w-full h-11 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 text-xs sm:text-sm shadow-lg flex items-center justify-center gap-1.5 active:scale-98 transition-all"
+                  className="w-full h-11 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 text-xs sm:text-sm font-bold shadow-lg flex items-center justify-center gap-1.5 active:scale-98 transition-all"
                 >
                   <span>{isKh ? 'ចូលប្រព័ន្ធ' : 'Sign In'}</span>
                   <ArrowRight className="h-4 w-4" />
                 </button>
-
               </div>
             </div>
           )}
         </div>
       </div>
 
-      <div className="h-10" />
+      <div className="h-8" />
     </div>
   );
 }
