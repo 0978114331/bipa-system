@@ -219,28 +219,19 @@ let lastLocalRiceSaveTime = 0;
 
 export async function fetchRicePayloadFromDb(): Promise<RiceSystemPayload> {
   let current = loadCachedRicePayload();
-  if (Date.now() - lastLocalRiceSaveTime < 5000) {
+  if (Date.now() - lastLocalRiceSaveTime < 1500) {
     return current;
   }
 
-  const deletedSet = new Set(getLocalDeletedCodes().map((c) => normalizeStudentCodeInput(c)));
-  const localUpdatedAt = Number(localStorage.getItem('bipa_rice_updated_at') || '0');
-
   try {
-    const { data: setRow } = await supabase
+    const { data: setRow, error } = await supabase
       .from('bipa_settings')
       .select('name_en')
       .eq('id', 'rice_payload_v1')
       .maybeSingle();
 
-    if (setRow && setRow.name_en) {
+    if (!error && setRow && setRow.name_en) {
       const p = JSON.parse(setRow.name_en);
-      const remoteUpdatedAt = Number(p.updatedAt || 0);
-
-      if (localUpdatedAt > remoteUpdatedAt && remoteUpdatedAt > 0) {
-        return current;
-      }
-
       const rawStudents: RiceResidentStudent[] =
         Array.isArray(p.residentStudents) && p.residentStudents.length > 0
           ? p.residentStudents
@@ -252,16 +243,11 @@ export async function fetchRicePayloadFromDb(): Promise<RiceSystemPayload> {
         customColumns: Array.isArray(p.customColumns)
           ? p.customColumns
           : defaultRicePayload.customColumns,
-        residentStudents: rawStudents.filter(
-          (s) => !deletedSet.has(normalizeStudentCodeInput(s.student_code))
-        ),
+        residentStudents: rawStudents,
         recordsByYear: p.recordsByYear || {},
         notifications: Array.isArray(p.notifications) ? p.notifications : []
       };
       localStorage.setItem(RICE_STORAGE_KEY, JSON.stringify(current));
-      if (remoteUpdatedAt > 0) {
-        localStorage.setItem('bipa_rice_updated_at', String(remoteUpdatedAt));
-      }
     }
   } catch {}
 
@@ -279,7 +265,6 @@ export async function saveRicePayloadToDb(
   };
   const jsonStr = JSON.stringify(payloadWithTs);
   localStorage.setItem(RICE_STORAGE_KEY, jsonStr);
-  localStorage.setItem('bipa_rice_updated_at', String(nowTs));
 
   let syncedCloud = false;
 

@@ -332,56 +332,34 @@ export function loadCachedSecurityPayload(): StudentSecurityPayload {
 }
 
 let lastLocalSecuritySaveTime = 0;
-let securitySaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPayload> {
   let current = loadCachedSecurityPayload();
-  if (Date.now() - lastLocalSecuritySaveTime < 5000) {
+  if (Date.now() - lastLocalSecuritySaveTime < 1500) {
     return current;
   }
 
-  const localUpdatedAt = Number(localStorage.getItem('bipa_security_updated_at') || '0');
-
   try {
-    const { data: setRow } = await supabase
+    const { data: setRow, error } = await supabase
       .from('bipa_settings')
       .select('name_en')
       .eq('id', 'student_security_v2')
       .maybeSingle();
 
-    if (setRow && setRow.name_en) {
+    if (!error && setRow && setRow.name_en) {
       const parsed = JSON.parse(setRow.name_en);
-      const remoteUpdatedAt = Number(parsed?.updatedAt || 0);
-
-      if (localUpdatedAt > remoteUpdatedAt && remoteUpdatedAt > 0) {
-        return current;
-      }
-
       if (parsed && parsed.profiles) {
-        const combinedDeleted = Array.from(
-          new Set(
-            [
-              ...getLocalDeletedCodes(),
-              ...(current.deletedCodes || []),
-              ...(Array.isArray(parsed.deletedCodes) ? parsed.deletedCodes : [])
-            ].map((c: string) => normalizeCode(c))
-          )
-        );
-        saveLocalDeletedCodes(combinedDeleted);
-        const deletedSet = new Set(combinedDeleted);
+        const cloudDeleted = Array.isArray(parsed.deletedCodes)
+          ? parsed.deletedCodes.map((c: string) => normalizeCode(c))
+          : [];
+        saveLocalDeletedCodes(cloudDeleted);
+        const deletedSet = new Set(cloudDeleted);
 
         const merged: Record<string, StudentSecurityProfile> = {};
-        Object.keys(current.profiles).forEach((k) => {
-          const code = normalizeCode(k);
-          if (!deletedSet.has(code)) {
-            merged[code] = current.profiles[k];
-          }
-        });
 
         Object.keys(parsed.profiles).forEach((k) => {
           const code = normalizeCode(k);
           if (!code || deletedSet.has(code)) {
-            delete merged[code];
             return;
           }
           const item = parsed.profiles[k];
@@ -389,25 +367,21 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
           const fullName =
             item.fullNameKm ||
             `${item.lastNameKm || ''} ${item.firstNameKm || ''}`.trim() ||
-            merged[code]?.fullNameKm ||
             code;
           const split = splitKhmerFullName(fullName);
 
           merged[code] = {
-            ...(merged[code] || {}),
             ...item,
             studentCode: code,
             lastNameKm: item.lastNameKm !== undefined ? item.lastNameKm : split.lastName,
             firstNameKm: item.firstNameKm !== undefined ? item.firstNameKm : split.firstName,
             fullNameKm: fullName,
             userTypeKm: item.userTypeKm || 'សិស្ស',
-            phoneNumber:
-              item.phoneNumber || merged[code]?.phoneNumber || generateDefaultPhone(code),
+            phoneNumber: item.phoneNumber || generateDefaultPhone(code),
             saltSeed: seed,
             secretCode: item.secretCode || generateEncryptedCodeFromId(code, seed),
             avatarDataUrl:
               item.avatarDataUrl ||
-              merged[code]?.avatarDataUrl ||
               localStorage.getItem(`bipa_avatar_${code}`) ||
               ''
           };
@@ -415,12 +389,9 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
 
         current = {
           profiles: merged,
-          deletedCodes: combinedDeleted
+          deletedCodes: cloudDeleted
         };
         localStorage.setItem(SECURITY_STORAGE_KEY, JSON.stringify(current));
-        if (remoteUpdatedAt > 0) {
-          localStorage.setItem('bipa_security_updated_at', String(remoteUpdatedAt));
-        }
       }
     }
   } catch {}
@@ -434,7 +405,11 @@ export async function saveSecurityPayloadToDb(
   lastLocalSecuritySaveTime = nowTs;
 
   const deletedList = Array.from(
-    new Set([...getLocalDeletedCodes(), ...(payload.deletedCodes || [])])
+    new Set(
+      [...getLocalDeletedCodes(), ...(payload.deletedCodes || [])].map((c) =>
+        normalizeCode(c)
+      )
+    )
   );
   saveLocalDeletedCodes(deletedList);
 
@@ -455,26 +430,20 @@ export async function saveSecurityPayloadToDb(
 
   const jsonStr = JSON.stringify(finalPayload);
   localStorage.setItem(SECURITY_STORAGE_KEY, jsonStr);
-  localStorage.setItem('bipa_security_updated_at', String(nowTs));
 
-  if (securitySaveTimer) {
-    clearTimeout(securitySaveTimer);
-  }
+  try {
+    await supabase.from('bipa_settings').upsert(
+      {
+        id: 'student_security_v2',
+        logo_url: 'STUDENT_SECURITY',
+        name_km: 'ប្រព័ន្ធសុវត្ថិភាពកូដសម្ងាត់និស្សិត',
+        name_en: jsonStr
+      },
+      { onConflict: 'id' }
+    );
+  } catch {}
 
-  securitySaveTimer = setTimeout(async () => {
-    try {
-      await supabase.from('bipa_settings').upsert(
-        {
-          id: 'student_security_v2',
-          logo_url: 'STUDENT_SECURITY',
-          name_km: 'ប្រព័ន្ធសុវត្ថិភាពកូដសម្ងាត់និស្សិត',
-          name_en: jsonStr
-        },
-        { onConflict: 'id' }
-      );
-    } catch {}
-    window.dispatchEvent(new Event('student-security-updated'));
-  }, 450);
+  window.dispatchEvent(new Event('student-security-updated'));
 }
 
 export function isStudentSessionVerified(

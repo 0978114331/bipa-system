@@ -208,28 +208,19 @@ let lastLocalPaymentSaveTime = 0;
 
 export async function fetchPaymentPayloadFromDb(): Promise<PaymentSystemPayload> {
   let current = loadCachedPaymentPayload();
-  if (Date.now() - lastLocalPaymentSaveTime < 5000) {
+  if (Date.now() - lastLocalPaymentSaveTime < 1500) {
     return current;
   }
 
-  const deletedSet = new Set(getLocalDeletedCodes().map((c) => normalizeStudentCodeInput(c)));
-  const localUpdatedAt = Number(localStorage.getItem('bipa_payment_updated_at') || '0');
-
   try {
-    const { data: setRow } = await supabase
+    const { data: setRow, error } = await supabase
       .from('bipa_settings')
       .select('name_en')
       .eq('id', 'payment_payload_v2')
       .maybeSingle();
 
-    if (setRow && setRow.name_en) {
+    if (!error && setRow && setRow.name_en) {
       const p = JSON.parse(setRow.name_en);
-      const remoteUpdatedAt = Number(p.updatedAt || 0);
-
-      if (localUpdatedAt > remoteUpdatedAt && remoteUpdatedAt > 0) {
-        return current;
-      }
-
       const rawStudents =
         Array.isArray(p.residentStudents) && p.residentStudents.length > 0
           ? p.residentStudents
@@ -242,16 +233,11 @@ export async function fetchPaymentPayloadFromDb(): Promise<PaymentSystemPayload>
         customColumns: Array.isArray(p.customColumns)
           ? p.customColumns
           : defaultPaymentPayload.customColumns,
-        residentStudents: rawStudents.filter(
-          (s: any) => !deletedSet.has(normalizeStudentCodeInput(s.student_code))
-        ),
+        residentStudents: rawStudents,
         recordsByYear: p.recordsByYear || {},
         notifications: Array.isArray(p.notifications) ? p.notifications : []
       };
       localStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify(current));
-      if (remoteUpdatedAt > 0) {
-        localStorage.setItem('bipa_payment_updated_at', String(remoteUpdatedAt));
-      }
     }
   } catch {}
 
@@ -269,7 +255,6 @@ export async function savePaymentPayloadToDb(
   };
   const jsonStr = JSON.stringify(payloadWithTs);
   localStorage.setItem(PAYMENT_STORAGE_KEY, jsonStr);
-  localStorage.setItem('bipa_payment_updated_at', String(nowTs));
 
   let syncedCloud = false;
 
