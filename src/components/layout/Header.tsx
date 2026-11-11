@@ -443,6 +443,16 @@ export function Header() {
   const [systemNameEn, setSystemNameEn] = useState('BIPA Residence');
 
   useEffect(() => {
+    let metaTheme = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
+    if (!metaTheme) {
+      metaTheme = document.createElement('meta');
+      metaTheme.name = 'theme-color';
+      document.head.appendChild(metaTheme);
+    }
+    metaTheme.content = '#091224';
+  }, []);
+
+  useEffect(() => {
     const fetchSettings = async () => {
       try {
         const { data } = await supabase.from('bipa_settings').select('*').eq('id', '1').single();
@@ -499,7 +509,7 @@ export function Header() {
       });
 
       const allSingleViews = Array.from(
-        document.querySelectorAll('#bipa-active-single-view')
+        document.querySelectorAll('.bipa-single-overlay-box')
       ) as HTMLElement[];
       if (allSingleViews.length > 1) {
         allSingleViews.slice(1).forEach((el) => {
@@ -851,7 +861,11 @@ export function Header() {
   return (
     <>
       <div id="global-qr-file-hidden" className="hidden" />
-      <div className="fixed inset-0 -z-50 pointer-events-none select-none overflow-hidden">
+      <div
+        id="bipa-master-bg"
+        style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}
+        className="select-none overflow-hidden"
+      >
         <img
           src="https://i.ibb.co/KY0bJNW/b151bd61-2587-445b-b245-2ddaea928120.png"
           alt=""
@@ -862,20 +876,33 @@ export function Header() {
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Moul&family=Siemreap&display=swap');
-        html, body, #root {
+        html, body {
           font-family: 'Siemreap', sans-serif !important;
-          background: transparent !important;
-          background-color: transparent !important;
+          background-color: #091224 !important;
           margin: 0 !important;
           padding: 0 !important;
           width: 100% !important;
           max-width: 100% !important;
           overflow-x: hidden !important;
+          -webkit-tap-highlight-color: transparent;
+        }
+        #root {
+          font-family: 'Siemreap', sans-serif !important;
+          background: transparent !important;
+          background-color: transparent !important;
+          position: relative !important;
+          z-index: 1 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
         }
         main {
           font-family: 'Siemreap', sans-serif !important;
           background: transparent !important;
           background-color: transparent !important;
+          position: relative !important;
+          z-index: 10 !important;
           width: 100% !important;
           max-width: 100% !important;
           margin: 0 !important;
@@ -890,14 +917,14 @@ export function Header() {
         }
         main > div,
         .min-h-screen,
-        #bipa-active-single-view,
+        .bipa-single-overlay-box,
         div.fixed.z-30 {
           background: transparent !important;
           background-color: transparent !important;
         }
-        .bipa-glass-overlay:not(#bipa-active-single-view),
-        div.fixed.z-\\[90\\]:not(#bipa-active-single-view),
-        div.fixed.z-\\[85\\]:not(#bipa-active-single-view) {
+        .bipa-glass-overlay:not(.bipa-single-overlay-box),
+        div.fixed.z-\\[90\\]:not(.bipa-single-overlay-box),
+        div.fixed.z-\\[85\\]:not(.bipa-single-overlay-box) {
           display: none !important;
         }
         ${
@@ -913,7 +940,7 @@ export function Header() {
         ${
           !isSidebarSpecialOverlayActive && isAnyOverlayOpen
             ? `
-        div.fixed.z-30:not(#bipa-active-single-view) {
+        div.fixed.z-30:not(.bipa-single-overlay-box) {
           display: none !important;
         }
         `
@@ -935,7 +962,10 @@ export function Header() {
       `}</style>
 
       {showScanner && (
-        <div className="fixed inset-0 z-50 bg-[#070b14] flex flex-col items-center justify-center p-6 font-khmer select-none" style={{ zIndex: 140 }}>
+        <div
+          className="fixed inset-0 z-50 bg-[#070b14] flex flex-col items-center justify-center p-6 font-khmer select-none"
+          style={{ zIndex: 140 }}
+        >
           <style>{`
             @keyframes scanLine {
               0% { top: 8%; }
@@ -1046,7 +1076,10 @@ export function Header() {
         </div>
       )}
 
-      <header className="sticky top-0 left-0 right-0 z-50 w-full bg-[#091224] text-white shadow-md border-0 m-0" style={{ zIndex: 110 }}>
+      <header
+        className="fixed top-0 left-0 right-0 w-full bg-[#091224] text-white shadow-md border-0 m-0"
+        style={{ zIndex: 110 }}
+      >
         <div className="w-full max-w-7xl mx-auto px-3.5 sm:px-6">
           <div className="flex items-center justify-between h-14 sm:h-16">
             <button onClick={() => navigate('/')} className="flex items-center gap-2.5 min-w-0">
@@ -1223,6 +1256,7 @@ export function Header() {
           </div>
         </div>
       </header>
+      <div className="h-14 sm:h-16 w-full shrink-0 pointer-events-none" />
 
       {mobileOpen && (
         <div
@@ -1505,22 +1539,20 @@ export function Header() {
 
       {isDashboardOverlay && (
         <div
-          id="bipa-active-single-view"
-          style={{ zIndex: 88 }}
-          className="fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto scrollbar-thin"
+          id="bipa-dashboard-scroll-container"
+          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch' }}
+          className="bipa-single-overlay-box fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto overscroll-y-contain scrollbar-thin"
         >
-          <div id="bipa-dashboard-scroll-container" className="w-full h-full overflow-y-auto">
-            <StudentPersonalDashboard />
-          </div>
+          <StudentPersonalDashboard />
         </div>
       )}
 
       {isDutiesOverlay && (
         <div
           id="bipa-active-single-view"
-          style={{ zIndex: 88 }}
+          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch' }}
           className={cn(
-            'fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
+            'bipa-single-overlay-box fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto overscroll-y-contain p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
           )}
         >
@@ -1537,9 +1569,9 @@ export function Header() {
       {isPaymentsOverlay && (
         <div
           id="bipa-active-single-view"
-          style={{ zIndex: 88 }}
+          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch' }}
           className={cn(
-            'fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
+            'bipa-single-overlay-box fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto overscroll-y-contain p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
           )}
         >
@@ -1556,9 +1588,9 @@ export function Header() {
       {isRiceOverlay && (
         <div
           id="bipa-active-single-view"
-          style={{ zIndex: 88 }}
+          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch' }}
           className={cn(
-            'fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
+            'bipa-single-overlay-box fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto overscroll-y-contain p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
           )}
         >
@@ -1575,9 +1607,9 @@ export function Header() {
       {isLeaveOverlay && (
         <div
           id="bipa-active-single-view"
-          style={{ zIndex: 88 }}
+          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch' }}
           className={cn(
-            'fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
+            'bipa-single-overlay-box fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto overscroll-y-contain p-3 sm:p-6 scrollbar-thin',
             isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
           )}
         >

@@ -1928,7 +1928,6 @@ export function StudentPersonalDashboard() {
   const [showProfileDetailModal, setShowProfileDetailModal] = useState(false);
 
   const [scrolledCompact, setScrolledCompact] = useState(false);
-  const [scrollOffset, setScrollOffset] = useState(0);
   const [pullStretch, setPullStretch] = useState(0);
 
   const touchStartYRef = useRef<number | null>(null);
@@ -1961,22 +1960,38 @@ export function StudentPersonalDashboard() {
   }, []);
 
   useEffect(() => {
-    const scrollContainer = document.getElementById('bipa-dashboard-scroll-container');
-    if (!scrollContainer) return;
-
-    const handleScroll = () => {
-      const top = scrollContainer.scrollTop;
-      setScrollOffset(top);
-      setScrolledCompact(top > 190);
+    const checkCoverPosition = () => {
+      const el = heroBannerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setScrolledCompact(rect.bottom < 105);
     };
 
-    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
-    return () => scrollContainer.removeEventListener('scroll', handleScroll);
-  }, []);
+    const el = heroBannerRef.current;
+    let observer: IntersectionObserver | null = null;
+    if (el && typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          setScrolledCompact(!entry.isIntersecting);
+        },
+        { threshold: 0.15 }
+      );
+      observer.observe(el);
+    }
+
+    window.addEventListener('scroll', checkCoverPosition, { capture: true, passive: true });
+    window.addEventListener('touchmove', checkCoverPosition, { passive: true });
+
+    return () => {
+      if (observer) observer.disconnect();
+      window.removeEventListener('scroll', checkCoverPosition, true);
+      window.removeEventListener('touchmove', checkCoverPosition);
+    };
+  }, [verifiedProfile]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    const scrollContainer = document.getElementById('bipa-dashboard-scroll-container');
-    if (scrollContainer && scrollContainer.scrollTop <= 4) {
+    const el = heroBannerRef.current;
+    if (el && el.getBoundingClientRect().top >= 45) {
       touchStartYRef.current = e.touches[0].clientY;
     } else {
       touchStartYRef.current = null;
@@ -1987,7 +2002,7 @@ export function StudentPersonalDashboard() {
     if (touchStartYRef.current === null) return;
     const deltaY = e.touches[0].clientY - touchStartYRef.current;
     if (deltaY > 0) {
-      setPullStretch(Math.min(100, deltaY * 0.5));
+      setPullStretch(Math.min(85, deltaY * 0.45));
     } else {
       setPullStretch(0);
     }
@@ -2055,13 +2070,9 @@ export function StudentPersonalDashboard() {
       ? localStorage.getItem(`bipa_avatar_${verifiedProfile.studentCode}`) || ''
       : '');
 
-  const coverBaseHeight = verifiedProfile ? 295 : 230;
-  const dynamicCoverHeight = Math.max(
-    190,
-    coverBaseHeight + pullStretch - Math.min(scrollOffset * 0.32, 80)
-  );
-  const dynamicImageScale =
-    1 + pullStretch / 210 + Math.min(scrollOffset / 1200, 0.08);
+  const coverBaseHeight = verifiedProfile ? 290 : 225;
+  const dynamicCoverHeight = coverBaseHeight + pullStretch;
+  const dynamicImageScale = 1 + pullStretch / 220;
 
   return (
     <div
@@ -2080,10 +2091,14 @@ export function StudentPersonalDashboard() {
         />
       )}
 
-      {verifiedProfile && scrolledCompact && (
+      { scrolledCompact && (
         <div
-          onClick={() => setShowProfileDetailModal(true)}
-          className="fixed top-14 sm:top-16 left-0 right-0 z-50 max-w-xl mx-auto bg-[#07152e]/90 backdrop-blur-xl border-b border-white/15 px-3.5 py-2 flex items-center justify-between shadow-lg cursor-pointer animate-in slide-in-from-top-2 duration-150"
+          onClick={() => {
+            if (verifiedProfile) setShowProfileDetailModal(true);
+            else setShowLoginModal(true);
+          }}
+          style={{ zIndex: 98 }}
+          className="fixed top-14 sm:top-16 left-0 right-0 max-w-xl mx-auto bg-[#081630]/95 backdrop-blur-xl border-b border-white/20 px-3.5 py-2.5 flex items-center justify-between shadow-xl cursor-pointer animate-in slide-in-from-top-2 duration-150"
         >
           <div className="flex items-center gap-2.5 min-w-0">
             <button
@@ -2097,21 +2112,28 @@ export function StudentPersonalDashboard() {
               <ChevronLeft className="h-5 w-5" />
             </button>
             <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-amber-400 bg-slate-800 shrink-0">
-              {currentAvatar ? (
-                <img src={currentAvatar} alt="" className="w-full h-full object-cover object-top" />
+              {verifiedProfile ? (
+                currentAvatar ? (
+                  <img src={currentAvatar} alt="" className="w-full h-full object-cover object-top" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-xs">
+                    {verifiedProfile.fullNameKm.charAt(0)}
+                  </div>
+                )
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-xs">
-                  {verifiedProfile.fullNameKm.charAt(0)}
+                <div className="w-full h-full flex items-center justify-center bg-white/15 text-amber-300">
+                  <User className="h-4 w-4" />
                 </div>
               )}
             </div>
             <div className="min-w-0">
               <span className="font-moul-kh text-xs text-white truncate block">
-                {verifiedProfile.fullNameKm}
+                {verifiedProfile ? verifiedProfile.fullNameKm : isKh ? 'ភ្ញៀវ' : 'Guest'}
               </span>
               <p className="text-[10px] text-sky-200 truncate">
-                {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
-                {verifiedProfile.phoneNumber}
+                {verifiedProfile
+                  ? `${renderTranslatedUserType(verifiedProfile.userTypeKm)} • ${verifiedProfile.phoneNumber}`
+                  : 'XXX-XXX-XXX'}
               </p>
             </div>
           </div>
@@ -2126,7 +2148,7 @@ export function StudentPersonalDashboard() {
         }}
         style={{
           height: `${dynamicCoverHeight}px`,
-          transition: pullStretch > 0 ? 'none' : 'height 0.28s cubic-bezier(0.16, 1, 0.3, 1)'
+          transition: pullStretch > 0 ? 'none' : 'height 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
         }}
         className={cn(
           'relative w-full overflow-hidden rounded-b-[32px] shadow-[0_12px_35px_rgba(0,0,0,0.35)] border-b border-white/20 flex flex-col justify-between p-4 sm:p-5 text-white',
@@ -2358,7 +2380,7 @@ export function StudentPersonalDashboard() {
 
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div
-                  onClick={() => navigate('/dashboard/payments')}
+                  onClick={() => navigate('/?view=payments')}
                   className="bg-[#091e42]/55 backdrop-blur-xl rounded-3xl p-3.5 border border-white/25 shadow-[0_8px_30px_rgba(0,0,0,0.22)] cursor-pointer hover:border-sky-300/60 transition-all space-y-1"
                 >
                   <div className="flex items-center justify-between">
