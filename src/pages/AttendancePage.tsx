@@ -573,51 +573,84 @@ export function AttendancePage() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-              <KeyRound className="h-4 w-4 text-amber-500" /> ភ្ជាប់អត្តលេខសិស្ស (ID) របស់អ្នកសម្រាប់ស្គែន
-            </span>
+        <div className="bg-white/90 dark:bg-[#1e293b]/90 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-[#3b82f6]/15 border border-[#3b82f6]/30 flex items-center justify-center text-[#3b82f6] shrink-0">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect width="5" height="5" x="3" y="3" rx="1" />
+                <rect width="5" height="5" x="16" y="3" rx="1" />
+                <rect width="5" height="5" x="3" y="16" rx="1" />
+                <path d="M21 16h-3a2 2 0 0 0-2 2v3" />
+                <path d="M21 21v.01" />
+                <path d="M12 7v3a2 2 0 0 1-2 2H7" />
+                <path d="M3 12h.01" />
+                <path d="M12 3h.01" />
+                <path d="M12 16v.01" />
+                <path d="M16 12h1" />
+                <path d="M21 12v.01" />
+                <path d="M12 21v-1" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-xs sm:text-sm text-slate-900 dark:text-white truncate">
+                ស្កេនកូដ QR កត់ត្រាវត្តមាន
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                ចុច Camera QR ខាងស្តាំដើម្បីបើកកាមេរ៉ាស្កេនចេញ-ចូល
+              </p>
+            </div>
           </div>
 
-          {myStudentId ? (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 dark:bg-[#0f172a] p-3.5 rounded-xl border border-slate-100 dark:border-slate-800">
-              <span className="text-sm font-bold text-emerald-500 flex items-center gap-2">
-                <Check className="h-5 w-5" /> បានភ្ជាប់ ID រួចរាល់៖ {myStudentId}
-              </span>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setTempStudentId(myStudentId);
-                  setMyStudentId('');
-                  localStorage.removeItem('bipa_linked_student_id');
-                }}
-                className="h-9 border-slate-300 dark:border-slate-600 text-xs font-bold w-full sm:w-auto"
-              >
-                ផ្លាស់ប្តូរ ID
-              </Button>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                value={tempStudentId}
-                onChange={(e) => setTempStudentId(e.target.value.toUpperCase())}
-                placeholder="សូមបញ្ចូល ID របស់អ្នក (ឧ.BIPA-001)..."
-                className="flex-1 h-11 rounded-xl border border-slate-200 dark:border-slate-700 px-3 bg-slate-50 dark:bg-[#0f172a] text-sm font-bold uppercase"
-              />
-              <Button
-                onClick={handleSaveMyId}
-                className="h-11 px-6 bg-[#3b82f6] hover:bg-blue-600 text-white font-bold rounded-xl shadow-md shrink-0"
-              >
-                ភ្ជាប់ ID
-              </Button>
-            </div>
-          )}
-
-          {idSavedMsg && (
-            <p className="text-emerald-500 text-xs font-bold text-center">បានភ្ជាប់ ID ជោគជ័យ!</p>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              const headerQrBtn = (
+                document.querySelector('header svg.lucide-qr-code')?.closest('button') ||
+                document.querySelector('header button.bg-\\[\\#3b82f6\\]')
+              ) as HTMLButtonElement | null;
+              if (headerQrBtn) {
+                headerQrBtn.click();
+              } else {
+                window.dispatchEvent(new Event('open-bipa-qr-scanner'));
+              }
+            }}
+            className="bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.45)] w-11 h-11 border-0 p-0 flex items-center justify-center shrink-0 transition-transform active:scale-95 cursor-pointer"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect width="5" height="5" x="3" y="3" rx="1" />
+              <rect width="5" height="5" x="16" y="3" rx="1" />
+              <rect width="5" height="5" x="3" y="16" rx="1" />
+              <path d="M21 16h-3a2 2 0 0 0-2 2v3" />
+              <path d="M21 21v.01" />
+              <path d="M12 7v3a2 2 0 0 1-2 2H7" />
+              <path d="M3 12h.01" />
+              <path d="M12 3h.01" />
+              <path d="M12 16v.01" />
+              <path d="M16 12h1" />
+              <path d="M21 12v.01" />
+              <path d="M12 21v-1" />
+            </svg>
+          </button>
         </div>
 
         <div className="relative">

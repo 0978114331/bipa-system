@@ -140,7 +140,7 @@ export function AttendancePage() {
   const filteredRecords = allRecords.filter((r) => r.date === targetDateString);
 
   const handleDeleteRecord = async (id: string, studentCode?: string, recDate?: string) => {
-    if (!window.confirm('តើអ្នកពិតជាចង់លុបទិន្នន័យនេះចេញពីតារាងរក្សាទុកទិន្នន័យជាអចិន្ត្រៃយ៍មែនទេ?')) return;
+    if (!window.confirm('តើអ្នកចង់លុបទិន្នន័យនេះជារហូតមែនទេ?')) return;
     const updated = allRecords.filter((r) => r.id !== id);
     setAllRecords(updated);
     localStorage.setItem(ATT_STORAGE_KEY, JSON.stringify(updated));
