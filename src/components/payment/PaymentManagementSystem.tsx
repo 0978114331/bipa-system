@@ -204,9 +204,16 @@ export function loadCachedPaymentPayload(): PaymentSystemPayload {
   }
 }
 
+let lastLocalPaymentSaveTime = 0;
+
 export async function fetchPaymentPayloadFromDb(): Promise<PaymentSystemPayload> {
   let current = loadCachedPaymentPayload();
+  if (Date.now() - lastLocalPaymentSaveTime < 5000) {
+    return current;
+  }
+
   const deletedSet = new Set(getLocalDeletedCodes().map((c) => normalizeStudentCodeInput(c)));
+  const localUpdatedAt = Number(localStorage.getItem('bipa_payment_updated_at') || '0');
 
   try {
     const { data: setRow } = await supabase
@@ -217,23 +224,34 @@ export async function fetchPaymentPayloadFromDb(): Promise<PaymentSystemPayload>
 
     if (setRow && setRow.name_en) {
       const p = JSON.parse(setRow.name_en);
-      const rawStudents: PaymentResidentStudent[] =
+      const remoteUpdatedAt = Number(p.updatedAt || 0);
+
+      if (localUpdatedAt > remoteUpdatedAt && remoteUpdatedAt > 0) {
+        return current;
+      }
+
+      const rawStudents =
         Array.isArray(p.residentStudents) && p.residentStudents.length > 0
           ? p.residentStudents
           : current.residentStudents;
 
       current = {
+        ...current,
+        ...p,
         monthlyFeeRiel: Number(p.monthlyFeeRiel || DEFAULT_MONTHLY_FEE),
         customColumns: Array.isArray(p.customColumns)
           ? p.customColumns
           : defaultPaymentPayload.customColumns,
         residentStudents: rawStudents.filter(
-          (s) => !deletedSet.has(normalizeStudentCodeInput(s.student_code))
+          (s: any) => !deletedSet.has(normalizeStudentCodeInput(s.student_code))
         ),
         recordsByYear: p.recordsByYear || {},
         notifications: Array.isArray(p.notifications) ? p.notifications : []
       };
       localStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify(current));
+      if (remoteUpdatedAt > 0) {
+        localStorage.setItem('bipa_payment_updated_at', String(remoteUpdatedAt));
+      }
     }
   } catch {}
 
@@ -243,25 +261,35 @@ export async function fetchPaymentPayloadFromDb(): Promise<PaymentSystemPayload>
 export async function savePaymentPayloadToDb(
   payload: PaymentSystemPayload
 ): Promise<{ ok: boolean; syncedCloud: boolean }> {
-  const jsonStr = JSON.stringify(payload);
+  const nowTs = Date.now();
+  lastLocalPaymentSaveTime = nowTs;
+  const payloadWithTs = {
+    ...payload,
+    updatedAt: nowTs
+  };
+  const jsonStr = JSON.stringify(payloadWithTs);
   localStorage.setItem(PAYMENT_STORAGE_KEY, jsonStr);
+  localStorage.setItem('bipa_payment_updated_at', String(nowTs));
 
   let syncedCloud = false;
 
   try {
-    const { error: fallbackErr } = await supabase.from('bipa_settings').upsert({
-      id: 'payment_payload_v2',
-      logo_url: 'PAYMENT_SYSTEM',
-      name_km: 'ប្រព័ន្ធបង់ប្រាក់ប្រចាំខែ',
-      name_en: jsonStr
-    });
-    if (!fallbackErr) syncedCloud = true;
+    const { error } = await supabase.from('bipa_settings').upsert(
+      {
+        id: 'payment_payload_v2',
+        logo_url: 'PAYMENT_SYSTEM',
+        name_km: 'ប្រព័ន្ធគ្រប់គ្រងការបង់ប្រាក់ប្រចាំខែ',
+        name_en: jsonStr
+      },
+      { onConflict: 'id' }
+    );
+    if (!error) syncedCloud = true;
   } catch {}
 
   try {
     if (typeof BroadcastChannel !== 'undefined') {
       const bc = new BroadcastChannel('bipa_payment_sync_channel');
-      bc.postMessage({ type: 'PAYMENT_UPDATED', timestamp: Date.now() });
+      bc.postMessage({ type: 'PAYMENT_UPDATED', timestamp: nowTs });
       bc.close();
     }
   } catch {}
@@ -613,7 +641,7 @@ export function PaymentAdminDashboard() {
 
   useEffect(() => {
     initLoad();
-    window.addEventListener('payment-system-updated', initLoad);
+   
     return () => {
       window.removeEventListener('payment-system-updated', initLoad);
     };
@@ -2355,7 +2383,7 @@ export function PaymentStudentView({
 
   useEffect(() => {
     loadData();
-    const timer = setInterval(loadData, 3500);
+    const timer = setInterval(loadData, 30000);
     window.addEventListener('payment-system-updated', loadData);
     window.addEventListener('storage', loadData);
 

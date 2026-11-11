@@ -30,7 +30,6 @@ import {
   UserPlus,
   RefreshCw,
   Eye,
-  ArrowLeft,
   SlidersHorizontal
 } from 'lucide-react';
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
@@ -216,9 +215,16 @@ export function loadCachedRicePayload(): RiceSystemPayload {
   }
 }
 
+let lastLocalRiceSaveTime = 0;
+
 export async function fetchRicePayloadFromDb(): Promise<RiceSystemPayload> {
   let current = loadCachedRicePayload();
+  if (Date.now() - lastLocalRiceSaveTime < 5000) {
+    return current;
+  }
+
   const deletedSet = new Set(getLocalDeletedCodes().map((c) => normalizeStudentCodeInput(c)));
+  const localUpdatedAt = Number(localStorage.getItem('bipa_rice_updated_at') || '0');
 
   try {
     const { data: setRow } = await supabase
@@ -229,6 +235,12 @@ export async function fetchRicePayloadFromDb(): Promise<RiceSystemPayload> {
 
     if (setRow && setRow.name_en) {
       const p = JSON.parse(setRow.name_en);
+      const remoteUpdatedAt = Number(p.updatedAt || 0);
+
+      if (localUpdatedAt > remoteUpdatedAt && remoteUpdatedAt > 0) {
+        return current;
+      }
+
       const rawStudents: RiceResidentStudent[] =
         Array.isArray(p.residentStudents) && p.residentStudents.length > 0
           ? p.residentStudents
@@ -247,6 +259,9 @@ export async function fetchRicePayloadFromDb(): Promise<RiceSystemPayload> {
         notifications: Array.isArray(p.notifications) ? p.notifications : []
       };
       localStorage.setItem(RICE_STORAGE_KEY, JSON.stringify(current));
+      if (remoteUpdatedAt > 0) {
+        localStorage.setItem('bipa_rice_updated_at', String(remoteUpdatedAt));
+      }
     }
   } catch {}
 
@@ -256,25 +271,35 @@ export async function fetchRicePayloadFromDb(): Promise<RiceSystemPayload> {
 export async function saveRicePayloadToDb(
   payload: RiceSystemPayload
 ): Promise<{ ok: boolean; syncedCloud: boolean }> {
-  const jsonStr = JSON.stringify(payload);
+  const nowTs = Date.now();
+  lastLocalRiceSaveTime = nowTs;
+  const payloadWithTs = {
+    ...payload,
+    updatedAt: nowTs
+  };
+  const jsonStr = JSON.stringify(payloadWithTs);
   localStorage.setItem(RICE_STORAGE_KEY, jsonStr);
+  localStorage.setItem('bipa_rice_updated_at', String(nowTs));
 
   let syncedCloud = false;
 
   try {
-    const { error } = await supabase.from('bipa_settings').upsert({
-      id: 'rice_payload_v1',
-      logo_url: 'RICE_SYSTEM',
-      name_km: 'របាយការណ៍បង់អង្ករនិស្សិត',
-      name_en: jsonStr
-    });
+    const { error } = await supabase.from('bipa_settings').upsert(
+      {
+        id: 'rice_payload_v1',
+        logo_url: 'RICE_SYSTEM',
+        name_km: 'របាយការណ៍បង់អង្ករនិស្សិត',
+        name_en: jsonStr
+      },
+      { onConflict: 'id' }
+    );
     if (!error) syncedCloud = true;
   } catch {}
 
   try {
     if (typeof BroadcastChannel !== 'undefined') {
       const bc = new BroadcastChannel('bipa_rice_sync_channel');
-      bc.postMessage({ type: 'RICE_UPDATED', timestamp: Date.now() });
+      bc.postMessage({ type: 'RICE_UPDATED', timestamp: nowTs });
       bc.close();
     }
   } catch {}
@@ -376,7 +401,7 @@ export function GlobalRiceBadgeEnhancer() {
 
   useEffect(() => {
     refreshCount();
-    const interval = setInterval(refreshCount, 3000);
+    const interval = setInterval(refreshCount, 30000);
     window.addEventListener('rice-system-updated', refreshCount);
     window.addEventListener('student-id-linked', refreshCount);
     window.addEventListener('student-security-updated', refreshCount);
@@ -698,9 +723,16 @@ export function RiceAdminDashboard() {
 
   useEffect(() => {
     initLoad();
-    window.addEventListener('rice-system-updated', initLoad);
+    const handleStorageSync = (e: StorageEvent) => {
+      if (e.key === RICE_STORAGE_KEY && e.newValue) {
+        try {
+          setPayload(JSON.parse(e.newValue));
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageSync);
     return () => {
-      window.removeEventListener('rice-system-updated', initLoad);
+      window.removeEventListener('storage', handleStorageSync);
     };
   }, []);
 
@@ -2689,7 +2721,7 @@ export function RiceStudentView({
 
   useEffect(() => {
     loadData();
-    const timer = setInterval(loadData, 3500);
+    const timer = setInterval(loadData, 30000);
     window.addEventListener('rice-system-updated', loadData);
     window.addEventListener('storage', loadData);
 

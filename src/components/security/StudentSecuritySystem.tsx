@@ -331,8 +331,17 @@ export function loadCachedSecurityPayload(): StudentSecurityPayload {
   }
 }
 
+let lastLocalSecuritySaveTime = 0;
+let securitySaveTimer: ReturnType<typeof setTimeout> | null = null;
+
 export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPayload> {
   let current = loadCachedSecurityPayload();
+  if (Date.now() - lastLocalSecuritySaveTime < 5000) {
+    return current;
+  }
+
+  const localUpdatedAt = Number(localStorage.getItem('bipa_security_updated_at') || '0');
+
   try {
     const { data: setRow } = await supabase
       .from('bipa_settings')
@@ -342,6 +351,12 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
 
     if (setRow && setRow.name_en) {
       const parsed = JSON.parse(setRow.name_en);
+      const remoteUpdatedAt = Number(parsed?.updatedAt || 0);
+
+      if (localUpdatedAt > remoteUpdatedAt && remoteUpdatedAt > 0) {
+        return current;
+      }
+
       if (parsed && parsed.profiles) {
         const combinedDeleted = Array.from(
           new Set(
@@ -403,6 +418,9 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
           deletedCodes: combinedDeleted
         };
         localStorage.setItem(SECURITY_STORAGE_KEY, JSON.stringify(current));
+        if (remoteUpdatedAt > 0) {
+          localStorage.setItem('bipa_security_updated_at', String(remoteUpdatedAt));
+        }
       }
     }
   } catch {}
@@ -412,6 +430,9 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
 export async function saveSecurityPayloadToDb(
   payload: StudentSecurityPayload
 ): Promise<void> {
+  const nowTs = Date.now();
+  lastLocalSecuritySaveTime = nowTs;
+
   const deletedList = Array.from(
     new Set([...getLocalDeletedCodes(), ...(payload.deletedCodes || [])])
   );
@@ -426,22 +447,34 @@ export async function saveSecurityPayloadToDb(
     }
   });
 
-  const finalPayload: StudentSecurityPayload = {
+  const finalPayload = {
     profiles: cleanProfiles,
-    deletedCodes: deletedList
+    deletedCodes: deletedList,
+    updatedAt: nowTs
   };
 
   const jsonStr = JSON.stringify(finalPayload);
   localStorage.setItem(SECURITY_STORAGE_KEY, jsonStr);
-  try {
-    await supabase.from('bipa_settings').upsert({
-      id: 'student_security_v2',
-      logo_url: 'STUDENT_SECURITY',
-      name_km: 'ប្រព័ន្ធសុវត្ថិភាពកូដសម្ងាត់និស្សិត',
-      name_en: jsonStr
-    });
-  } catch {}
-  window.dispatchEvent(new Event('student-security-updated'));
+  localStorage.setItem('bipa_security_updated_at', String(nowTs));
+
+  if (securitySaveTimer) {
+    clearTimeout(securitySaveTimer);
+  }
+
+  securitySaveTimer = setTimeout(async () => {
+    try {
+      await supabase.from('bipa_settings').upsert(
+        {
+          id: 'student_security_v2',
+          logo_url: 'STUDENT_SECURITY',
+          name_km: 'ប្រព័ន្ធសុវត្ថិភាពកូដសម្ងាត់និស្សិត',
+          name_en: jsonStr
+        },
+        { onConflict: 'id' }
+      );
+    } catch {}
+    window.dispatchEvent(new Event('student-security-updated'));
+  }, 450);
 }
 
 export function isStudentSessionVerified(
@@ -1341,7 +1374,7 @@ export function AdminUserPasswordDashboard() {
       const img = new Image();
       img.onload = async () => {
         const canvas = document.createElement('canvas');
-        const maxDim = 720;
+        const maxDim = 320;
         let w = img.width;
         let h = img.height;
         if (w > h && w > maxDim) {
@@ -1354,7 +1387,7 @@ export function AdminUserPasswordDashboard() {
         canvas.width = w;
         canvas.height = h;
         canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
         localStorage.setItem(`bipa_avatar_${targetCode}`, dataUrl);
         await handleUpdateProfileField(targetCode, { avatarDataUrl: dataUrl });
         showNotice(`បានរក្សាទុករូបភាពសម្រាប់ ${targetCode}`);
