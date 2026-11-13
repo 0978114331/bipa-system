@@ -26,7 +26,6 @@ import {
   LogOut,
   LayoutDashboard,
   User,
-  Menu,
   Sun,
   Moon,
   Languages,
@@ -42,8 +41,7 @@ import {
   Check,
   DollarSign,
   Package,
-  CalendarClock,
-  KeyRound
+  CalendarClock
 } from 'lucide-react';
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
 import { DutyScheduleUserView, DutyRosterAdminPanel } from '@/components/duty/DutyScheduleSystem';
@@ -424,7 +422,6 @@ export function Header() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [showAdminSecurityModal, setShowAdminSecurityModal] = useState(false);
   const [scanStage, setScanStage] = useState<'scanning' | 'processing' | 'success' | 'error'>(
@@ -453,8 +450,13 @@ export function Header() {
 
   useEffect(() => {
     const openScannerHandler = () => setShowScanner(true);
+    const openAdminSecHandler = () => setShowAdminSecurityModal(true);
     window.addEventListener('open-bipa-qr-scanner', openScannerHandler);
-    return () => window.removeEventListener('open-bipa-qr-scanner', openScannerHandler);
+    window.addEventListener('open-bipa-admin-security-modal', openAdminSecHandler);
+    return () => {
+      window.removeEventListener('open-bipa-qr-scanner', openScannerHandler);
+      window.removeEventListener('open-bipa-admin-security-modal', openAdminSecHandler);
+    };
   }, []);
 
   useEffect(() => {
@@ -474,10 +476,6 @@ export function Header() {
     window.addEventListener('system-settings-updated', fetchSettings);
     return () => window.removeEventListener('system-settings-updated', fetchSettings);
   }, []);
-
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname, location.search]);
 
   useEffect(() => {
     const p = location.pathname;
@@ -686,7 +684,7 @@ export function Header() {
     isSidebarSpecialOverlayActive;
 
   useEffect(() => {
-    if (mobileOpen || showScanner) {
+    if (showScanner) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -694,7 +692,7 @@ export function Header() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [mobileOpen, showScanner]);
+  }, [showScanner]);
 
   const mainNavItems = [
     { key: 'nav.home', path: '/', icon: Home, labelKm: 'ផ្ទះ', labelEn: 'Home' },
@@ -1058,19 +1056,6 @@ export function Header() {
         `
             : ''
         }
-        @keyframes bipaSheetSlideUp {
-          0% {
-            opacity: 0;
-            transform: translateY(100%);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-bipa-sheet-up {
-          animation: bipaSheetSlideUp 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
       `}</style>
 
       {showScanner && (
@@ -1188,377 +1173,190 @@ export function Header() {
         </div>
       )}
 
-      <header
-        className="fixed top-0 left-0 right-0 w-full bg-[#091224] text-white shadow-md border-0 m-0"
-        style={{ zIndex: 110 }}
-      >
-        <div className="w-full max-w-7xl mx-auto px-3.5 sm:px-6">
-          <div className="flex items-center justify-between h-14 sm:h-16">
-            <button onClick={() => navigate('/')} className="flex items-center gap-2.5 min-w-0">
-              <div className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden shrink-0 bg-white shadow-xs">
-                {systemLogoUrl ? (
-                  <img src={systemLogoUrl} alt="Logo" className="w-full h-full object-contain p-0.5" />
-                ) : (
-                  <div className="flex items-center justify-center w-full h-full bg-gold-gradient">
-                    <GraduationCap className="h-5 w-5 text-navy" />
+      {!isDashboardOverlay && (
+        <>
+          <header
+            className="fixed top-0 left-0 right-0 w-full bg-[#091224] text-white shadow-md border-0 m-0"
+            style={{ zIndex: 110 }}
+          >
+            <div className="w-full max-w-7xl mx-auto px-3.5 sm:px-6">
+              <div className="flex items-center justify-between h-14 sm:h-16">
+                <button onClick={() => navigate('/')} className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden shrink-0 bg-white shadow-xs">
+                    {systemLogoUrl ? (
+                      <img src={systemLogoUrl} alt="Logo" className="w-full h-full object-contain p-0.5" />
+                    ) : (
+                      <div className="flex items-center justify-center w-full h-full bg-gold-gradient">
+                        <GraduationCap className="h-5 w-5 text-navy" />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="text-left flex flex-col justify-center min-w-0">
-                <div className="font-moul-kh text-xs sm:text-base leading-tight tracking-wide text-white truncate">
-                  {lang === 'km' ? systemNameKm || 'មណ្ឌលនិស្សិត BIPA' : systemNameEn || 'BIPA Residence'}
-                </div>
-              </div>
-            </button>
-
-            <div className="hidden md:flex items-center bg-[#1e293b] rounded-full px-2 py-1 shadow-inner border border-slate-700/50">
-              {mainNavItems.map((item) => (
-                <button
-                  key={item.path}
-                  onClick={() => navigate(item.path)}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-1.5 text-xs rounded-full transition-all duration-300 font-khmer',
-                    isActive(item.path)
-                      ? 'bg-[#3b82f6] text-white shadow-md'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-                  )}
-                >
-                  <item.icon className="h-4 w-4" />
-                  <span>{lang === 'km' ? item.labelKm : item.labelEn}</span>
+                  <div className="text-left flex flex-col justify-center min-w-0">
+                    <div className="font-moul-kh text-xs sm:text-base leading-tight tracking-wide text-white truncate">
+                      {lang === 'km' ? systemNameKm || 'មណ្ឌលនិស្សិត BIPA' : systemNameEn || 'BIPA Residence'}
+                    </div>
+                  </div>
                 </button>
-              ))}
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-2 px-4 py-1.5 text-xs rounded-full text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-300 font-khmer">
-                    <LayoutGrid className="h-4 w-4" />
-                    <span>{lang === 'km' ? 'ម៉ឺនុយ' : 'Menu'}</span>
-                    <ChevronDown className="h-3 w-3 opacity-70" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52 bg-[#1e293b] border-slate-700 text-white font-khmer text-xs">
-                  <DropdownMenuItem
-                    onClick={() => navigate('/dashboard')}
-                    className="hover:bg-slate-800 cursor-pointer text-xs"
-                  >
-                    <LayoutDashboard className="h-4 w-4 mr-2.5 text-blue-400" />
-                    <span>គ្រប់គ្រង</span>
-                  </DropdownMenuItem>
-                  {menuFeatureItems.map((item) => (
-                    <DropdownMenuItem
+                <div className="hidden md:flex items-center bg-[#1e293b] rounded-full px-2 py-1 shadow-inner border border-slate-700/50">
+                  {mainNavItems.map((item) => (
+                    <button
                       key={item.path}
                       onClick={() => navigate(item.path)}
-                      className="hover:bg-slate-800 cursor-pointer text-xs"
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-1.5 text-xs rounded-full transition-all duration-300 font-khmer',
+                        isActive(item.path)
+                          ? 'bg-[#3b82f6] text-white shadow-md'
+                          : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                      )}
                     >
-                      <item.icon className={cn('h-4 w-4 mr-2.5', item.color)} />
+                      <item.icon className="h-4 w-4" />
                       <span>{lang === 'km' ? item.labelKm : item.labelEn}</span>
-                    </DropdownMenuItem>
+                    </button>
                   ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="flex items-center md:mr-2 md:border-r border-slate-700 md:pr-4">
-                <Button
-                  onClick={() => setShowScanner(true)}
-                  className="bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.4)] w-9 h-9 sm:w-10 sm:h-10 border-0 p-0 flex items-center justify-center transition-transform active:scale-95"
-                >
-                  <QrCode className="h-5 w-5" />
-                </Button>
-              </div>
-
-              {user ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="hidden md:flex text-white hover:bg-slate-800 gap-2 px-2 h-10 rounded-xl">
-                      <Avatar className="h-8 w-8 border border-slate-600">
-                        <AvatarImage src={profile?.avatar_url ? profile.avatar_url : undefined} />
-                        <AvatarFallback className="bg-[#eab308] text-[#0f172a] text-xs">
-                          {profile?.display_name?.charAt(0).toUpperCase() || 'U'}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col items-start justify-center">
-                        <span className="text-xs max-w-[100px] truncate leading-none">
-                          {profile?.display_name || 'User'}
-                        </span>
-                        <span className="text-[9px] text-slate-400 mt-1 uppercase leading-none">
-                          {renderRole(profile?.role)}
-                        </span>
-                      </div>
-                      <ChevronDown className="h-3.5 w-3.5 opacity-50 ml-1" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52 bg-[#1e293b] border-slate-700 text-white font-khmer text-xs">
-                    <DropdownMenuLabel>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-xs">{profile?.display_name || 'User'}</span>
-                        <span className="text-[10px] text-slate-400">{profile?.email || ''}</span>
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator className="bg-slate-700" />
-                    <DropdownMenuItem onClick={() => navigate('/dashboard')} className="hover:bg-slate-800 cursor-pointer text-xs">
-                      <LayoutDashboard className="h-4 w-4 mr-2.5 text-slate-400" />
-                      គ្រប់គ្រង
-                    </DropdownMenuItem>
-
-                    {isAdminRoute ? (
-                      <DropdownMenuItem onClick={() => navigate('/')} className="hover:bg-slate-800 cursor-pointer text-xs">
-                        <Eye className="h-4 w-4 mr-2.5 text-slate-400" />
-                        View Site
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-2 px-4 py-1.5 text-xs rounded-full text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-300 font-khmer">
+                        <LayoutGrid className="h-4 w-4" />
+                        <span>{lang === 'km' ? 'គ្រប់គ្រង' : 'Dashboard'}</span>
+                        <ChevronDown className="h-3 w-3 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52 bg-[#1e293b] border-slate-700 text-white font-khmer text-xs">
+                      <DropdownMenuItem
+                        onClick={() => navigate('/dashboard')}
+                        className="hover:bg-slate-800 cursor-pointer text-xs"
+                      >
+                        <LayoutDashboard className="h-4 w-4 mr-2.5 text-blue-400" />
+                        <span>ផ្ទាំងគ្រប់គ្រង</span>
                       </DropdownMenuItem>
-                    ) : (
-                      isAdmin && (
-                        <DropdownMenuItem onClick={() => navigate('/admin')} className="hover:bg-slate-800 cursor-pointer text-xs">
-                          <Shield className="h-4 w-4 mr-2.5 text-slate-400" />
-                          Admin
+                      {menuFeatureItems.map((item) => (
+                        <DropdownMenuItem
+                          key={item.path}
+                          onClick={() => navigate(item.path)}
+                          className="hover:bg-slate-800 cursor-pointer text-xs"
+                        >
+                          <item.icon className={cn('h-4 w-4 mr-2.5', item.color)} />
+                          <span>{lang === 'km' ? item.labelKm : item.labelEn}</span>
                         </DropdownMenuItem>
-                      )
-                    )}
-
-                    <DropdownMenuItem onClick={() => navigate('/profile')} className="hover:bg-slate-800 cursor-pointer text-xs">
-                      <User className="h-4 w-4 mr-2.5 text-slate-400" />
-                      {t('nav.profile')}
-                    </DropdownMenuItem>
-
-                    <DropdownMenuSeparator className="bg-slate-700" />
-                    <div className="px-2 py-1.5 flex items-center justify-between">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setLang(lang === 'en' ? 'km' : 'en')}
-                        className="text-slate-300 hover:text-white hover:bg-slate-800 text-xs h-8"
-                      >
-                        <Languages className="h-3.5 w-3.5 mr-1.5" />
-                        {lang === 'en' ? 'KH' : 'EN'}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={toggleTheme}
-                        className="text-slate-300 hover:text-white hover:bg-slate-800 text-xs h-8"
-                      >
-                        {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-                      </Button>
-                    </div>
-                    <DropdownMenuSeparator className="bg-slate-700" />
-
-                    <DropdownMenuItem
-                      onClick={handleSignOut}
-                      className="text-red-400 hover:bg-slate-800 hover:text-red-300 cursor-pointer text-xs"
-                    >
-                      <LogOut className="h-4 w-4 mr-2.5" />
-                      {t('nav.signOut')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <div className="hidden md:flex items-center gap-2 font-khmer">
-                  <Button variant="ghost" size="sm" onClick={() => navigate('/signin')} className="text-white hover:bg-white/10 text-xs">
-                    <LogIn className="h-3.5 w-3.5 mr-1.5" />
-                    {t('nav.signIn')}
-                  </Button>
-                  <Button size="sm" onClick={() => navigate('/signup')} className="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs">
-                    <UserPlus className="h-3.5 w-3.5 mr-1.5" />
-                    {t('nav.createAccount')}
-                  </Button>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-      <div className="h-14 sm:h-16 w-full shrink-0 pointer-events-none" />
 
-      {mobileOpen && (
-        <div
-          onClick={() => setMobileOpen(false)}
-          className="md:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] font-khmer"
-          style={{ zIndex: 105 }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ bottom: 'calc(3.75rem + env(safe-area-inset-bottom, 0px))', zIndex: 106 }}
-            className="fixed left-0 right-0 mx-auto w-full max-w-md rounded-t-[26px] bg-white dark:bg-[#151e2e] border-t border-slate-200 dark:border-slate-700/80 shadow-[0_-12px_35px_rgba(0,0,0,0.3)] max-h-[75dvh] overflow-y-auto animate-bipa-sheet-up"
-          >
-            <div className="p-3.5 pb-4 flex flex-col gap-2.5">
-              <div
-                onClick={() => setMobileOpen(false)}
-                className="w-10 h-1 bg-slate-300 dark:bg-slate-600 rounded-full mx-auto cursor-pointer"
-              />
-
-              {user ? (
-                <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-[#1e2a3f] p-2 rounded-2xl border border-slate-200/80 dark:border-slate-700/70">
-                  <div
-                    onClick={() => {
-                      navigate('/profile');
-                      setMobileOpen(false);
-                    }}
-                    className="flex items-center gap-2 min-w-0 cursor-pointer"
-                  >
-                    <Avatar className="h-8 w-8 border border-slate-300 dark:border-slate-600 shrink-0">
-                      <AvatarImage src={profile?.avatar_url ? profile.avatar_url : undefined} />
-                      <AvatarFallback className="bg-[#3b82f6] text-white text-xs">
-                        {profile?.display_name?.charAt(0).toUpperCase() || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-slate-900 dark:text-white truncate">
-                          {profile?.display_name || 'User'}
-                        </span>
-                        <span className="px-1.5 py-0.2 rounded-full text-[8px] uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
-                          {renderRole(profile?.role)}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                        {profile?.email || ''}
-                      </span>
-                    </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center md:mr-2 md:border-r border-slate-700 md:pr-4">
+                    <Button
+                      onClick={() => setShowScanner(true)}
+                      className="bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.4)] w-9 h-9 sm:w-10 sm:h-10 border-0 p-0 flex items-center justify-center transition-transform active:scale-95"
+                    >
+                      <QrCode className="h-5 w-5" />
+                    </Button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleSignOut();
-                      setMobileOpen(false);
-                    }}
-                    className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[10px] transition-all active:scale-95"
-                  >
-                    <LogOut className="h-3 w-3" />
-                    <span>{t('nav.signOut')}</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      navigate('/signin');
-                      setMobileOpen(false);
-                    }}
-                    className="h-8 rounded-xl border-slate-300 dark:border-slate-700 text-xs bg-white dark:bg-transparent"
-                  >
-                    <LogIn className="h-3.5 w-3.5 mr-1" /> {t('nav.signIn')}
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      navigate('/signup');
-                      setMobileOpen(false);
-                    }}
-                    className="h-8 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs"
-                  >
-                    <UserPlus className="h-3.5 w-3.5 mr-1" /> {t('nav.createAccount')}
-                  </Button>
-                </div>
-              )}
+                  {user ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="hidden md:flex text-white hover:bg-slate-800 gap-2 px-2 h-10 rounded-xl">
+                          <Avatar className="h-8 w-8 border border-slate-600">
+                            <AvatarImage src={profile?.avatar_url ? profile.avatar_url : undefined} />
+                            <AvatarFallback className="bg-[#eab308] text-[#0f172a] text-xs">
+                              {profile?.display_name?.charAt(0).toUpperCase() || 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col items-start justify-center">
+                            <span className="text-xs max-w-[100px] truncate leading-none">
+                              {profile?.display_name || 'User'}
+                            </span>
+                            <span className="text-[9px] text-slate-400 mt-1 uppercase leading-none">
+                              {renderRole(profile?.role)}
+                            </span>
+                          </div>
+                          <ChevronDown className="h-3.5 w-3.5 opacity-50 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52 bg-[#1e293b] border-slate-700 text-white font-khmer text-xs">
+                        <DropdownMenuLabel>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs">{profile?.display_name || 'User'}</span>
+                            <span className="text-[10px] text-slate-400">{profile?.email || ''}</span>
+                          </div>
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator className="bg-slate-700" />
+                        <DropdownMenuItem onClick={() => navigate('/dashboard')} className="hover:bg-slate-800 cursor-pointer text-xs">
+                          <LayoutDashboard className="h-4 w-4 mr-2.5 text-slate-400" />
+                          គ្រប់គ្រង
+                        </DropdownMenuItem>
 
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setLang(lang === 'en' ? 'km' : 'en')}
-                  className="flex items-center justify-center gap-1.5 h-8 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-[11px]"
-                >
-                  <Languages className="h-3.5 w-3.5 text-blue-500" />
-                  {lang === 'en' ? 'ខ្មែរ' : 'En'}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleTheme}
-                  className="flex items-center justify-center gap-1.5 h-8 rounded-xl border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-[#1e2a3f]/60 text-slate-700 dark:text-slate-200 text-[11px]"
-                >
-                  {theme === 'light' ? (
-                    <Moon className="h-3.5 w-3.5 text-amber-500" />
+                        {isAdminRoute ? (
+                          <DropdownMenuItem onClick={() => navigate('/')} className="hover:bg-slate-800 cursor-pointer text-xs">
+                            <Eye className="h-4 w-4 mr-2.5 text-slate-400" />
+                            View Site
+                          </DropdownMenuItem>
+                        ) : (
+                          isAdmin && (
+                            <DropdownMenuItem onClick={() => navigate('/admin')} className="hover:bg-slate-800 cursor-pointer text-xs">
+                              <Shield className="h-4 w-4 mr-2.5 text-slate-400" />
+                              Admin
+                            </DropdownMenuItem>
+                          )
+                        )}
+
+                        <DropdownMenuItem onClick={() => navigate('/profile')} className="hover:bg-slate-800 cursor-pointer text-xs">
+                          <User className="h-4 w-4 mr-2.5 text-slate-400" />
+                          {t('nav.profile')}
+                        </DropdownMenuItem>
+
+                        <DropdownMenuSeparator className="bg-slate-700" />
+                        <div className="px-2 py-1.5 flex items-center justify-between">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setLang(lang === 'en' ? 'km' : 'en')}
+                            className="text-slate-300 hover:text-white hover:bg-slate-800 text-xs h-8"
+                          >
+                            <Languages className="h-3.5 w-3.5 mr-1.5" />
+                            {lang === 'en' ? 'KH' : 'EN'}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={toggleTheme}
+                            className="text-slate-300 hover:text-white hover:bg-slate-800 text-xs h-8"
+                          >
+                            {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+                          </Button>
+                        </div>
+                        <DropdownMenuSeparator className="bg-slate-700" />
+
+                        <DropdownMenuItem
+                          onClick={handleSignOut}
+                          className="text-red-400 hover:bg-slate-800 hover:text-red-300 cursor-pointer text-xs"
+                        >
+                          <LogOut className="h-4 w-4 mr-2.5" />
+                          {t('nav.signOut')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   ) : (
-                    <Sun className="h-3.5 w-3.5 text-amber-400" />
-                  )}
-                  {theme === 'light' ? 'Dark' : 'Light'}
-                </Button>
-              </div>
-
-              <div className="pt-1">
-                <div className="grid grid-cols-4 gap-y-2.5 gap-x-1 py-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigate('/dashboard');
-                      setMobileOpen(false);
-                    }}
-                    className={cn(
-                      'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-all active:scale-90',
-                      isActive('/dashboard')
-                        ? 'text-blue-500'
-                        : 'text-slate-700 dark:text-slate-200 hover:text-blue-400'
-                    )}
-                  >
-                    <LayoutDashboard className="h-5 w-5 text-[#3b82f6]" />
-                    <span className="text-[10px] leading-none">
-                      {lang === 'km' ? 'គ្រប់គ្រង' : 'Dashboard'}
-                    </span>
-                  </button>
-
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigate(isAdminRoute ? '/' : '/admin');
-                        setMobileOpen(false);
-                      }}
-                      className="flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl text-slate-700 dark:text-slate-200 hover:text-amber-400 transition-all active:scale-90"
-                    >
-                      {isAdminRoute ? (
-                        <Eye className="h-5 w-5 text-emerald-400" />
-                      ) : (
-                        <Shield className="h-5 w-5 text-[#eab308]" />
-                      )}
-                      <span className="text-[10px] leading-none">
-                        {isAdminRoute ? 'ទំព័រដើម' : 'Admin'}
-                      </span>
-                    </button>
-                  )}
-
-                  {menuFeatureItems.map((item) => (
-                    <button
-                      key={item.path}
-                      type="button"
-                      onClick={() => {
-                        navigate(item.path);
-                        setMobileOpen(false);
-                      }}
-                      className={cn(
-                        'flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-all active:scale-90',
-                        isActive(item.path)
-                          ? 'text-blue-500'
-                          : 'text-slate-700 dark:text-slate-200 hover:text-blue-400'
-                      )}
-                    >
-                      <item.icon className={cn('h-5 w-5', item.color)} />
-                      <span className="text-[10px] leading-none">
-                        {lang === 'km' ? item.labelKm : item.labelEn}
-                      </span>
-                    </button>
-                  ))}
-
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobileOpen(false);
-                        setShowAdminSecurityModal(true);
-                      }}
-                      className="flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl text-amber-500 hover:text-amber-400 transition-all active:scale-90"
-                    >
-                      <KeyRound className="h-5 w-5 text-amber-400" />
-                      <span className="text-[10px] leading-none">កូដសិស្ស</span>
-                    </button>
+                    <div className="hidden md:flex items-center gap-2 font-khmer">
+                      <Button variant="ghost" size="sm" onClick={() => navigate('/signin')} className="text-white hover:bg-white/10 text-xs">
+                        <LogIn className="h-3.5 w-3.5 mr-1.5" />
+                        {t('nav.signIn')}
+                      </Button>
+                      <Button size="sm" onClick={() => navigate('/signup')} className="bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs">
+                        <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+                        {t('nav.createAccount')}
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          </header>
+          <div className="h-14 sm:h-16 w-full shrink-0 pointer-events-none" />
+        </>
       )}
 
       <div
@@ -1567,13 +1365,10 @@ export function Header() {
       >
         <button
           type="button"
-          onClick={() => {
-            setMobileOpen(false);
-            navigate('/');
-          }}
+          onClick={() => navigate('/')}
           className={cn(
             'flex flex-col items-center justify-center w-full gap-0.5 transition-colors',
-            isActive('/') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
+            isActive('/') ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
           <Home className="h-[19px] w-[19px]" />
@@ -1582,13 +1377,10 @@ export function Header() {
 
         <button
           type="button"
-          onClick={() => {
-            setMobileOpen(false);
-            navigate('/attendance');
-          }}
+          onClick={() => navigate('/attendance')}
           className={cn(
             'flex flex-col items-center justify-center w-full gap-0.5 transition-colors',
-            isActive('/attendance') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
+            isActive('/attendance') ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
           <UserCheck className="h-[19px] w-[19px]" />
@@ -1597,36 +1389,35 @@ export function Header() {
 
         <button
           type="button"
-          onClick={() => setMobileOpen((prev) => !prev)}
+          onClick={() => navigate('/dashboard')}
           className="flex flex-col items-center justify-center shrink-0 -mt-6 mx-1"
         >
           <div
             className={cn(
               'text-white h-[48px] w-[48px] flex items-center justify-center rounded-full shadow-lg border-[3.5px] border-white dark:border-[#091224] transition-all active:scale-95',
-              mobileOpen ? 'bg-[#3b82f6]' : 'bg-[#1e293b]'
+              isDashboardOverlay
+                ? 'bg-[#3b82f6] shadow-[0_0_16px_rgba(59,130,246,0.5)]'
+                : 'bg-[#1e293b]'
             )}
           >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            <LayoutDashboard className="h-5 w-5" />
           </div>
           <span
             className={cn(
               'text-[10px] mt-0.5',
-              mobileOpen ? 'text-[#3b82f6]' : 'text-slate-600 dark:text-slate-300'
+              isDashboardOverlay ? 'text-[#3b82f6] font-bold' : 'text-slate-600 dark:text-slate-300'
             )}
           >
-            {lang === 'km' ? 'ម៉ឺនុយ' : 'Menu'}
+            {lang === 'km' ? 'គ្រប់គ្រង' : 'Dashboard'}
           </span>
         </button>
 
         <button
           type="button"
-          onClick={() => {
-            setMobileOpen(false);
-            navigate('/leave');
-          }}
+          onClick={() => navigate('/leave')}
           className={cn(
             'flex flex-col items-center justify-center w-full gap-0.5 transition-colors',
-            isActive('/leave') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
+            isActive('/leave') ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
           <FileText className="h-[19px] w-[19px]" />
@@ -1635,13 +1426,10 @@ export function Header() {
 
         <button
           type="button"
-          onClick={() => {
-            setMobileOpen(false);
-            navigate('/about');
-          }}
+          onClick={() => navigate('/about')}
           className={cn(
             'flex flex-col items-center justify-center w-full gap-0.5 transition-colors',
-            isActive('/about') && !mobileOpen ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
+            isActive('/about') ? 'text-[#3b82f6]' : 'text-slate-500 dark:text-slate-400'
           )}
         >
           <Info className="h-[19px] w-[19px]" />
@@ -1653,7 +1441,7 @@ export function Header() {
         <div
           id="bipa-dashboard-scroll-container"
           style={{ zIndex: 88, WebkitOverflowScrolling: 'touch' }}
-          className="bipa-single-overlay-box fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto scrollbar-thin"
+          className="bipa-single-overlay-box fixed top-0 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto scrollbar-thin"
         >
           <StudentPersonalDashboard />
         </div>

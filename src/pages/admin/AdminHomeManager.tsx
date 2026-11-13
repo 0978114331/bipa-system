@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit2, Trash2, Eye, Heart, Save, BarChart3, Settings, Activity } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, Heart, Save, Settings, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { HomeBannerItem, HomeNewsItem } from '@/pages/public/HomePage';
 

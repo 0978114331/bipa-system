@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -36,7 +37,8 @@ import {
   Headphones,
   Info,
   ArrowRight,
-  Contact
+  Contact,
+  Save
 } from 'lucide-react';
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
 import {
@@ -77,13 +79,14 @@ export interface StudentSecurityProfile {
 export interface StudentSecurityPayload {
   profiles: Record<string, StudentSecurityProfile>;
   deletedCodes?: string[];
+  updatedAt?: number;
 }
 
 export const SECURITY_STORAGE_KEY = 'bipa_student_security_system_v3';
 export const DELETED_USERS_STORAGE_KEY = 'bipa_deleted_security_users_v1';
 export const VERIFIED_TOKEN_KEY = 'bipa_verified_student_token_v2';
 
-function normalizeCode(raw: string): string {
+export function normalizeCode(raw: string): string {
   let cleaned = String(raw || '').trim().replace(/\s+/g, '').toUpperCase();
   if (cleaned.startsWith('PIBA-')) cleaned = 'BIPA-' + cleaned.slice(5);
   else if (cleaned.startsWith('PIBA')) cleaned = 'BIPA-' + cleaned.slice(4);
@@ -150,6 +153,41 @@ export function generateEncryptedCodeFromId(studentCode: string, salt = 2026): s
   return `BP-${part1}-${part2}`;
 }
 
+export function generateObfuscatedCardCipher(studentCode: string, secretCode: string): string {
+  const raw = `${normalizeCode(studentCode)}::${String(secretCode || '').trim()}::BIPA_CARD_CIPHER`;
+  let h1 = 0x811c9dc5;
+  let h2 = 0x1b873593;
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw.charCodeAt(i);
+    h1 ^= c;
+    h1 = Math.imul(h1, 0x01000193);
+    h2 ^= c * 37;
+    h2 = Math.imul(h2, 0xcc9e2d51);
+  }
+  const alphabet = '9X7FK2M8Q4Z1W5R3J6N0BVTYHPLGCDS';
+  let out = '';
+  let a = Math.abs(h1);
+  let b = Math.abs(h2);
+  for (let i = 0; i < 12; i++) {
+    const idx = ((i % 2 === 0 ? a : b) + i * 13) % alphabet.length;
+    out += alphabet[idx];
+    a = Math.floor(a / 3) ^ (b & 0xff);
+    b = Math.floor(b / 5) ^ (a & 0xff);
+  }
+  return `ENC#${out.slice(0, 4)}-${out.slice(4, 8)}-${out.slice(8, 12)}`;
+}
+
+export function generateObfuscatedBarcodeSerial(studentCode: string, secretCode: string): string {
+  const raw = `BAR::${normalizeCode(studentCode)}::${String(secretCode || '').trim()}`;
+  let h = 5381;
+  for (let i = 0; i < raw.length; i++) {
+    h = (h * 33) ^ raw.charCodeAt(i);
+  }
+  const hex1 = (h >>> 0).toString(16).toUpperCase().padStart(8, '0');
+  const hex2 = ((h ^ 0xa5a5a5a5) >>> 0).toString(16).toUpperCase().padStart(8, '0');
+  return `0x${hex1}${hex2}`;
+}
+
 export function buildStudentQrToken(studentCode: string, secretCode: string): string {
   return `BIPA-PASS:${normalizeCode(studentCode)}:${secretCode.trim()}`;
 }
@@ -205,7 +243,7 @@ function getCombinedPaymentAndRiceStudentsMap(
         firstNameKm: firstName,
         fullNameKm: cleanName,
         genderKm: genderKm || 'ប្រុស',
-        userTypeKm: 'សិស្ស',
+        userTypeKm: 'និស្សិត',
         phoneNumber: phoneRaw || generateDefaultPhone(code),
         majorKm: majorKm || 'ព័ត៌មានវិទ្យា',
         generationKm: genKm || 'សិស្សមណ្ឌល',
@@ -295,21 +333,20 @@ export function loadCachedSecurityPayload(): StudentSecurityPayload {
       }
       const item = savedProfiles[k];
       const seed = Number(item.saltSeed || 2026);
-      const fullName =
-        item.fullNameKm ||
-        `${item.lastNameKm || ''} ${item.firstNameKm || ''}`.trim() ||
-        baseMap[code]?.fullNameKm ||
-        code;
-      const split = splitKhmerFullName(fullName);
+      const fallbackFull = item.fullNameKm || baseMap[code]?.fullNameKm || code;
+      const split = splitKhmerFullName(fallbackFull);
+      const lName = item.lastNameKm !== undefined ? String(item.lastNameKm) : split.lastName;
+      const fName = item.firstNameKm !== undefined ? String(item.firstNameKm) : split.firstName;
+      const fullName = `${lName} ${fName}`.trim() || fallbackFull;
 
       merged[code] = {
         ...(merged[code] || {}),
         ...item,
         studentCode: code,
-        lastNameKm: item.lastNameKm !== undefined ? item.lastNameKm : split.lastName,
-        firstNameKm: item.firstNameKm !== undefined ? item.firstNameKm : split.firstName,
+        lastNameKm: lName,
+        firstNameKm: fName,
         fullNameKm: fullName,
-        userTypeKm: item.userTypeKm || 'សិស្ស',
+        userTypeKm: item.userTypeKm || 'និស្សិត',
         phoneNumber:
           item.phoneNumber || baseMap[code]?.phoneNumber || generateDefaultPhone(code),
         saltSeed: seed,
@@ -321,7 +358,8 @@ export function loadCachedSecurityPayload(): StudentSecurityPayload {
 
     return {
       profiles: merged,
-      deletedCodes: combinedDeleted
+      deletedCodes: combinedDeleted,
+      updatedAt: Number(parsed?.updatedAt || 0)
     };
   } catch {
     return {
@@ -355,28 +393,31 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
         saveLocalDeletedCodes(cloudDeleted);
         const deletedSet = new Set(cloudDeleted);
 
-        const merged: Record<string, StudentSecurityProfile> = {};
+        const baseMap = getCombinedPaymentAndRiceStudentsMap(cloudDeleted);
+        const merged: Record<string, StudentSecurityProfile> = { ...baseMap };
 
         Object.keys(parsed.profiles).forEach((k) => {
           const code = normalizeCode(k);
           if (!code || deletedSet.has(code)) {
+            delete merged[code];
             return;
           }
           const item = parsed.profiles[k];
           const seed = Number(item.saltSeed || 2026);
-          const fullName =
-            item.fullNameKm ||
-            `${item.lastNameKm || ''} ${item.firstNameKm || ''}`.trim() ||
-            code;
-          const split = splitKhmerFullName(fullName);
+          const fallbackFull = item.fullNameKm || baseMap[code]?.fullNameKm || code;
+          const split = splitKhmerFullName(fallbackFull);
+          const lName = item.lastNameKm !== undefined ? String(item.lastNameKm) : split.lastName;
+          const fName = item.firstNameKm !== undefined ? String(item.firstNameKm) : split.firstName;
+          const fullName = `${lName} ${fName}`.trim() || fallbackFull;
 
           merged[code] = {
+            ...(merged[code] || {}),
             ...item,
             studentCode: code,
-            lastNameKm: item.lastNameKm !== undefined ? item.lastNameKm : split.lastName,
-            firstNameKm: item.firstNameKm !== undefined ? item.firstNameKm : split.firstName,
+            lastNameKm: lName,
+            firstNameKm: fName,
             fullNameKm: fullName,
-            userTypeKm: item.userTypeKm || 'សិស្ស',
+            userTypeKm: item.userTypeKm || 'និស្សិត',
             phoneNumber: item.phoneNumber || generateDefaultPhone(code),
             saltSeed: seed,
             secretCode: item.secretCode || generateEncryptedCodeFromId(code, seed),
@@ -389,7 +430,8 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
 
         current = {
           profiles: merged,
-          deletedCodes: cloudDeleted
+          deletedCodes: cloudDeleted,
+          updatedAt: Number(parsed.updatedAt || Date.now())
         };
         localStorage.setItem(SECURITY_STORAGE_KEY, JSON.stringify(current));
       }
@@ -418,7 +460,16 @@ export async function saveSecurityPayloadToDb(
   Object.keys(payload.profiles || {}).forEach((k) => {
     const code = normalizeCode(k);
     if (!delSet.has(code)) {
-      cleanProfiles[code] = payload.profiles[k];
+      const item = payload.profiles[k];
+      const composedFull =
+        `${item.lastNameKm || ''} ${item.firstNameKm || ''}`.trim() ||
+        item.fullNameKm ||
+        code;
+      cleanProfiles[code] = {
+        ...item,
+        studentCode: code,
+        fullNameKm: composedFull
+      };
     }
   });
 
@@ -441,6 +492,14 @@ export async function saveSecurityPayloadToDb(
       },
       { onConflict: 'id' }
     );
+  } catch {}
+
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('bipa_security_sync_channel');
+      bc.postMessage({ type: 'SECURITY_UPDATED', timestamp: nowTs });
+      bc.close();
+    }
   } catch {}
 
   window.dispatchEvent(new Event('student-security-updated'));
@@ -507,10 +566,12 @@ export function clearVerifiedStudentSession() {
 
 export function BarcodeSvg({
   value,
+  displayLabel,
   hideText = false,
   height = 38
 }: {
   value: string;
+  displayLabel?: string;
   hideText?: boolean;
   height?: number;
 }) {
@@ -549,8 +610,8 @@ export function BarcodeSvg({
         })}
       </svg>
       {!hideText && (
-        <span className="text-[9.5px] font-mono tracking-[0.18em] text-slate-800 mt-1">
-          {value}
+        <span className="text-[9.5px] font-mono tracking-[0.18em] text-slate-800 mt-1 truncate max-w-full">
+          {displayLabel || value}
         </span>
       )}
     </div>
@@ -1325,6 +1386,105 @@ export function StudentVerificationGate({
   );
 }
 
+function StudentIdCardSingleItem({
+  st,
+  logoUrl
+}: {
+  st: StudentSecurityProfile;
+  logoUrl: string;
+}) {
+  const token = buildStudentQrToken(st.studentCode, st.secretCode);
+  const cipherCode = generateObfuscatedCardCipher(st.studentCode, st.secretCode);
+  const barcodeSerial = generateObfuscatedBarcodeSerial(st.studentCode, st.secretCode);
+  const fullName = `${st.lastNameKm || ''} ${st.firstNameKm || ''}`.trim() || st.fullNameKm;
+  const avatarSrc = st.avatarDataUrl || localStorage.getItem(`bipa_avatar_${st.studentCode}`) || '';
+
+  return (
+    <div className="bipa-cut-card border-2 border-dashed border-slate-400 rounded-2xl p-3.5 bg-white text-slate-900 flex flex-col justify-between gap-2.5 break-inside-avoid">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <img
+            src={logoUrl}
+            alt="BIPA"
+            className="w-8 h-8 rounded-full object-contain border border-slate-200 p-0.5 shrink-0 bg-white"
+          />
+          <div className="min-w-0">
+            <div className="font-moul-kh text-[10px] text-slate-900 leading-tight truncate">
+              សមាគមជនជាតិដើមភាគតិចព្នង (BIPA)
+            </div>
+            <div className="text-[9.5px] text-amber-600 font-bold">
+              បណ្ណស្កេនព័ត៌មាននិស្សិត
+            </div>
+          </div>
+        </div>
+        <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-slate-950 font-black text-[10px] shrink-0">
+          {st.studentCode}
+        </span>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <div className="space-y-1 text-xs flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            {avatarSrc ? (
+              <img
+                src={avatarSrc}
+                alt=""
+                className="w-11 h-11 rounded-full object-cover object-top border border-slate-300 shrink-0"
+              />
+            ) : (
+              <div className="w-11 h-11 rounded-full bg-amber-500 text-white font-bold text-sm flex items-center justify-center shrink-0">
+                {fullName.charAt(0)}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="font-moul-kh text-xs text-slate-900 truncate">
+                {fullName}
+              </div>
+              <div className="text-[10px] text-slate-500">
+                ប្រភេទ៖ {st.userTypeKm || 'និស្សិត'}
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-1 space-y-0.5 text-[10.5px]">
+            <div>
+              <span className="text-slate-500">ទូរស័ព្ទ៖ </span>
+              <span className="font-bold text-slate-900">{st.phoneNumber}</span>
+            </div>
+            <div className="truncate">
+              <span className="text-slate-500">កូដ៖ </span>
+              <span className="font-mono text-[10px] font-bold text-blue-700">
+                {cipherCode}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="shrink-0 flex flex-col items-center">
+          <img
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=6&data=${encodeURIComponent(
+              token
+            )}`}
+            alt="QR"
+            crossOrigin="anonymous"
+            style={{ width: '108px', height: '108px' }}
+            className="rounded-xl border border-slate-200 p-1 bg-white"
+          />
+        </div>
+      </div>
+
+      <div className="pt-0.5">
+        <BarcodeSvg
+          value={`${st.studentCode}:${st.secretCode}`}
+          displayLabel={barcodeSerial}
+          hideText={false}
+          height={25}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function AdminA4BarcodeSheetModal({
   profiles,
   logoUrl,
@@ -1334,185 +1494,160 @@ export function AdminA4BarcodeSheetModal({
   logoUrl: string;
   onClose: () => void;
 }) {
+  const paginatedPages = useMemo(() => {
+    const pages: StudentSecurityProfile[][] = [];
+    for (let i = 0; i < profiles.length; i += 6) {
+      pages.push(profiles.slice(i, i + 6));
+    }
+    return pages;
+  }, [profiles]);
+
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 font-khmer overflow-y-auto animate-in fade-in duration-200"
-    >
-      <style>{`
-        @media print {
-          @page {
-            size: A4 portrait;
-            margin: 8mm;
-          }
-          html, body {
-            background: #ffffff !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          body * {
-            visibility: hidden !important;
-          }
-          #bipa-a4-multi-barcode-sheet,
-          #bipa-a4-multi-barcode-sheet * {
-            visibility: visible !important;
-          }
-          #bipa-a4-multi-barcode-sheet {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            background: #ffffff !important;
-            color: #000000 !important;
-            box-shadow: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
-          }
-          .bipa-cut-card {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          .no-print-header {
-            display: none !important;
-          }
-        }
-      `}</style>
-
+    <>
       <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl max-h-[94dvh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-slate-700"
+        onClick={onClose}
+        className="fixed inset-0 z-[250] bg-black/85 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 font-khmer animate-in fade-in duration-200"
       >
-        <div className="no-print-header p-4 bg-[#0f172a] border-b border-slate-800 text-white flex flex-wrap items-center justify-between gap-2 shrink-0">
-          <div className="flex items-center gap-2">
-            <Printer className="h-4 w-4 text-amber-400" />
-            <div>
-              <h3 className="font-moul-kh text-xs text-white">
-                បោះពុម្ពកាត QR & បាកូដនិស្សិត (A4)
-              </h3>
-              <p className="text-[11px] text-slate-400">
-                សរុប {profiles.length} កាត សម្រាប់កាត់ចែកនិស្សិត
-              </p>
+        <style>{`
+          #bipa-a4-print-portal {
+            display: none;
+          }
+          @media print {
+            @page {
+              size: A4 portrait;
+              margin: 8mm;
+            }
+            html, body {
+              background: #ffffff !important;
+              background-color: #ffffff !important;
+              height: auto !important;
+              min-height: 0 !important;
+              overflow: visible !important;
+              position: static !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            body > *:not(#bipa-a4-print-portal) {
+              display: none !important;
+            }
+            #bipa-a4-print-portal {
+              display: block !important;
+              position: static !important;
+              width: 100% !important;
+              height: auto !important;
+              overflow: visible !important;
+              background: #ffffff !important;
+            }
+            .bipa-a4-print-page {
+              width: 100% !important;
+              display: grid !important;
+              grid-template-columns: repeat(2, 1fr) !important;
+              gap: 6mm !important;
+              padding: 1mm 0 !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+            .bipa-a4-print-page:last-child {
+              page-break-after: auto !important;
+              break-after: auto !important;
+            }
+            .bipa-cut-card {
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+          }
+        `}</style>
+
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-4xl h-[90dvh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-slate-700"
+        >
+          <div className="p-4 bg-[#0f172a] border-b border-slate-800 text-white flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2">
+              <Printer className="h-4 w-4 text-amber-400" />
+              <div>
+                <h3 className="font-moul-kh text-xs text-white">
+                  បោះពុម្ពកាត QR & បាកូដនិស្សិត (A4)
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  សរុប {profiles.length} កាត • {paginatedPages.length} ទំព័រ A4 (១ ទំព័រ ៦ កាត មិនដាច់កាត)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => window.print()}
+                className="bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs h-8 px-3.5 rounded-xl shadow"
+              >
+                <Printer className="h-3.5 w-3.5 mr-1.5" />
+                បោះពុម្ព (A4)
+              </Button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              onClick={() => window.print()}
-              className="bg-amber-400 hover:bg-amber-500 text-slate-950 text-xs h-8 px-3.5 rounded-xl shadow"
-            >
-              <Printer className="h-3.5 w-3.5 mr-1.5" />
-              បោះពុម្ព (A4)
-            </Button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-y-auto p-4 sm:p-6 bg-slate-800/70 flex justify-center flex-1 scrollbar-thin">
           <div
-            id="bipa-a4-multi-barcode-sheet"
-            className="w-full max-w-[210mm] bg-white text-slate-900 p-4 sm:p-6 shadow-2xl rounded-sm"
+            style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 bg-slate-800/80 space-y-6 scrollbar-thin"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {profiles.map((st) => {
-                const token = buildStudentQrToken(st.studentCode, st.secretCode);
-                return (
-                  <div
-                    key={st.studentCode}
-                    className="bipa-cut-card border-2 border-dashed border-slate-400 rounded-2xl p-3.5 bg-white flex flex-col justify-between gap-2.5"
-                  >
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={logoUrl}
-                          alt="BIPA"
-                          className="w-8 h-8 rounded-full object-contain border border-slate-200 p-0.5"
-                        />
-                        <div>
-                          <div className="font-moul-kh text-[10px] text-slate-900 leading-tight">
-                            សមាគមជនជាតិដើមភាគតិចព្នង (BIPA)
-                          </div>
-                          <div className="text-[9.5px] text-amber-600">
-                            បណ្ណស្កេនព័ត៌មាននិស្សិត
-                          </div>
-                        </div>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 text-[10px]">
-                        {st.studentCode}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="space-y-1 text-xs flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          {st.avatarDataUrl ? (
-                            <img
-                              src={st.avatarDataUrl}
-                              alt=""
-                              className="w-11 h-11 rounded-full object-cover border border-slate-300 shrink-0"
-                            />
-                          ) : (
-                            <div className="w-11 h-11 rounded-full bg-amber-500 text-white text-sm flex items-center justify-center shrink-0">
-                              {st.fullNameKm.charAt(0)}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <div className="font-moul-kh text-xs text-slate-900 truncate">
-                              {st.fullNameKm}
-                            </div>
-                            <div className="text-[10px] text-slate-500">
-                              ប្រភេទ៖ {st.userTypeKm || 'សិស្ស'}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="pt-1 space-y-0.5 text-[10.5px]">
-                          <div>
-                            <span className="text-slate-500">ទូរស័ព្ទ៖ </span>
-                            <span className="text-slate-900">{st.phoneNumber}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">កូដ៖ </span>
-                            <span className="font-mono text-blue-700">{st.secretCode}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 flex flex-col items-center">
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=6&data=${encodeURIComponent(
-                            token
-                          )}`}
-                          alt="QR"
-                          style={{ width: '112px', height: '112px' }}
-                          className="rounded-xl border border-slate-200 p-1 bg-white"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="pt-0.5">
-                      <BarcodeSvg
-                        value={`${st.studentCode}:${st.secretCode}`}
-                        hideText={false}
-                        height={26}
-                      />
-                    </div>
+            {paginatedPages.map((pageProfiles, pageIdx) => (
+              <div
+                key={pageIdx}
+                className="w-full max-w-[210mm] mx-auto bg-white text-slate-900 p-4 sm:p-6 shadow-2xl rounded-2xl space-y-3"
+              >
+                {paginatedPages.length > 1 && (
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2 text-xs text-slate-500 font-bold">
+                    <span>ទំព័រ A4 ទី {pageIdx + 1} / {paginatedPages.length}</span>
+                    <span>ចំនួន {pageProfiles.length} កាត</span>
                   </div>
-                );
-              })}
-            </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {pageProfiles.map((st) => (
+                    <StudentIdCardSingleItem
+                      key={st.studentCode}
+                      st={st}
+                      logoUrl={logoUrl}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
-    </div>
+
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <div id="bipa-a4-print-portal">
+            {paginatedPages.map((pageProfiles, pageIdx) => (
+              <div key={pageIdx} className="bipa-a4-print-page">
+                {pageProfiles.map((st) => (
+                  <StudentIdCardSingleItem
+                    key={st.studentCode}
+                    st={st}
+                    logoUrl={logoUrl}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
 
@@ -1528,6 +1663,8 @@ export function AdminUserPasswordDashboard() {
     useState<StudentSecurityProfile | null>(null);
   const [showA4PrintAllModal, setShowA4PrintAllModal] = useState(false);
   const [revealedCodes, setRevealedCodes] = useState<Record<string, boolean>>({});
+  const [dirtyRows, setDirtyRows] = useState<Record<string, boolean>>({});
+  const [isSavingAll, setIsSavingAll] = useState(false);
   const [toastText, setToastText] = useState('');
 
   const [showAddBox, setShowAddBox] = useState(false);
@@ -1535,12 +1672,19 @@ export function AdminUserPasswordDashboard() {
   const [newLastName, setNewLastName] = useState('');
   const [newFirstName, setNewFirstName] = useState('');
   const [newPhone, setNewPhone] = useState('');
-  const [newUserType, setNewUserType] = useState<StudentUserCategory>('សិស្ស');
+  const [newUserType, setNewUserType] = useState<StudentUserCategory>('និស្សិត');
 
   const rowAvatarInputRef = useRef<HTMLInputElement>(null);
   const [uploadingForCode, setUploadingForCode] = useState<string | null>(null);
 
-  const syncFromPaymentAndRiceTables = async () => {
+  const showNotice = (msg: string) => {
+    setToastText(msg);
+    setTimeout(() => {
+      setToastText((prev) => (prev === msg ? '' : prev));
+    }, 3200);
+  };
+
+  const syncFromPaymentAndRiceTables = async (notify = false) => {
     const [secDb, payDb, riceDb] = await Promise.all([
       fetchSecurityPayloadFromDb(),
       fetchPaymentPayloadFromDb(),
@@ -1584,21 +1728,27 @@ export function AdminUserPasswordDashboard() {
       if (!code || deletedSet.has(code)) return;
       const existing = merged[code];
       const seed = existing?.saltSeed || 2026;
-      const cleanFull = (s.full_name_km || existing?.fullNameKm || code)
+      const existingFull = existing
+        ? `${existing.lastNameKm || ''} ${existing.firstNameKm || ''}`.trim() ||
+          existing.fullNameKm
+        : '';
+      const cleanFull = (existingFull || s.full_name_km || code)
         .replace(/\(ប្រធាន\)/g, '')
         .trim();
       const split = splitKhmerFullName(cleanFull);
 
       merged[code] = {
         studentCode: code,
-        lastNameKm: existing?.lastNameKm || split.lastName,
-        firstNameKm: existing?.firstNameKm || split.firstName,
+        lastNameKm:
+          existing?.lastNameKm !== undefined ? existing.lastNameKm : split.lastName,
+        firstNameKm:
+          existing?.firstNameKm !== undefined ? existing.firstNameKm : split.firstName,
         fullNameKm: cleanFull,
-        genderKm: s.gender_km || existing?.genderKm || 'ប្រុស',
-        userTypeKm: existing?.userTypeKm || 'សិស្ស',
+        genderKm: existing?.genderKm || s.gender_km || 'ប្រុស',
+        userTypeKm: existing?.userTypeKm || 'និស្សិត',
         phoneNumber: existing?.phoneNumber || generateDefaultPhone(code),
-        majorKm: s.major_km || existing?.majorKm || 'ព័ត៌មានវិទ្យា',
-        generationKm: s.generation_km || existing?.generationKm || 'សិស្សមណ្ឌល',
+        majorKm: existing?.majorKm || s.major_km || 'ព័ត៌មានវិទ្យា',
+        generationKm: existing?.generationKm || s.generation_km || 'សិស្សមណ្ឌល',
         saltSeed: seed,
         secretCode: existing?.secretCode || generateEncryptedCodeFromId(code, seed),
         avatarDataUrl:
@@ -1611,14 +1761,18 @@ export function AdminUserPasswordDashboard() {
 
     const nextPayload: StudentSecurityPayload = {
       profiles: merged,
-      deletedCodes: combinedDeleted
+      deletedCodes: combinedDeleted,
+      updatedAt: Date.now()
     };
     setSecurityPayload(nextPayload);
     await saveSecurityPayloadToDb(nextPayload);
+    if (notify) {
+      showNotice('បានធ្វើបច្ចុប្បន្នភាពទិន្នន័យ (Sync) រួចរាល់!');
+    }
   };
 
   useEffect(() => {
-    syncFromPaymentAndRiceTables();
+    syncFromPaymentAndRiceTables(false);
   }, []);
 
   const profilesList = useMemo(() => {
@@ -1629,7 +1783,7 @@ export function AdminUserPasswordDashboard() {
     );
     return Object.values(securityPayload.profiles)
       .filter((p) => !deletedSet.has(normalizeCode(p.studentCode)))
-      .sort((a, b) => a.studentCode.localeCompare(b.studentCode));
+      .sort((a, b) => a.studentCode.localeCompare(b.studentCode, undefined, { numeric: true }));
   }, [securityPayload]);
 
   const filteredList = useMemo(() => {
@@ -1639,45 +1793,127 @@ export function AdminUserPasswordDashboard() {
       (p) =>
         p.studentCode.toLowerCase().includes(q) ||
         p.fullNameKm.toLowerCase().includes(q) ||
+        (p.lastNameKm || '').toLowerCase().includes(q) ||
+        (p.firstNameKm || '').toLowerCase().includes(q) ||
         (p.phoneNumber || '').toLowerCase().includes(q)
     );
   }, [profilesList, searchQuery]);
 
-  const showNotice = (msg: string) => {
-    setToastText(msg);
-    setTimeout(() => setToastText(''), 3000);
-  };
-
-  const handleUpdateProfileField = async (
+  const handleLocalFieldEdit = (
     studentCode: string,
     patch: Partial<StudentSecurityProfile>
   ) => {
-    const existing = securityPayload.profiles[studentCode];
-    if (!existing) return;
-
-    const updated = {
-      ...existing,
-      ...patch
-    };
-    if (patch.lastNameKm !== undefined || patch.firstNameKm !== undefined) {
-      updated.fullNameKm = `${updated.lastNameKm || ''} ${updated.firstNameKm || ''}`.trim();
-    }
-
-    const nextPayload: StudentSecurityPayload = {
-      ...securityPayload,
-      profiles: {
-        ...securityPayload.profiles,
-        [studentCode]: updated
+    const code = normalizeCode(studentCode);
+    setSecurityPayload((prev) => {
+      const existing = prev.profiles[code];
+      if (!existing) return prev;
+      const updated: StudentSecurityProfile = {
+        ...existing,
+        ...patch
+      };
+      if (patch.lastNameKm !== undefined || patch.firstNameKm !== undefined) {
+        updated.fullNameKm = `${updated.lastNameKm || ''} ${updated.firstNameKm || ''}`.trim();
       }
-    };
-    setSecurityPayload(nextPayload);
-    await saveSecurityPayloadToDb(nextPayload);
+      const next: StudentSecurityPayload = {
+        ...prev,
+        profiles: {
+          ...prev.profiles,
+          [code]: updated
+        },
+        updatedAt: Date.now()
+      };
+      localStorage.setItem(SECURITY_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+    setDirtyRows((prev) => ({ ...prev, [code]: true }));
+  };
+
+  const persistAndPropagateNames = async (
+    targetPayload: StudentSecurityPayload,
+    successMessage: string
+  ) => {
+    setIsSavingAll(true);
+    await saveSecurityPayloadToDb(targetPayload);
+
+    try {
+      const payData = await fetchPaymentPayloadFromDb();
+      let payModified = false;
+      const nextPayStudents = (payData.residentStudents || []).map((s) => {
+        const c = normalizeCode(s.student_code);
+        const prof = targetPayload.profiles[c];
+        if (prof) {
+          const full =
+            `${prof.lastNameKm || ''} ${prof.firstNameKm || ''}`.trim() || prof.fullNameKm;
+          if (full && s.full_name_km !== full) {
+            payModified = true;
+            return { ...s, full_name_km: full, full_name_en: full };
+          }
+        }
+        return s;
+      });
+      if (payModified) {
+        await savePaymentPayloadToDb({
+          ...payData,
+          residentStudents: nextPayStudents
+        });
+      }
+    } catch {}
+
+    try {
+      const riceData = await fetchRicePayloadFromDb();
+      let riceModified = false;
+      const nextRiceStudents = (riceData.residentStudents || []).map((s) => {
+        const c = normalizeCode(s.student_code);
+        const prof = targetPayload.profiles[c];
+        if (prof) {
+          const full =
+            `${prof.lastNameKm || ''} ${prof.firstNameKm || ''}`.trim() || prof.fullNameKm;
+          if (full && s.full_name_km !== full) {
+            riceModified = true;
+            return { ...s, full_name_km: full, full_name_en: full };
+          }
+        }
+        return s;
+      });
+      if (riceModified) {
+        await saveRicePayloadToDb({
+          ...riceData,
+          residentStudents: nextRiceStudents
+        });
+      }
+    } catch {}
+
+    try {
+      const linkedCode = normalizeCode(localStorage.getItem('bipa_linked_student_id') || '');
+      if (linkedCode && targetPayload.profiles[linkedCode]) {
+        setVerifiedStudentSession(targetPayload.profiles[linkedCode]);
+      }
+    } catch {}
+
+    setIsSavingAll(false);
+    setDirtyRows({});
+    showNotice(successMessage);
+  };
+
+  const handleSaveSingleStudentRow = async (st: StudentSecurityProfile) => {
+    const fullName = `${st.lastNameKm || ''} ${st.firstNameKm || ''}`.trim() || st.fullNameKm;
+    await persistAndPropagateNames(
+      securityPayload,
+      `បានរក្សាទុក និងធ្វើបច្ចុប្បន្នភាពព័ត៌មានរបស់ «${fullName}» ដោយជោគជ័យ!`
+    );
+  };
+
+  const handleSaveAllEditedRows = async () => {
+    await persistAndPropagateNames(
+      securityPayload,
+      'បានរក្សាទុកការកែប្រែទាំងអស់ និងបញ្ជូនទៅកាន់អ្នកប្រើប្រាស់ភ្លាមៗ!'
+    );
   };
 
   const handleRowAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !uploadingForCode) return;
-    const targetCode = uploadingForCode;
+    const targetCode = normalizeCode(uploadingForCode);
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -1699,8 +1935,25 @@ export function AdminUserPasswordDashboard() {
         canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
         localStorage.setItem(`bipa_avatar_${targetCode}`, dataUrl);
-        await handleUpdateProfileField(targetCode, { avatarDataUrl: dataUrl });
-        showNotice(`បានរក្សាទុករូបភាពសម្រាប់ ${targetCode}`);
+
+        const existing = securityPayload.profiles[targetCode];
+        if (existing) {
+          const nextPayload: StudentSecurityPayload = {
+            ...securityPayload,
+            profiles: {
+              ...securityPayload.profiles,
+              [targetCode]: {
+                ...existing,
+                avatarDataUrl: dataUrl
+              }
+            },
+            updatedAt: Date.now()
+          };
+          setSecurityPayload(nextPayload);
+          await saveSecurityPayloadToDb(nextPayload);
+          showNotice(`បានរក្សាទុករូបភាពថ្មីសម្រាប់ ${targetCode} ដោយជោគជ័យ!`);
+        }
+        setUploadingForCode(null);
       };
       img.src = String(reader.result);
     };
@@ -1709,15 +1962,30 @@ export function AdminUserPasswordDashboard() {
   };
 
   const handleAutoEncryptNewCode = async (studentCode: string) => {
-    const existing = securityPayload.profiles[studentCode];
+    const code = normalizeCode(studentCode);
+    const existing = securityPayload.profiles[code];
     if (!existing) return;
     const newSeed = Math.floor(1000 + Math.random() * 90000);
-    const autoEncrypted = generateEncryptedCodeFromId(studentCode, newSeed);
-    await handleUpdateProfileField(studentCode, {
-      saltSeed: newSeed,
-      secretCode: autoEncrypted
-    });
-    showNotice(`បានប្តូរកូដថ្មីសម្រាប់ ${studentCode}`);
+    const autoEncrypted = generateEncryptedCodeFromId(code, newSeed);
+    const fullName =
+      `${existing.lastNameKm || ''} ${existing.firstNameKm || ''}`.trim() || existing.fullNameKm;
+
+    const nextPayload: StudentSecurityPayload = {
+      ...securityPayload,
+      profiles: {
+        ...securityPayload.profiles,
+        [code]: {
+          ...existing,
+          saltSeed: newSeed,
+          secretCode: autoEncrypted
+        }
+      },
+      updatedAt: Date.now()
+    };
+    setSecurityPayload(nextPayload);
+    setRevealedCodes((prev) => ({ ...prev, [code]: true }));
+    await saveSecurityPayloadToDb(nextPayload);
+    showNotice(`បានប្តូរកូដសម្ងាត់ថ្មីសម្រាប់ «${fullName} (${code})» ដោយជោគជ័យ!`);
   };
 
   const handleAddStudentAndSyncAll = async () => {
@@ -1755,7 +2023,8 @@ export function AdminUserPasswordDashboard() {
         ...securityPayload.profiles,
         [cleanCode]: newProfile
       },
-      deletedCodes: updatedDeleted
+      deletedCodes: updatedDeleted,
+      updatedAt: Date.now()
     };
     setSecurityPayload(nextSecPayload);
     await saveSecurityPayloadToDb(nextSecPayload);
@@ -1815,7 +2084,7 @@ export function AdminUserPasswordDashboard() {
     setNewFirstName('');
     setNewPhone('');
     setShowAddBox(false);
-    showNotice(`បានបន្ថែម "${newProfile.fullNameKm}" (${cleanCode})`);
+    showNotice(`បានបន្ថែមនិស្សិតថ្មី «${newProfile.fullNameKm} (${cleanCode})» ដោយជោគជ័យ!`);
   };
 
   const handleDeleteStudentProfile = async (studentCode: string, nameKm: string) => {
@@ -1838,7 +2107,8 @@ export function AdminUserPasswordDashboard() {
 
     const nextPayload: StudentSecurityPayload = {
       profiles: copy,
-      deletedCodes: updatedDeleted
+      deletedCodes: updatedDeleted,
+      updatedAt: Date.now()
     };
     setSecurityPayload(nextPayload);
     await saveSecurityPayloadToDb(nextPayload);
@@ -1875,8 +2145,10 @@ export function AdminUserPasswordDashboard() {
       }
     } catch {}
 
-    showNotice(`បានលុប "${nameKm} (${cleanCode})"`);
+    showNotice(`បានលុប «${nameKm} (${cleanCode})» ចេញពីប្រព័ន្ធរួចរាល់!`);
   };
+
+  const hasDirtyChanges = Object.keys(dirtyRows).length > 0;
 
   return (
     <div className="bipa-admin-sec-page space-y-4 font-khmer pb-28">
@@ -1896,8 +2168,8 @@ export function AdminUserPasswordDashboard() {
       />
 
       {toastText && (
-        <div className="fixed top-20 right-4 z-[250] px-4 py-2.5 rounded-2xl bg-emerald-950/95 border border-emerald-500 text-emerald-300 shadow-2xl flex items-center gap-2 text-xs">
-          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+        <div className="fixed top-20 right-4 z-[260] px-4 py-3 rounded-2xl bg-emerald-950/95 border border-emerald-400 text-emerald-200 shadow-2xl flex items-center gap-2.5 text-xs sm:text-sm font-bold animate-in slide-in-from-top-3 duration-200">
+          <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
           <span>{toastText}</span>
         </div>
       )}
@@ -1916,8 +2188,23 @@ export function AdminUserPasswordDashboard() {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
+            onClick={handleSaveAllEditedRows}
+            disabled={isSavingAll}
+            className={cn(
+              'text-xs h-9 px-4 rounded-xl shadow-xs font-bold transition-all',
+              hasDirtyChanges
+                ? 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 animate-pulse'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+            )}
+          >
+            <Save className="h-3.5 w-3.5 mr-1.5" />
+            {isSavingAll ? 'កំពុងរក្សាទុក...' : 'រក្សាទុកការកែប្រែ'}
+          </Button>
+
+          <Button
+            type="button"
             onClick={() => setShowA4PrintAllModal(true)}
-            className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs h-9 px-3.5 rounded-xl shadow-xs"
+            className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs h-9 px-3.5 rounded-xl shadow-xs font-bold"
           >
             <Printer className="h-3.5 w-3.5 mr-1.5" />
             បោះពុម្ពកាត A4 ({filteredList.length})
@@ -1926,7 +2213,7 @@ export function AdminUserPasswordDashboard() {
           <Button
             type="button"
             onClick={() => setShowAddBox((p) => !p)}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 px-3.5 rounded-xl shadow-xs"
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 px-3.5 rounded-xl shadow-xs font-bold"
           >
             <UserPlus className="h-3.5 w-3.5 mr-1.5" />
             បន្ថែម User
@@ -1935,7 +2222,7 @@ export function AdminUserPasswordDashboard() {
           <Button
             type="button"
             variant="outline"
-            onClick={syncFromPaymentAndRiceTables}
+            onClick={() => syncFromPaymentAndRiceTables(true)}
             className="rounded-xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs h-9 px-3"
           >
             <RefreshCw className="h-3.5 w-3.5 mr-1.5 text-amber-500" />
@@ -2023,7 +2310,7 @@ export function AdminUserPasswordDashboard() {
         </div>
 
         <div className="w-full max-h-[540px] overflow-x-auto overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 scrollbar-thin">
-          <table className="w-full text-xs text-left border-collapse min-w-[1040px]">
+          <table className="w-full text-xs text-left border-collapse min-w-[1060px]">
             <thead className="sticky top-0 z-20">
               <tr className="bg-amber-400 text-slate-950">
                 <th className="py-3 px-2.5 border border-amber-500/40 text-center w-10">ល.រ</th>
@@ -2041,6 +2328,7 @@ export function AdminUserPasswordDashboard() {
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {filteredList.map((st, idx) => {
                 const isRevealed = Boolean(revealedCodes[st.studentCode]);
+                const isRowDirty = Boolean(dirtyRows[st.studentCode]);
                 const barcodeToken = `${st.studentCode}:${st.secretCode}`;
 
                 return (
@@ -2068,7 +2356,7 @@ export function AdminUserPasswordDashboard() {
                           />
                         ) : (
                           <span className="text-xs text-amber-500">
-                            {st.fullNameKm.charAt(0)}
+                            {(st.lastNameKm || st.fullNameKm || 'U').charAt(0)}
                           </span>
                         )}
                         <span className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
@@ -2084,11 +2372,14 @@ export function AdminUserPasswordDashboard() {
                         type="text"
                         value={st.lastNameKm || ''}
                         onChange={(e) =>
-                          handleUpdateProfileField(st.studentCode, {
+                          handleLocalFieldEdit(st.studentCode, {
                             lastNameKm: e.target.value
                           })
                         }
-                        className="w-24 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveSingleStudentRow(st);
+                        }}
+                        className="w-24 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 focus:border-amber-500 text-slate-900 dark:text-white outline-none"
                       />
                     </td>
                     <td className="py-2 px-2 border border-slate-200/70 dark:border-slate-800">
@@ -2096,22 +2387,25 @@ export function AdminUserPasswordDashboard() {
                         type="text"
                         value={st.firstNameKm || ''}
                         onChange={(e) =>
-                          handleUpdateProfileField(st.studentCode, {
+                          handleLocalFieldEdit(st.studentCode, {
                             firstNameKm: e.target.value
                           })
                         }
-                        className="w-28 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveSingleStudentRow(st);
+                        }}
+                        className="w-28 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 focus:border-amber-500 text-slate-900 dark:text-white outline-none"
                       />
                     </td>
                     <td className="py-2 px-2 border border-slate-200/70 dark:border-slate-800 text-center">
                       <select
-                        value={st.userTypeKm || 'សិស្ស'}
+                        value={st.userTypeKm || 'និស្សិត'}
                         onChange={(e) =>
-                          handleUpdateProfileField(st.studentCode, {
+                          handleLocalFieldEdit(st.studentCode, {
                             userTypeKm: e.target.value as StudentUserCategory
                           })
                         }
-                        className="h-8 rounded-lg px-2 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                        className="h-8 rounded-lg px-2 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none"
                       >
                         <option value="សិស្ស">សិស្ស</option>
                         <option value="និស្សិត">និស្សិត</option>
@@ -2123,11 +2417,14 @@ export function AdminUserPasswordDashboard() {
                         type="text"
                         value={st.phoneNumber || ''}
                         onChange={(e) =>
-                          handleUpdateProfileField(st.studentCode, {
+                          handleLocalFieldEdit(st.studentCode, {
                             phoneNumber: e.target.value
                           })
                         }
-                        className="w-28 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveSingleStudentRow(st);
+                        }}
+                        className="w-28 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 focus:border-amber-500 text-slate-900 dark:text-white outline-none"
                       />
                     </td>
                     <td className="py-2 px-2.5 border border-slate-200/70 dark:border-slate-800 text-center whitespace-nowrap">
@@ -2155,11 +2452,25 @@ export function AdminUserPasswordDashboard() {
                     </td>
                     <td className="py-1.5 px-2.5 border border-slate-200/70 dark:border-slate-800 text-center">
                       <div className="w-36 mx-auto">
-                        <BarcodeSvg value={barcodeToken} hideText={!isRevealed} height={26} />
+                        <BarcodeSvg value={barcodeToken} hideText={true} height={26} />
                       </div>
                     </td>
                     <td className="py-2 px-2.5 border border-slate-200/70 dark:border-slate-800 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveSingleStudentRow(st)}
+                          className={cn(
+                            'px-2.5 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1 transition-all',
+                            isRowDirty
+                              ? 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 shadow-md scale-105'
+                              : 'bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                          )}
+                        >
+                          <Save className="h-3 w-3" />
+                          <span>Save</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => handleAutoEncryptNewCode(st.studentCode)}
@@ -2255,7 +2566,7 @@ export function StudentPersonalDashboard() {
   const navigate = useNavigate();
   const { lang, setLang } = useI18n();
   const { theme, toggleTheme } = useTheme();
-  const { hasRole } = useAuth();
+  const { user, profile, signOut, hasRole } = useAuth();
   const isKh = lang === 'km';
   const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
 
@@ -2272,9 +2583,12 @@ export function StudentPersonalDashboard() {
 
   const [scrolledCompact, setScrolledCompact] = useState(false);
   const [pullStretch, setPullStretch] = useState(0);
+  const [customCoverUrl, setCustomCoverUrl] = useState<string>('');
+  const [coverToast, setCoverToast] = useState('');
 
   const touchStartYRef = useRef<number | null>(null);
   const heroBannerRef = useRef<HTMLDivElement>(null);
+  const coverFileInputRef = useRef<HTMLInputElement>(null);
 
   const loadAllDashboardData = async () => {
     const [secData, payData, rData] = await Promise.all([
@@ -2284,17 +2598,41 @@ export function StudentPersonalDashboard() {
     ]);
     setPaymentPayload(payData);
     setRicePayload(rData);
-    setVerifiedProfile(isStudentSessionVerified(secData));
+    const activeProf = isStudentSessionVerified(secData);
+    setVerifiedProfile(activeProf);
+
+    if (activeProf) {
+      const savedCover =
+        (activeProf as any).coverDataUrl ||
+        localStorage.getItem(`bipa_cover_${normalizeCode(activeProf.studentCode)}`) ||
+        localStorage.getItem('bipa_default_cover_banner') ||
+        '';
+      setCustomCoverUrl(savedCover);
+    } else {
+      setCustomCoverUrl(localStorage.getItem('bipa_default_cover_banner') || '');
+    }
   };
 
   useEffect(() => {
     loadAllDashboardData();
     const openLoginHandler = () => setShowLoginModal(true);
+    const syncTimer = setInterval(loadAllDashboardData, 6000);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel('bipa_security_sync_channel');
+        bc.onmessage = () => loadAllDashboardData();
+      }
+    } catch {}
+
     window.addEventListener('student-security-updated', loadAllDashboardData);
     window.addEventListener('payment-system-updated', loadAllDashboardData);
     window.addEventListener('rice-system-updated', loadAllDashboardData);
     window.addEventListener('open-bipa-student-login', openLoginHandler);
     return () => {
+      clearInterval(syncTimer);
+      if (bc) bc.close();
       window.removeEventListener('student-security-updated', loadAllDashboardData);
       window.removeEventListener('payment-system-updated', loadAllDashboardData);
       window.removeEventListener('rice-system-updated', loadAllDashboardData);
@@ -2303,38 +2641,36 @@ export function StudentPersonalDashboard() {
   }, []);
 
   useEffect(() => {
+    const scrollEl = document.getElementById('bipa-dashboard-scroll-container');
     const checkCoverPosition = () => {
+      if (scrollEl) {
+        setScrolledCompact(scrollEl.scrollTop > 165);
+        return;
+      }
       const el = heroBannerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      setScrolledCompact(rect.bottom < 105);
+      setScrolledCompact(rect.bottom < 85);
     };
 
-    const el = heroBannerRef.current;
-    let observer: IntersectionObserver | null = null;
-    if (el && typeof IntersectionObserver !== 'undefined') {
-      observer = new IntersectionObserver(
-        ([entry]) => {
-          setScrolledCompact(!entry.isIntersecting);
-        },
-        { threshold: 0.15 }
-      );
-      observer.observe(el);
+    if (scrollEl) {
+      scrollEl.addEventListener('scroll', checkCoverPosition, { passive: true });
     }
-
     window.addEventListener('scroll', checkCoverPosition, { capture: true, passive: true });
     window.addEventListener('touchmove', checkCoverPosition, { passive: true });
 
     return () => {
-      if (observer) observer.disconnect();
+      if (scrollEl) {
+        scrollEl.removeEventListener('scroll', checkCoverPosition);
+      }
       window.removeEventListener('scroll', checkCoverPosition, true);
       window.removeEventListener('touchmove', checkCoverPosition);
     };
   }, [verifiedProfile]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    const el = heroBannerRef.current;
-    if (el && el.getBoundingClientRect().top >= 45) {
+    const scrollEl = document.getElementById('bipa-dashboard-scroll-container');
+    if (scrollEl && scrollEl.scrollTop <= 5) {
       touchStartYRef.current = e.touches[0].clientY;
     } else {
       touchStartYRef.current = null;
@@ -2345,7 +2681,7 @@ export function StudentPersonalDashboard() {
     if (touchStartYRef.current === null) return;
     const deltaY = e.touches[0].clientY - touchStartYRef.current;
     if (deltaY > 0) {
-      setPullStretch(Math.min(85, deltaY * 0.45));
+      setPullStretch(Math.min(90, deltaY * 0.45));
     } else {
       setPullStretch(0);
     }
@@ -2354,6 +2690,63 @@ export function StudentPersonalDashboard() {
   const handleTouchEnd = () => {
     touchStartYRef.current = null;
     setPullStretch(0);
+  };
+
+  const handleCoverUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 1100;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxW) {
+          h = Math.round((h * maxW) / w);
+          w = maxW;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.84);
+
+        setCustomCoverUrl(dataUrl);
+        localStorage.setItem('bipa_default_cover_banner', dataUrl);
+
+        if (verifiedProfile) {
+          const code = normalizeCode(verifiedProfile.studentCode);
+          localStorage.setItem(`bipa_cover_${code}`, dataUrl);
+          try {
+            const secData = await fetchSecurityPayloadFromDb();
+            if (secData.profiles[code]) {
+              const updatedProf = {
+                ...secData.profiles[code],
+                coverDataUrl: dataUrl
+              } as StudentSecurityProfile;
+              const nextPayload: StudentSecurityPayload = {
+                ...secData,
+                profiles: {
+                  ...secData.profiles,
+                  [code]: updatedProf
+                },
+                updatedAt: Date.now()
+              };
+              await saveSecurityPayloadToDb(nextPayload);
+              setVerifiedProfile(updatedProf);
+            }
+          } catch {}
+        }
+
+        setCoverToast('បានផ្លាស់ប្តូររូបភាព Cover ដោយជោគជ័យ!');
+        setTimeout(() => setCoverToast(''), 3000);
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const myPaySummary = useMemo(() => {
@@ -2401,7 +2794,7 @@ export function StudentPersonalDashboard() {
   }, [verifiedProfile, ricePayload, currentYearStr]);
 
   const renderTranslatedUserType = (typeKm?: StudentUserCategory) => {
-    if (isKh) return typeKm || 'សិស្ស';
+    if (isKh) return typeKm || 'និស្សិត';
     if (typeKm === 'និស្សិត') return 'Student';
     if (typeKm === 'ពិសេស') return 'Special';
     return 'Student';
@@ -2413,17 +2806,89 @@ export function StudentPersonalDashboard() {
       ? localStorage.getItem(`bipa_avatar_${verifiedProfile.studentCode}`) || ''
       : '');
 
-  const coverBaseHeight = verifiedProfile ? 290 : 225;
+  const activeCoverBanner =
+    customCoverUrl ||
+    (verifiedProfile && (verifiedProfile as any).coverDataUrl) ||
+    (verifiedProfile
+      ? localStorage.getItem(`bipa_cover_${normalizeCode(verifiedProfile.studentCode)}`) || ''
+      : '') ||
+    currentAvatar;
+
+  const coverBaseHeight = verifiedProfile ? 265 : 230;
   const dynamicCoverHeight = coverBaseHeight + pullStretch;
-  const dynamicImageScale = 1 + pullStretch / 220;
+  const dynamicImageScale = 1 + pullStretch / 210;
+  const displayFullName = verifiedProfile
+    ? `${verifiedProfile.lastNameKm || ''} ${verifiedProfile.firstNameKm || ''}`.trim() ||
+      verifiedProfile.fullNameKm
+    : '';
+
+  const dashboardMenuShortcuts = [
+    {
+      labelKm: 'បង់ប្រាក់',
+      labelEn: 'Payment',
+      path: '/?view=payments',
+      color: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30',
+      icon: DollarSign
+    },
+    {
+      labelKm: 'បង់អង្ករ',
+      labelEn: 'Rice',
+      path: '/?view=rice',
+      color: 'bg-orange-500/20 text-orange-300 border-orange-400/30',
+      icon: Package
+    },
+    {
+      labelKm: 'វេនប្រចាំថ្ងៃ',
+      labelEn: 'Duty',
+      path: '/?view=duties',
+      color: 'bg-sky-500/20 text-sky-300 border-sky-400/30',
+      icon: RefreshCw
+    },
+    {
+      labelKm: 'មណ្ឌល',
+      labelEn: 'Center',
+      path: '/residence-info',
+      color: 'bg-cyan-500/20 text-cyan-300 border-cyan-400/30',
+      icon: Globe
+    },
+    {
+      labelKm: 'ប្រកាស',
+      labelEn: 'News',
+      path: '/announcements',
+      color: 'bg-amber-500/20 text-amber-300 border-amber-400/30',
+      icon: Info
+    },
+    {
+      labelKm: 'ទំនាក់ទំនង',
+      labelEn: 'Contact',
+      path: '/contact',
+      color: 'bg-indigo-500/20 text-indigo-300 border-indigo-400/30',
+      icon: Phone
+    }
+  ];
 
   return (
     <div
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className="w-full max-w-xl mx-auto min-h-full text-white font-khmer pb-14 overflow-x-hidden select-none"
+      className="w-full max-w-xl mx-auto min-h-full text-white font-khmer pb-16 overflow-x-hidden select-none"
     >
+      <input
+        ref={coverFileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleCoverUploadChange}
+        className="hidden"
+      />
+
+      {coverToast && (
+        <div className="fixed top-5 right-4 z-[260] px-4 py-2.5 rounded-2xl bg-emerald-950/95 border border-emerald-400 text-emerald-200 shadow-2xl flex items-center gap-2 text-xs font-bold animate-in slide-in-from-top-2 duration-150">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+          <span>{coverToast}</span>
+        </div>
+      )}
+
       {showLoginModal && (
         <StudentVerificationGate
           onVerified={(prof) => {
@@ -2434,14 +2899,17 @@ export function StudentPersonalDashboard() {
         />
       )}
 
-      { scrolledCompact && (
+      {scrolledCompact && (
         <div
           onClick={() => {
             if (verifiedProfile) setShowProfileDetailModal(true);
             else setShowLoginModal(true);
           }}
-          style={{ zIndex: 98 }}
-          className="fixed top-14 sm:top-16 left-0 right-0 max-w-xl mx-auto bg-[#081630]/95 backdrop-blur-xl border-b border-white/20 px-3.5 py-2.5 flex items-center justify-between shadow-xl cursor-pointer animate-in slide-in-from-top-2 duration-150"
+          style={{
+            zIndex: 115,
+            paddingTop: 'max(0.6rem, env(safe-area-inset-top, 0px))'
+          }}
+          className="fixed top-0 left-0 right-0 max-w-xl mx-auto bg-[#071329]/95 backdrop-blur-xl border-b border-white/15 px-3.5 pb-2.5 flex items-center justify-between shadow-2xl cursor-pointer animate-in slide-in-from-top-2 duration-150"
         >
           <div className="flex items-center gap-2.5 min-w-0">
             <button
@@ -2450,7 +2918,7 @@ export function StudentPersonalDashboard() {
                 e.stopPropagation();
                 navigate('/');
               }}
-              className="p-1 text-white"
+              className="p-1 text-white hover:text-amber-300 transition-colors"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -2460,7 +2928,7 @@ export function StudentPersonalDashboard() {
                   <img src={currentAvatar} alt="" className="w-full h-full object-cover object-top" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-xs">
-                    {verifiedProfile.fullNameKm.charAt(0)}
+                    {displayFullName.charAt(0)}
                   </div>
                 )
               ) : (
@@ -2471,16 +2939,16 @@ export function StudentPersonalDashboard() {
             </div>
             <div className="min-w-0">
               <span className="font-moul-kh text-xs text-white truncate block">
-                {verifiedProfile ? verifiedProfile.fullNameKm : isKh ? 'ភ្ញៀវ' : 'Guest'}
+                {verifiedProfile ? displayFullName : isKh ? 'ភ្ញៀវ' : 'Guest'}
               </span>
-              <p className="text-[10px] text-sky-200 truncate">
+              <p className="text-[10.5px] text-sky-200 truncate">
                 {verifiedProfile
-                  ? `${renderTranslatedUserType(verifiedProfile.userTypeKm)} • ${verifiedProfile.phoneNumber}`
+                  ? `${renderTranslatedUserType(verifiedProfile.userTypeKm)} - ${verifiedProfile.phoneNumber}`
                   : 'XXX-XXX-XXX'}
               </p>
             </div>
           </div>
-          <Eye className="h-4 w-4 text-amber-300 shrink-0" />
+          <Eye className="h-4 w-4 text-amber-400 shrink-0" />
         </div>
       )}
 
@@ -2491,84 +2959,91 @@ export function StudentPersonalDashboard() {
         }}
         style={{
           height: `${dynamicCoverHeight}px`,
-          transition: pullStretch > 0 ? 'none' : 'height 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+          transition: pullStretch > 0 ? 'none' : 'height 0.28s cubic-bezier(0.16, 1, 0.3, 1)'
         }}
         className={cn(
-          'relative w-full overflow-hidden rounded-b-[32px] shadow-[0_12px_35px_rgba(0,0,0,0.35)] border-b border-white/20 flex flex-col justify-between p-4 sm:p-5 text-white',
+          'relative w-full overflow-hidden rounded-b-[32px] shadow-[0_16px_40px_rgba(0,0,0,0.5)] border-b border-white/15 flex flex-col justify-between p-4 sm:p-5 text-white',
           verifiedProfile
-            ? 'bg-[#091834] cursor-pointer'
-            : 'bg-gradient-to-br from-[#0c244d]/90 via-[#123570]/85 to-[#081838]/95 backdrop-blur-xl'
+            ? 'bg-[#061229] cursor-pointer'
+            : 'bg-gradient-to-br from-[#0a1e42] via-[#102d63] to-[#061229]'
         )}
       >
-        {verifiedProfile ? (
-          currentAvatar ? (
-            <>
-              <img
-                src={currentAvatar}
-                alt=""
-                style={{
-                  transform: `scale(${dynamicImageScale + 0.14})`,
-                  transition: pullStretch > 0 ? 'none' : 'transform 0.3s ease-out'
-                }}
-                className="absolute inset-0 w-full h-full object-cover blur-xl opacity-60 pointer-events-none"
-              />
-              <img
-                src={currentAvatar}
-                alt={verifiedProfile.fullNameKm}
-                style={{
-                  objectPosition: 'center 8%',
-                  transform: `scale(${dynamicImageScale})`,
-                  transition: pullStretch > 0 ? 'none' : 'transform 0.3s ease-out'
-                }}
-                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-              />
-            </>
-          ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-[#0f254a] via-[#133266] to-[#0b1528]" />
-          )
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-15">
-            <User
+        {activeCoverBanner ? (
+          <>
+            <img
+              src={activeCoverBanner}
+              alt=""
               style={{
+                transform: `scale(${dynamicImageScale + 0.08})`,
+                transition: pullStretch > 0 ? 'none' : 'transform 0.3s ease-out'
+              }}
+              className="absolute inset-0 w-full h-full object-cover blur-xl opacity-55 pointer-events-none"
+            />
+            <img
+              src={activeCoverBanner}
+              alt={displayFullName || 'Cover'}
+              style={{
+                objectPosition: 'center center',
                 transform: `scale(${dynamicImageScale})`,
                 transition: pullStretch > 0 ? 'none' : 'transform 0.3s ease-out'
               }}
-              className="w-36 h-36 text-sky-200"
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             />
-          </div>
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-[#0b2149] via-[#133675] to-[#061024]" />
         )}
 
-        <div className="absolute inset-0 bg-gradient-to-t from-[#040d21]/90 via-black/20 to-black/10 pointer-events-none" />
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(4,12,28,0.45) 0%, rgba(4,12,28,0.08) 38%, rgba(4,12,28,0.68) 76%, rgba(4,12,28,0.94) 100%)'
+          }}
+        />
 
-        <div className="relative z-10 flex items-center justify-between">
+        <div
+          style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+          className="relative z-10 flex items-center justify-between gap-2"
+        >
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               navigate('/');
             }}
-            className="w-9 h-9 rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md flex items-center justify-center text-white border border-white/20 transition-colors"
+            className="w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md flex items-center justify-center text-white border border-white/20 shadow-md transition-all active:scale-95"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
 
-          {isAdmin ? (
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                navigate('/admin?page=user-passwords');
+                coverFileInputRef.current?.click();
               }}
-              className="px-3.5 py-1.5 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md text-amber-300 text-[11px] border border-white/20"
+              className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md border border-white/20 text-[10.5px] text-amber-300 flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
             >
-              {isKh ? 'កែរូបក្នុង Admin' : 'Edit in Admin'}
+              <Camera className="h-3.5 w-3.5" />
+              <span>{isKh ? 'ដាក់រូប Cover' : 'Set Cover'}</span>
             </button>
-          ) : verifiedProfile ? (
-            <span className="px-3 py-1 rounded-full bg-black/35 backdrop-blur-md border border-white/20 text-[10px] text-white/95 flex items-center gap-1">
-              <Eye className="h-3 w-3 text-amber-300" />
-              <span>{isKh ? 'មើលរូបពេញ' : 'View Cover'}</span>
-            </span>
-          ) : null}
+
+            {verifiedProfile && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowProfileDetailModal(true);
+                }}
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md border border-white/20 text-[10.5px] text-white/95 flex items-center gap-1 shadow-md active:scale-95 transition-all"
+              >
+                <Eye className="h-3.5 w-3.5 text-amber-300" />
+                <span>{isKh ? 'មើលរូបពេញ' : 'Full View'}</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {!verifiedProfile ? (
@@ -2576,12 +3051,12 @@ export function StudentPersonalDashboard() {
             <div className="flex items-center gap-3.5">
               <div
                 onClick={() => setShowLoginModal(true)}
-                className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-white/15 border-2 border-amber-300/80 flex items-center justify-center cursor-pointer shrink-0 shadow-lg"
+                className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-white/15 border-2 border-amber-300/80 flex items-center justify-center cursor-pointer shrink-0 shadow-xl"
               >
                 <User className="h-8 w-8 text-amber-300" />
               </div>
               <div className="space-y-0.5">
-                <h1 className="font-moul-kh text-base sm:text-lg text-white leading-tight drop-shadow">
+                <h1 className="font-moul-kh text-base sm:text-lg text-white leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
                   {isKh ? 'ភ្ញៀវ' : 'Guest'}
                 </h1>
                 <p className="text-xs text-sky-200">{isKh ? 'មិនទាន់ភ្ជាប់កាតសិស្ស' : 'Guest'}</p>
@@ -2593,8 +3068,11 @@ export function StudentPersonalDashboard() {
 
             <button
               type="button"
-              onClick={() => setShowLoginModal(true)}
-              className="px-4 py-2 rounded-2xl bg-amber-400 hover:bg-amber-500 text-slate-950 text-xs shadow-lg flex items-center gap-1.5 active:scale-95 transition-all"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowLoginModal(true);
+              }}
+              className="px-4 py-2 rounded-2xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs shadow-lg flex items-center gap-1.5 active:scale-95 transition-all"
             >
               <QrCode className="h-4 w-4" />
               <span>{isKh ? 'ស្កេនកាត' : 'Scan QR'}</span>
@@ -2603,31 +3081,31 @@ export function StudentPersonalDashboard() {
         ) : (
           <div className="relative z-10 flex items-center gap-3.5 pb-1">
             <div
-              className="rounded-full overflow-hidden border-[2.5px] border-white shadow-2xl bg-slate-900 shrink-0"
-              style={{ width: '76px', height: '76px' }}
+              className="rounded-full overflow-hidden border-[2.5px] border-white shadow-[0_6px_20px_rgba(0,0,0,0.85)] bg-slate-900 shrink-0"
+              style={{ width: '74px', height: '74px' }}
             >
               {currentAvatar ? (
                 <img
                   src={currentAvatar}
-                  alt={verifiedProfile.fullNameKm}
+                  alt={displayFullName}
                   className="w-full h-full object-cover object-top"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-xl">
-                  {verifiedProfile.fullNameKm.charAt(0)}
+                  {displayFullName.charAt(0)}
                 </div>
               )}
             </div>
 
-            <div className="space-y-0.5 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] min-w-0">
+            <div className="space-y-0.5 drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)] min-w-0">
               <h1 className="font-moul-kh text-base sm:text-lg text-white leading-tight truncate">
-                {verifiedProfile.fullNameKm}
+                {displayFullName}
               </h1>
               <p className="text-xs text-sky-100">
                 {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
                 {verifiedProfile.majorKm || 'ព័ត៌មានវិទ្យា'}
               </p>
-              <p className="text-xs text-amber-300 tracking-wide">
+              <p className="text-xs text-amber-300 font-bold tracking-wide">
                 {verifiedProfile.phoneNumber}
               </p>
             </div>
@@ -2638,6 +3116,109 @@ export function StudentPersonalDashboard() {
       <div className="px-3.5 sm:px-5 pt-4 space-y-4">
         <div className="space-y-2">
           <h2 className="text-xs text-sky-100/95 px-1 drop-shadow-2xs">
+            {isKh ? 'ម៉ឺនុយគ្រប់គ្រងរហ័ស' : 'Quick Menu'}
+          </h2>
+
+          <div className="bg-[#091e42]/60 backdrop-blur-xl rounded-3xl p-3.5 border border-white/20 shadow-[0_8px_30px_rgba(0,0,0,0.25)] space-y-3">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+              {dashboardMenuShortcuts.map((item) => (
+                <button
+                  key={item.path}
+                  type="button"
+                  onClick={() => navigate(item.path)}
+                  className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-1.5 rounded-2xl bg-white/5 hover:bg-white/15 border border-white/10 transition-all active:scale-95"
+                >
+                  <div
+                    className={cn(
+                      'w-9 h-9 rounded-xl border flex items-center justify-center shrink-0',
+                      item.color
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                  </div>
+                  <span className="text-[11px] text-white truncate max-w-full">
+                    {isKh ? item.labelKm : item.labelEn}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {isAdmin && (
+              <div className="grid grid-cols-2 gap-2.5 pt-1 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin')}
+                  className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/40 text-amber-300 text-xs font-bold transition-all active:scale-95"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>{isKh ? 'ផ្ទាំងគ្រប់គ្រង Admin' : 'Admin Panel'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(new Event('open-bipa-admin-security-modal'))
+                  }
+                  className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/40 text-sky-200 text-xs font-bold transition-all active:scale-95"
+                >
+                  <QrCode className="h-4 w-4" />
+                  <span>{isKh ? 'កូដសិស្ស & កាត QR' : 'Student QR'}</span>
+                </button>
+              </div>
+            )}
+
+            {user ? (
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10 px-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center font-bold shrink-0">
+                    {profile?.display_name?.charAt(0).toUpperCase() || 'A'}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-white truncate">
+                      {profile?.display_name || user.email}
+                    </p>
+                    <p className="text-[9.5px] text-amber-300 uppercase">
+                      {profile?.role?.replace(/_/g, ' ') || 'USER'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    clearVerifiedStudentSession();
+                    await signOut();
+                    navigate('/');
+                  }}
+                  className="px-3 py-1 rounded-full bg-rose-500/25 hover:bg-rose-500/35 border border-rose-400/40 text-rose-200 text-[10.5px] flex items-center gap-1 shrink-0"
+                >
+                  <LogOut className="h-3 w-3" />
+                  <span>{isKh ? 'ចាកចេញគណនី' : 'Logout'}</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => navigate('/signin')}
+                  className="py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs transition-all active:scale-95"
+                >
+                  {isKh ? 'ចូលគណនី App' : 'Sign In'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/signup')}
+                  className="py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs transition-all active:scale-95"
+                >
+                  {isKh ? 'បង្កើតគណនី' : 'Create Account'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h2 className="text-xs text-sky-100/95 px-1 drop-shadow-2xs">
             {isKh ? 'ប្រវត្តិរូប' : 'Profile'}
           </h2>
 
@@ -2645,15 +3226,15 @@ export function StudentPersonalDashboard() {
             <div className="bg-[#091e42]/55 backdrop-blur-xl rounded-3xl p-5 border border-white/25 shadow-lg text-center space-y-3">
               <p className="text-xs text-white/95">
                 {isKh
-                  ? 'អ្នកមិនទាន់បានចូលគណនី (login) នៅឡើយទេ'
-                  : 'You are not logged in yet'}
+                  ? 'អ្នកមិនទាន់បានចូលគណនីសិស្ស (ស្កេនកាត QR) នៅឡើយទេ'
+                  : 'You have not linked your student QR card yet'}
               </p>
               <button
                 type="button"
                 onClick={() => setShowLoginModal(true)}
-                className="px-5 py-2 rounded-full bg-amber-400 hover:bg-amber-500 text-slate-950 text-xs shadow transition-all active:scale-95"
+                className="px-5 py-2 rounded-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs shadow transition-all active:scale-95"
               >
-                {isKh ? 'ទៅកាន់ផ្ទាំង ចូលគណនី' : 'Go to Login'}
+                {isKh ? 'ទៅកាន់ផ្ទាំង ស្កេនកាត / ចូលគណនី' : 'Go to Student Login'}
               </button>
             </div>
           ) : (
@@ -2977,16 +3558,16 @@ export function StudentPersonalDashboard() {
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm bg-[#0b1830] text-white rounded-3xl overflow-hidden shadow-2xl border border-white/20 animate-in zoom-in-95 duration-200"
           >
-            <div className="relative w-full h-72 bg-slate-950 flex items-center justify-center overflow-hidden">
-              {currentAvatar ? (
+            <div className="relative w-full h-64 bg-slate-950 flex items-center justify-center overflow-hidden">
+              {activeCoverBanner ? (
                 <img
-                  src={currentAvatar}
-                  alt={verifiedProfile.fullNameKm}
+                  src={activeCoverBanner}
+                  alt={displayFullName}
                   className="w-full h-full object-contain"
                 />
               ) : (
                 <div className="w-24 h-24 rounded-full bg-amber-500 text-white text-3xl flex items-center justify-center">
-                  {verifiedProfile.fullNameKm.charAt(0)}
+                  {displayFullName.charAt(0)}
                 </div>
               )}
               <button
@@ -3000,16 +3581,27 @@ export function StudentPersonalDashboard() {
 
             <div className="p-4 space-y-3.5">
               <div className="flex items-center justify-between border-b border-white/15 pb-2.5">
-                <div>
-                  <h3 className="font-moul-kh text-sm text-white">
-                    {verifiedProfile.fullNameKm}
-                  </h3>
-                  <p className="text-[11px] text-sky-200 mt-0.5">
-                    {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
-                    {verifiedProfile.majorKm}
-                  </p>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-11 h-11 rounded-full overflow-hidden border border-amber-400 shrink-0 bg-slate-800">
+                    {currentAvatar ? (
+                      <img src={currentAvatar} alt="" className="w-full h-full object-cover object-top" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-sm">
+                        {displayFullName.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-moul-kh text-sm text-white truncate">
+                      {displayFullName}
+                    </h3>
+                    <p className="text-[11px] text-sky-200 mt-0.5 truncate">
+                      {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
+                      {verifiedProfile.majorKm}
+                    </p>
+                  </div>
                 </div>
-                <Badge className="bg-amber-400 text-slate-950 text-[11px] px-2.5 py-0.5">
+                <Badge className="bg-amber-400 text-slate-950 text-[11px] px-2.5 py-0.5 shrink-0">
                   {verifiedProfile.studentCode}
                 </Badge>
               </div>
@@ -3054,13 +3646,26 @@ export function StudentPersonalDashboard() {
                 </div>
               </div>
 
-              <Button
-                type="button"
-                onClick={() => setShowProfileDetailModal(false)}
-                className="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 text-xs h-9 rounded-xl"
-              >
-                {isKh ? 'បិទផ្ទាំង' : 'Close'}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setShowProfileDetailModal(false);
+                    coverFileInputRef.current?.click();
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 rounded-xl"
+                >
+                  <Camera className="h-3.5 w-3.5 mr-1.5" />
+                  {isKh ? 'ប្តូររូប Cover' : 'Change Cover'}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setShowProfileDetailModal(false)}
+                  className="flex-1 bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs h-9 rounded-xl"
+                >
+                  {isKh ? 'បិទផ្ទាំង' : 'Close'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

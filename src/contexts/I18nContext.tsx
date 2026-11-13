@@ -22,7 +22,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('residence-lang', newLang);
   }, []);
 
-  const t = useCallback((key: TranslationKey) => translate(lang, key), [lang]);
+  const t = useCallback((key: TranslationKey) => translate(lang,  key as any), [lang]);
 
   useEffect(() => {
     document.documentElement.lang = lang;
