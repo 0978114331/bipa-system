@@ -520,6 +520,149 @@ export function Header() {
         });
       }
 
+      if (location.pathname === '/admin' && !location.search.includes('page=')) {
+        const oldExtraBar = document.getElementById('bipa-admin-mobile-extra-actions');
+        if (oldExtraBar) {
+          oldExtraBar.remove();
+        }
+
+        const allTextEls = Array.from(
+          document.querySelectorAll('main span, main div, main p, main h2, main h3, main h4')
+        ) as HTMLElement[];
+
+        allTextEls.forEach((el) => {
+          const cleanTxt = (el.textContent || '').replace(/\s+/g, ' ').trim();
+          if (el.children.length === 0 && cleanTxt === 'សម្ភារៈ') {
+            el.textContent = 'បង់អង្ករ';
+          }
+
+          if (
+            cleanTxt.includes('ការគ្រប់គ្រងរហ័សសម្រាប់ Admin') &&
+            el.children.length <= 3
+          ) {
+            let parentCard = el.parentElement as HTMLElement | null;
+            while (parentCard && parentCard.tagName !== 'MAIN') {
+              const cls = String(parentCard.className || '');
+              if (
+                (cls.includes('rounded-') || cls.includes('border')) &&
+                parentCard.innerText.includes('គ្រប់គ្រងបញ្ជីឈ្មោះនិស្សិត') &&
+                !parentCard.innerText.includes('ទិដ្ឋភាពទូទៅ')
+              ) {
+                parentCard.style.display = 'none';
+                break;
+              }
+              parentCard = parentCard.parentElement;
+            }
+          }
+        });
+
+        let announcementBtnRef: HTMLElement | null = null;
+        const adminBtns = Array.from(
+          document.querySelectorAll('main button, main a')
+        ) as HTMLElement[];
+
+        adminBtns.forEach((btn) => {
+          if (btn.classList.contains('bipa-clean-grid-added')) return;
+          const bTxt = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+
+          if (bTxt === 'សេចក្តីប្រកាស') {
+            announcementBtnRef = btn;
+          }
+
+          if (
+            bTxt === 'គ្រប់គ្រងវត្តមាន & QR' ||
+            bTxt === 'គ្រប់គ្រងទំព័រដើម' ||
+            bTxt === 'សេចក្តីប្រកាស'
+          ) {
+            btn.style.display = 'none';
+            const parentRow = btn.parentElement as HTMLElement | null;
+            if (
+              parentRow &&
+              !parentRow.innerText.includes('ទិដ្ឋភាពទូទៅ') &&
+              parentRow.children.length <= 3
+            ) {
+              parentRow.style.display = 'none';
+            }
+          }
+        });
+
+        const gridCandidates = Array.from(
+          document.querySelectorAll('main div.grid')
+        ) as HTMLElement[];
+        const quickIconGrid = gridCandidates.find(
+          (g) =>
+            g.innerText.includes('បង្ហោះ Home') &&
+            g.innerText.includes('និស្សិត') &&
+            g.innerText.includes('បង់ប្រាក់')
+        );
+
+        if (quickIconGrid && !quickIconGrid.querySelector('.bipa-clean-grid-added')) {
+          const sampleCard = quickIconGrid.firstElementChild as HTMLElement | null;
+          const sampleCardClass =
+            sampleCard?.className ||
+            'flex flex-col items-center justify-center gap-2 p-3 rounded-2xl bg-[#162033]/90 border border-slate-800 text-white shadow-md transition-all active:scale-95';
+
+          const extraGridItems = [
+            {
+              id: 'bipa-grid-user-qr',
+              label: 'គ្រប់គ្រង User',
+              iconBoxClass:
+                'w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400',
+              svg: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>`,
+              onClick: () => navigate('/admin?page=user-passwords')
+            },
+            {
+              id: 'bipa-grid-announce',
+              label: 'សេចក្តីប្រកាស',
+              iconBoxClass:
+                'w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400',
+              svg: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>`,
+              onClick: () => {
+                if (announcementBtnRef) {
+                  announcementBtnRef.click();
+                } else {
+                  navigate('/announcements');
+                }
+              }
+            },
+            {
+              id: 'bipa-grid-settings',
+              label: 'ការកំណត់',
+              iconBoxClass:
+                'w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400',
+              svg: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
+              onClick: () => navigate('/admin/settings')
+            },
+            {
+              id: 'bipa-grid-logout',
+              label: 'ចាកចេញ',
+              iconBoxClass:
+                'w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400',
+              svg: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>`,
+              onClick: () => handleSignOut()
+            }
+          ];
+
+          extraGridItems.forEach((item) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.id = item.id;
+            btn.className = `${sampleCardClass} bipa-clean-grid-added cursor-pointer`;
+            btn.innerHTML = `
+              <div class="${item.iconBoxClass}">
+                ${item.svg}
+              </div>
+              <span class="text-[11px] font-bold text-slate-200 truncate max-w-full">${item.label}</span>
+            `;
+            btn.onclick = (e) => {
+              e.preventDefault();
+              item.onClick();
+            };
+            quickIconGrid.appendChild(btn);
+          });
+        }
+      }
+
       if (location.pathname === '/attendance') {
         const mainBtns = Array.from(document.querySelectorAll('main button')) as HTMLElement[];
 
@@ -625,7 +768,7 @@ export function Header() {
     };
 
     cleanUpButtonsAndDuplicates();
-    const timer = setInterval(cleanUpButtonsAndDuplicates, 350);
+    const timer = setInterval(cleanUpButtonsAndDuplicates, 300);
     return () => clearInterval(timer);
   }, [location.pathname, location.search]);
 

@@ -35,14 +35,15 @@ import {
   User,
   FileText,
   Headphones,
-  Info,
   ArrowRight,
   Contact,
   Save,
   CalendarClock,
   Megaphone,
   Building2,
-  LogIn
+  LogIn,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { initialStudents, BipaStudent } from '@/pages/admin/StudentListPage';
 import {
@@ -84,6 +85,7 @@ export interface StudentSecurityProfile {
 export interface StudentSecurityPayload {
   profiles: Record<string, StudentSecurityProfile>;
   deletedCodes?: string[];
+  allowStudentPhotoEdit?: boolean;
   updatedAt?: number;
 }
 
@@ -92,6 +94,7 @@ export const DELETED_USERS_STORAGE_KEY = 'bipa_deleted_security_users_v1';
 export const VERIFIED_TOKEN_KEY = 'bipa_verified_student_token_v2';
 export const COVERS_STORAGE_KEY = 'bipa_student_covers_map_v1';
 export const AVATARS_STORAGE_KEY = 'bipa_student_avatars_map_v1';
+export const PHOTO_PERM_STORAGE_KEY = 'bipa_allow_student_photo_edit_v1';
 
 export function normalizeCode(raw: string): string {
   let cleaned = String(raw || '').trim().replace(/\s+/g, '').toUpperCase();
@@ -99,6 +102,92 @@ export function normalizeCode(raw: string): string {
   else if (cleaned.startsWith('PIBA')) cleaned = 'BIPA-' + cleaned.slice(4);
   else if (/^\d{1,3}$/.test(cleaned)) cleaned = 'BIPA-' + cleaned.padStart(3, '0');
   return cleaned;
+}
+
+export function standardizeImageToDataUrl(
+  img: HTMLImageElement,
+  targetWidth: number,
+  targetHeight: number,
+  quality = 0.8
+): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  ctx.fillStyle = '#061229';
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+  const srcW = img.width || targetWidth;
+  const srcH = img.height || targetHeight;
+  const targetRatio = targetWidth / targetHeight;
+  const srcRatio = srcW / srcH;
+
+  let drawW = srcW;
+  let drawH = srcH;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (srcRatio > targetRatio) {
+    drawW = srcH * targetRatio;
+    offsetX = (srcW - drawW) / 2;
+  } else {
+    drawH = srcW / targetRatio;
+    offsetY = (srcH - drawH) * 0.2;
+  }
+
+  ctx.drawImage(
+    img,
+    offsetX,
+    offsetY,
+    drawW,
+    drawH,
+    0,
+    0,
+    targetWidth,
+    targetHeight
+  );
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+export function getCachedPhotoEditPermission(): boolean {
+  const raw = localStorage.getItem(PHOTO_PERM_STORAGE_KEY);
+  if (raw === null) return true;
+  return raw === 'true';
+}
+
+export async function fetchPhotoPermFromDb(): Promise<boolean> {
+  let current = getCachedPhotoEditPermission();
+  try {
+    const { data, error } = await supabase
+      .from('bipa_settings')
+      .select('name_en')
+      .eq('id', 'student_photo_perm_v1')
+      .maybeSingle();
+
+    if (!error && data && typeof data.name_en === 'string') {
+      current = data.name_en.trim().toLowerCase() !== 'false';
+      localStorage.setItem(PHOTO_PERM_STORAGE_KEY, String(current));
+    }
+  } catch {}
+  return current;
+}
+
+export async function savePhotoPermToDb(allowed: boolean): Promise<void> {
+  localStorage.setItem(PHOTO_PERM_STORAGE_KEY, String(allowed));
+  try {
+    await supabase.from('bipa_settings').upsert(
+      {
+        id: 'student_photo_perm_v1',
+        logo_url: 'STUDENT_PHOTO_PERM',
+        name_km: 'សិទ្ធិកែរូបភាពនិស្សិត',
+        name_en: String(allowed)
+      },
+      { onConflict: 'id' }
+    );
+  } catch {}
+  window.dispatchEvent(new Event('student-security-updated'));
 }
 
 export function loadCachedCoversMap(): Record<string, string> {
@@ -126,6 +215,7 @@ export function loadCachedAvatarsMap(): Record<string, string> {
 export async function fetchCoversMapFromDb(): Promise<Record<string, string>> {
   let current = loadCachedCoversMap();
   try {
+    localStorage.removeItem('bipa_default_cover_banner');
     const { data, error } = await supabase
       .from('bipa_settings')
       .select('name_en')
@@ -135,13 +225,14 @@ export async function fetchCoversMapFromDb(): Promise<Record<string, string>> {
     if (!error && data?.name_en) {
       const parsed = JSON.parse(data.name_en);
       if (parsed && typeof parsed === 'object') {
+        delete parsed.DEFAULT;
         current = { ...current, ...parsed };
+        delete current.DEFAULT;
         localStorage.setItem(COVERS_STORAGE_KEY, JSON.stringify(current));
         Object.keys(current).forEach((k) => {
-          if (k === 'DEFAULT') {
-            localStorage.setItem('bipa_default_cover_banner', current[k]);
-          } else {
-            localStorage.setItem(`bipa_cover_${normalizeCode(k)}`, current[k]);
+          const cleanKey = normalizeCode(k);
+          if (cleanKey && current[k]) {
+            localStorage.setItem(`bipa_cover_${cleanKey}`, current[k]);
           }
         });
       }
@@ -165,7 +256,10 @@ export async function fetchAvatarsMapFromDb(): Promise<Record<string, string>> {
         current = { ...current, ...parsed };
         localStorage.setItem(AVATARS_STORAGE_KEY, JSON.stringify(current));
         Object.keys(current).forEach((k) => {
-          localStorage.setItem(`bipa_avatar_${normalizeCode(k)}`, current[k]);
+          const cleanKey = normalizeCode(k);
+          if (cleanKey && current[k]) {
+            localStorage.setItem(`bipa_avatar_${cleanKey}`, current[k]);
+          }
         });
       }
     }
@@ -174,62 +268,97 @@ export async function fetchAvatarsMapFromDb(): Promise<Record<string, string>> {
 }
 
 export async function saveCoverToCloudDb(
-  studentCodeOrDefault: string,
+  studentCodeOrKey: string,
   coverDataUrl: string
 ): Promise<void> {
-  const key =
-    studentCodeOrDefault === 'DEFAULT' ? 'DEFAULT' : normalizeCode(studentCodeOrDefault);
-  const current = await fetchCoversMapFromDb();
-  const next = {
-    ...current,
-    [key]: coverDataUrl,
-    DEFAULT: coverDataUrl
+  const key = normalizeCode(studentCodeOrKey);
+  if (!key || key === 'DEFAULT') return;
+
+  const cached = loadCachedCoversMap();
+  delete cached.DEFAULT;
+  const immediateNext: Record<string, string> = {
+    ...cached,
+    [key]: coverDataUrl
   };
-  localStorage.setItem(COVERS_STORAGE_KEY, JSON.stringify(next));
-  localStorage.setItem('bipa_default_cover_banner', coverDataUrl);
-  if (key !== 'DEFAULT') {
-    localStorage.setItem(`bipa_cover_${key}`, coverDataUrl);
-  }
+  localStorage.removeItem('bipa_default_cover_banner');
+  localStorage.setItem(COVERS_STORAGE_KEY, JSON.stringify(immediateNext));
+  localStorage.setItem(`bipa_cover_${key}`, coverDataUrl);
 
   try {
+    const remote = await fetchCoversMapFromDb();
+    delete remote.DEFAULT;
+    const merged: Record<string, string> = {
+      ...remote,
+      ...immediateNext,
+      [key]: coverDataUrl
+    };
+    localStorage.setItem(COVERS_STORAGE_KEY, JSON.stringify(merged));
+
     await supabase.from('bipa_settings').upsert(
       {
         id: 'student_covers_v1',
         logo_url: 'STUDENT_COVERS',
         name_km: 'រូបភាព Cover និស្សិត',
-        name_en: JSON.stringify(next)
+        name_en: JSON.stringify(merged)
       },
       { onConflict: 'id' }
     );
   } catch {}
+
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('bipa_security_sync_channel');
+      bc.postMessage({ type: 'SECURITY_UPDATED', timestamp: Date.now() });
+      bc.close();
+    }
+  } catch {}
+
   window.dispatchEvent(new Event('student-security-updated'));
 }
 
 export async function saveAvatarToCloudDb(
-  studentCode: string,
+  studentCodeOrKey: string,
   avatarDataUrl: string
 ): Promise<void> {
-  const key = normalizeCode(studentCode);
+  const key = normalizeCode(studentCodeOrKey);
   if (!key) return;
-  const current = await fetchAvatarsMapFromDb();
-  const next = {
-    ...current,
+
+  const cached = loadCachedAvatarsMap();
+  const immediateNext: Record<string, string> = {
+    ...cached,
     [key]: avatarDataUrl
   };
-  localStorage.setItem(AVATARS_STORAGE_KEY, JSON.stringify(next));
+  localStorage.setItem(AVATARS_STORAGE_KEY, JSON.stringify(immediateNext));
   localStorage.setItem(`bipa_avatar_${key}`, avatarDataUrl);
 
   try {
+    const remote = await fetchAvatarsMapFromDb();
+    const merged: Record<string, string> = {
+      ...remote,
+      ...immediateNext,
+      [key]: avatarDataUrl
+    };
+    localStorage.setItem(AVATARS_STORAGE_KEY, JSON.stringify(merged));
+
     await supabase.from('bipa_settings').upsert(
       {
         id: 'student_avatars_v1',
         logo_url: 'STUDENT_AVATARS',
         name_km: 'រូបភាពប្រវត្តិរូបនិស្សិត',
-        name_en: JSON.stringify(next)
+        name_en: JSON.stringify(merged)
       },
       { onConflict: 'id' }
     );
   } catch {}
+
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('bipa_security_sync_channel');
+      bc.postMessage({ type: 'SECURITY_UPDATED', timestamp: Date.now() });
+      bc.close();
+    }
+  } catch {}
+
   window.dispatchEvent(new Event('student-security-updated'));
 }
 
@@ -362,6 +491,7 @@ function getCombinedPaymentAndRiceStudentsMap(
 ): Record<string, StudentSecurityProfile> {
   const deletedSet = new Set(deletedCodesList.map((c) => normalizeCode(c)));
   const coversMap = loadCachedCoversMap();
+  const avatarsMap = loadCachedAvatarsMap();
   const map: Record<string, StudentSecurityProfile> = {};
 
   const addEntry = (
@@ -389,7 +519,8 @@ function getCombinedPaymentAndRiceStudentsMap(
         generationKm: genKm || 'សិស្សមណ្ឌល',
         saltSeed: 2026,
         secretCode: generateEncryptedCodeFromId(code, 2026),
-        avatarDataUrl: localStorage.getItem(`bipa_avatar_${code}`) || '',
+        avatarDataUrl:
+          avatarsMap[code] || localStorage.getItem(`bipa_avatar_${code}`) || '',
         coverDataUrl:
           coversMap[code] || localStorage.getItem(`bipa_cover_${code}`) || ''
       };
@@ -439,6 +570,9 @@ function getCombinedPaymentAndRiceStudentsMap(
 export function loadCachedSecurityPayload(): StudentSecurityPayload {
   const localDeleted = getLocalDeletedCodes();
   const coversMap = loadCachedCoversMap();
+  const avatarsMap = loadCachedAvatarsMap();
+  const cachedAllowEdit = getCachedPhotoEditPermission();
+
   try {
     const raw =
       localStorage.getItem(SECURITY_STORAGE_KEY) ||
@@ -448,11 +582,19 @@ export function loadCachedSecurityPayload(): StudentSecurityPayload {
     if (!raw) {
       return {
         profiles: getCombinedPaymentAndRiceStudentsMap(localDeleted),
-        deletedCodes: localDeleted
+        deletedCodes: localDeleted,
+        allowStudentPhotoEdit: cachedAllowEdit
       };
     }
 
     const parsed = JSON.parse(raw);
+    const allowEdit =
+      localStorage.getItem(PHOTO_PERM_STORAGE_KEY) !== null
+        ? cachedAllowEdit
+        : typeof parsed?.allowStudentPhotoEdit === 'boolean'
+        ? parsed.allowStudentPhotoEdit
+        : true;
+
     const combinedDeleted = Array.from(
       new Set(
         [
@@ -495,10 +637,13 @@ export function loadCachedSecurityPayload(): StudentSecurityPayload {
         saltSeed: seed,
         secretCode: item.secretCode || generateEncryptedCodeFromId(code, seed),
         avatarDataUrl:
-          item.avatarDataUrl || localStorage.getItem(`bipa_avatar_${code}`) || '',
+          avatarsMap[code] ||
+          item.avatarDataUrl ||
+          localStorage.getItem(`bipa_avatar_${code}`) ||
+          '',
         coverDataUrl:
-          item.coverDataUrl ||
           coversMap[code] ||
+          item.coverDataUrl ||
           localStorage.getItem(`bipa_cover_${code}`) ||
           ''
       };
@@ -507,12 +652,14 @@ export function loadCachedSecurityPayload(): StudentSecurityPayload {
     return {
       profiles: merged,
       deletedCodes: combinedDeleted,
+      allowStudentPhotoEdit: allowEdit,
       updatedAt: Number(parsed?.updatedAt || 0)
     };
   } catch {
     return {
       profiles: getCombinedPaymentAndRiceStudentsMap(localDeleted),
-      deletedCodes: localDeleted
+      deletedCodes: localDeleted,
+      allowStudentPhotoEdit: cachedAllowEdit
     };
   }
 }
@@ -526,13 +673,15 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
   }
 
   try {
-    const [secRes, coversMap] = await Promise.all([
+    const [secRes, coversMap, avatarsMap, permAllowed] = await Promise.all([
       supabase
         .from('bipa_settings')
         .select('name_en')
         .eq('id', 'student_security_v2')
         .maybeSingle(),
-      fetchCoversMapFromDb()
+      fetchCoversMapFromDb(),
+      fetchAvatarsMapFromDb(),
+      fetchPhotoPermFromDb()
     ]);
 
     const setRow = secRes.data;
@@ -562,9 +711,18 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
           const fName = item.firstNameKm !== undefined ? String(item.firstNameKm) : split.firstName;
           const fullName = `${lName} ${fName}`.trim() || fallbackFull;
 
+          const resolvedAvatar =
+            avatarsMap[code] ||
+            item.avatarDataUrl ||
+            localStorage.getItem(`bipa_avatar_${code}`) ||
+            '';
+          if (resolvedAvatar) {
+            localStorage.setItem(`bipa_avatar_${code}`, resolvedAvatar);
+          }
+
           const resolvedCover =
-            item.coverDataUrl ||
             coversMap[code] ||
+            item.coverDataUrl ||
             localStorage.getItem(`bipa_cover_${code}`) ||
             '';
           if (resolvedCover) {
@@ -582,10 +740,7 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
             phoneNumber: item.phoneNumber || generateDefaultPhone(code),
             saltSeed: seed,
             secretCode: item.secretCode || generateEncryptedCodeFromId(code, seed),
-            avatarDataUrl:
-              item.avatarDataUrl ||
-              localStorage.getItem(`bipa_avatar_${code}`) ||
-              '',
+            avatarDataUrl: resolvedAvatar,
             coverDataUrl: resolvedCover
           };
         });
@@ -593,10 +748,16 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
         current = {
           profiles: merged,
           deletedCodes: cloudDeleted,
+          allowStudentPhotoEdit: permAllowed,
           updatedAt: Number(parsed.updatedAt || Date.now())
         };
         localStorage.setItem(SECURITY_STORAGE_KEY, JSON.stringify(current));
       }
+    } else {
+      current = {
+        ...current,
+        allowStudentPhotoEdit: permAllowed
+      };
     }
   } catch {}
   return current;
@@ -617,6 +778,12 @@ export async function saveSecurityPayloadToDb(
   );
   saveLocalDeletedCodes(deletedList);
   const coversMap = loadCachedCoversMap();
+  const avatarsMap = loadCachedAvatarsMap();
+  const allowEdit =
+    typeof payload.allowStudentPhotoEdit === 'boolean'
+      ? payload.allowStudentPhotoEdit
+      : getCachedPhotoEditPermission();
+  localStorage.setItem(PHOTO_PERM_STORAGE_KEY, String(allowEdit));
 
   const cleanProfiles: Record<string, StudentSecurityProfile> = {};
   const delSet = new Set(deletedList);
@@ -632,18 +799,24 @@ export async function saveSecurityPayloadToDb(
         ...item,
         studentCode: code,
         fullNameKm: composedFull,
+        avatarDataUrl:
+          avatarsMap[code] ||
+          item.avatarDataUrl ||
+          localStorage.getItem(`bipa_avatar_${code}`) ||
+          '',
         coverDataUrl:
-          item.coverDataUrl ||
           coversMap[code] ||
+          item.coverDataUrl ||
           localStorage.getItem(`bipa_cover_${code}`) ||
           ''
       };
     }
   });
 
-  const finalPayload = {
+  const finalPayload: StudentSecurityPayload = {
     profiles: cleanProfiles,
     deletedCodes: deletedList,
+    allowStudentPhotoEdit: allowEdit,
     updatedAt: nowTs
   };
 
@@ -1823,6 +1996,9 @@ export function AdminUserPasswordDashboard() {
   const [securityPayload, setSecurityPayload] = useState<StudentSecurityPayload>(() =>
     loadCachedSecurityPayload()
   );
+  const [allowPhotoEdit, setAllowPhotoEdit] = useState<boolean>(() =>
+    getCachedPhotoEditPermission()
+  );
   const [logoUrl, setLogoUrl] = useState(
     'https://i.ibb.co/tphX7kd4/ce2e43f3-9d48-4d71-86a6-dd1ac3d77c49.png'
   );
@@ -1855,13 +2031,16 @@ export function AdminUserPasswordDashboard() {
   };
 
   const syncFromPaymentAndRiceTables = async (notify = false) => {
-    const [secDb, payDb, riceDb, coversMap, avatarsMap] = await Promise.all([
+    const [secDb, payDb, riceDb, coversMap, avatarsMap, permAllowed] = await Promise.all([
       fetchSecurityPayloadFromDb(),
       fetchPaymentPayloadFromDb(),
       fetchRicePayloadFromDb(),
       fetchCoversMapFromDb(),
-      fetchAvatarsMapFromDb()
+      fetchAvatarsMapFromDb(),
+      fetchPhotoPermFromDb()
     ]);
+
+    setAllowPhotoEdit(permAllowed);
 
     try {
       const { data: setRow } = await supabase
@@ -1954,6 +2133,7 @@ export function AdminUserPasswordDashboard() {
     const nextPayload: StudentSecurityPayload = {
       profiles: merged,
       deletedCodes: combinedDeleted,
+      allowStudentPhotoEdit: permAllowed,
       updatedAt: Date.now()
     };
     setSecurityPayload(nextPayload);
@@ -1990,6 +2170,26 @@ export function AdminUserPasswordDashboard() {
         (p.phoneNumber || '').toLowerCase().includes(q)
     );
   }, [profilesList, searchQuery]);
+
+  const handleToggleStudentPhotoPermission = async () => {
+    const nextAllowed = !allowPhotoEdit;
+    setAllowPhotoEdit(nextAllowed);
+    await savePhotoPermToDb(nextAllowed);
+
+    const nextPayload: StudentSecurityPayload = {
+      ...securityPayload,
+      allowStudentPhotoEdit: nextAllowed,
+      updatedAt: Date.now()
+    };
+    setSecurityPayload(nextPayload);
+    await saveSecurityPayloadToDb(nextPayload);
+
+    showNotice(
+      nextAllowed
+        ? 'បានបើកសិទ្ធិឱ្យសិស្សអាចប្តូររូប Profile និង Cover ដោយខ្លួនឯង!'
+        : 'បានបិទសិទ្ធិមិនឱ្យសិស្សប្តូររូប Profile ឬ Cover!'
+    );
+  };
 
   const handleLocalFieldEdit = (
     studentCode: string,
@@ -2111,23 +2311,7 @@ export function AdminUserPasswordDashboard() {
     reader.onload = () => {
       const img = new Image();
       img.onload = async () => {
-        const canvas = document.createElement('canvas');
-        const maxDim = 320;
-        let w = img.width;
-        let h = img.height;
-        if (w > h && w > maxDim) {
-          h = Math.round((h * maxDim) / w);
-          w = maxDim;
-        } else if (h > maxDim) {
-          w = Math.round((w * maxDim) / h);
-          h = maxDim;
-        }
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-
-        await saveAvatarToCloudDb(targetCode, dataUrl);
+        const dataUrl = standardizeImageToDataUrl(img, 360, 360, 0.8);
 
         setSecurityPayload((prev) => {
           const existing = prev.profiles[targetCode];
@@ -2147,6 +2331,7 @@ export function AdminUserPasswordDashboard() {
           return nextPayload;
         });
 
+        await saveAvatarToCloudDb(targetCode, dataUrl);
         showNotice(`បានផ្លាស់ប្តូររូបភាព Profile សម្រាប់ ${targetCode} ដោយជោគជ័យ!`);
         setUploadingForCode(null);
       };
@@ -2159,52 +2344,34 @@ export function AdminUserPasswordDashboard() {
   const handleRowCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !uploadingCoverForCode) return;
-    const targetCode =
-      uploadingCoverForCode === 'DEFAULT'
-        ? 'DEFAULT'
-        : normalizeCode(uploadingCoverForCode);
+    const targetCode = normalizeCode(uploadingCoverForCode);
 
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = async () => {
-        const canvas = document.createElement('canvas');
-        const maxW = 920;
-        let w = img.width;
-        let h = img.height;
-        if (w > maxW) {
-          h = Math.round((h * maxW) / w);
-          w = maxW;
-        }
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        const dataUrl = standardizeImageToDataUrl(img, 920, 520, 0.78);
+
+        setSecurityPayload((prev) => {
+          const existing = prev.profiles[targetCode];
+          if (!existing) return prev;
+          const nextPayload: StudentSecurityPayload = {
+            ...prev,
+            profiles: {
+              ...prev.profiles,
+              [targetCode]: {
+                ...existing,
+                coverDataUrl: dataUrl
+              }
+            },
+            updatedAt: Date.now()
+          };
+          saveSecurityPayloadToDb(nextPayload);
+          return nextPayload;
+        });
 
         await saveCoverToCloudDb(targetCode, dataUrl);
-
-        if (targetCode !== 'DEFAULT') {
-          setSecurityPayload((prev) => {
-            const existing = prev.profiles[targetCode];
-            if (!existing) return prev;
-            const nextPayload: StudentSecurityPayload = {
-              ...prev,
-              profiles: {
-                ...prev.profiles,
-                [targetCode]: {
-                  ...existing,
-                  coverDataUrl: dataUrl
-                }
-              },
-              updatedAt: Date.now()
-            };
-            saveSecurityPayloadToDb(nextPayload);
-            return nextPayload;
-          });
-          showNotice(`បានដាក់រូបភាព Cover សម្រាប់ ${targetCode} ដោយជោគជ័យ!`);
-        } else {
-          showNotice('បានដាក់រូបភាព Cover រួមសម្រាប់ប្រព័ន្ធដោយជោគជ័យ!');
-        }
+        showNotice(`បានដាក់រូបភាព Cover សម្រាប់ ${targetCode} ដោយជោគជ័យ!`);
         setUploadingCoverForCode(null);
       };
       img.src = String(reader.result);
@@ -2271,6 +2438,7 @@ export function AdminUserPasswordDashboard() {
     };
 
     const nextSecPayload: StudentSecurityPayload = {
+      ...securityPayload,
       profiles: {
         ...securityPayload.profiles,
         [cleanCode]: newProfile
@@ -2358,6 +2526,7 @@ export function AdminUserPasswordDashboard() {
     delete copy[cleanCode];
 
     const nextPayload: StudentSecurityPayload = {
+      ...securityPayload,
       profiles: copy,
       deletedCodes: updatedDeleted,
       updatedAt: Date.now()
@@ -2447,6 +2616,29 @@ export function AdminUserPasswordDashboard() {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
+            onClick={handleToggleStudentPhotoPermission}
+            className={cn(
+              'text-xs h-9 px-3.5 rounded-xl shadow-xs font-bold transition-all flex items-center gap-1.5',
+              allowPhotoEdit
+                ? 'bg-sky-600 hover:bg-sky-700 text-white'
+                : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40'
+            )}
+          >
+            {allowPhotoEdit ? (
+              <>
+                <Unlock className="h-3.5 w-3.5" />
+                <span>បើកសិទ្ធិសិស្សប្តូររូប</span>
+              </>
+            ) : (
+              <>
+                <Lock className="h-3.5 w-3.5" />
+                <span>បិទសិទ្ធិសិស្សប្តូររូប</span>
+              </>
+            )}
+          </Button>
+
+          <Button
+            type="button"
             onClick={handleSaveAllEditedRows}
             disabled={isSavingAll}
             className={cn(
@@ -2458,18 +2650,6 @@ export function AdminUserPasswordDashboard() {
           >
             <Save className="h-3.5 w-3.5 mr-1.5" />
             {isSavingAll ? 'កំពុងរក្សាទុក...' : 'រក្សាទុកការកែប្រែ'}
-          </Button>
-
-          <Button
-            type="button"
-            onClick={() => {
-              setUploadingCoverForCode('DEFAULT');
-              rowCoverInputRef.current?.click();
-            }}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-9 px-3.5 rounded-xl shadow-xs font-bold"
-          >
-            <ImageUp className="h-3.5 w-3.5 mr-1.5" />
-            ដាក់រូប Cover រួម
           </Button>
 
           <Button
@@ -2872,7 +3052,7 @@ export function StudentPersonalDashboard() {
   const navigate = useNavigate();
   const { lang, setLang } = useI18n();
   const { theme, toggleTheme } = useTheme();
-  const { user, signOut, hasRole } = useAuth();
+  const { user, profile, signOut, hasRole } = useAuth();
   const isKh = lang === 'km';
   const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
 
@@ -2884,15 +3064,20 @@ export function StudentPersonalDashboard() {
   const [verifiedProfile, setVerifiedProfile] = useState<StudentSecurityProfile | null>(() =>
     isStudentSessionVerified(loadCachedSecurityPayload())
   );
+  const [allowStudentPhotoEdit, setAllowStudentPhotoEdit] = useState<boolean>(() =>
+    getCachedPhotoEditPermission()
+  );
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileDetailModal, setShowProfileDetailModal] = useState(false);
 
   const [scrolledCompact, setScrolledCompact] = useState(false);
   const [pullStretch, setPullStretch] = useState(0);
-  const [customCoverUrl, setCustomCoverUrl] = useState<string>(() =>
-    localStorage.getItem('bipa_default_cover_banner') || ''
+  const [coversByCode, setCoversByCode] = useState<Record<string, string>>(() =>
+    loadCachedCoversMap()
   );
-  const [customAvatarUrl, setCustomAvatarUrl] = useState<string>('');
+  const [avatarsByCode, setAvatarsByCode] = useState<Record<string, string>>(() =>
+    loadCachedAvatarsMap()
+  );
   const [coverToast, setCoverToast] = useState('');
 
   const touchStartYRef = useRef<number | null>(null);
@@ -2901,54 +3086,63 @@ export function StudentPersonalDashboard() {
   const coverFileInputRef = useRef<HTMLInputElement>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
 
+  const activePhotoOwnerKey = useMemo(() => {
+    if (verifiedProfile) return normalizeCode(verifiedProfile.studentCode);
+    if (user?.id) return normalizeCode(`USER-${user.id.slice(0, 8)}`);
+    return '';
+  }, [verifiedProfile, user]);
+
+  const canCurrentUserEditPhoto = Boolean(
+    isAdmin || (verifiedProfile && allowStudentPhotoEdit)
+  );
+
   const loadAllDashboardData = async () => {
     if (Date.now() - lastManualImageUploadRef.current < 4000) {
       return;
     }
 
-    const [secData, payData, rData, coversMap, avatarsMap] = await Promise.all([
+    const [secData, payData, rData, coversMap, avatarsMap, permAllowed] = await Promise.all([
       fetchSecurityPayloadFromDb(),
       fetchPaymentPayloadFromDb(),
       fetchRicePayloadFromDb(),
       fetchCoversMapFromDb(),
-      fetchAvatarsMapFromDb()
+      fetchAvatarsMapFromDb(),
+      fetchPhotoPermFromDb()
     ]);
 
     setPaymentPayload(payData);
     setRicePayload(rData);
+    setCoversByCode(coversMap);
+    setAvatarsByCode(avatarsMap);
+    setAllowStudentPhotoEdit(permAllowed);
+
     const activeProf = isStudentSessionVerified(secData);
 
     if (activeProf) {
       const code = normalizeCode(activeProf.studentCode);
-      const dbAvatar =
+      const studentAvatar =
         avatarsMap[code] ||
         activeProf.avatarDataUrl ||
         localStorage.getItem(`bipa_avatar_${code}`) ||
         '';
-      const dbCover =
+      const studentCover =
         coversMap[code] ||
         activeProf.coverDataUrl ||
         localStorage.getItem(`bipa_cover_${code}`) ||
-        coversMap.DEFAULT ||
-        localStorage.getItem('bipa_default_cover_banner') ||
         '';
 
       setVerifiedProfile({
         ...activeProf,
-        avatarDataUrl: dbAvatar,
-        coverDataUrl: dbCover
+        avatarDataUrl: studentAvatar,
+        coverDataUrl: studentCover
       });
-      setCustomAvatarUrl(dbAvatar);
-      setCustomCoverUrl(dbCover);
     } else {
       setVerifiedProfile(null);
-      const fallbackCover =
-        coversMap.DEFAULT || localStorage.getItem('bipa_default_cover_banner') || '';
-      setCustomCoverUrl(fallbackCover);
     }
   };
 
   useEffect(() => {
+    localStorage.removeItem('bipa_default_cover_banner');
     loadAllDashboardData();
     const openLoginHandler = () => setShowLoginModal(true);
     const syncTimer = setInterval(loadAllDashboardData, 6000);
@@ -3016,7 +3210,7 @@ export function StudentPersonalDashboard() {
     if (touchStartYRef.current === null) return;
     const deltaY = e.touches[0].clientY - touchStartYRef.current;
     if (deltaY > 0) {
-      setPullStretch(Math.min(90, deltaY * 0.45));
+      setPullStretch(Math.min(80, deltaY * 0.4));
     } else {
       setPullStretch(0);
     }
@@ -3027,56 +3221,82 @@ export function StudentPersonalDashboard() {
     setPullStretch(0);
   };
 
+  const handleFullSystemLogout = async () => {
+    clearVerifiedStudentSession();
+    setVerifiedProfile(null);
+    setShowProfileDetailModal(false);
+    if (user) {
+      try {
+        await signOut();
+      } catch {}
+    }
+    navigate('/signin');
+  };
+
+  const handleTogglePhotoPermDirectly = async () => {
+    const nextAllowed = !allowStudentPhotoEdit;
+    setAllowStudentPhotoEdit(nextAllowed);
+    await savePhotoPermToDb(nextAllowed);
+    setCoverToast(
+      nextAllowed
+        ? 'បានបើកសិទ្ធិឱ្យសិស្សប្តូររូបភាព!'
+        : 'បានបិទសិទ្ធិមិនឱ្យសិស្សប្តូររូបភាព!'
+    );
+    setTimeout(() => setCoverToast(''), 2800);
+  };
+
   const handleCoverUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!activePhotoOwnerKey) {
+      setShowLoginModal(true);
+      e.target.value = '';
+      return;
+    }
+
+    if (!canCurrentUserEditPhoto) {
+      setCoverToast('អ្នកគ្រប់គ្រងបានបិទសិទ្ធិប្តូររូបភាព!');
+      setTimeout(() => setCoverToast(''), 2800);
+      e.target.value = '';
+      return;
+    }
+
+    const targetCode = activePhotoOwnerKey;
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = async () => {
-        const canvas = document.createElement('canvas');
-        const maxW = 920;
-        let w = img.width;
-        let h = img.height;
-        if (w > maxW) {
-          h = Math.round((h * maxW) / w);
-          w = maxW;
-        }
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        const dataUrl = standardizeImageToDataUrl(img, 920, 520, 0.78);
 
         lastManualImageUploadRef.current = Date.now();
-        setCustomCoverUrl(dataUrl);
-
-        const targetCode = verifiedProfile
-          ? normalizeCode(verifiedProfile.studentCode)
-          : 'DEFAULT';
-
+        setCoversByCode((prev) => ({
+          ...prev,
+          [targetCode]: dataUrl
+        }));
         if (verifiedProfile) {
           setVerifiedProfile((prev) =>
-            prev ? { ...prev, coverDataUrl: dataUrl } : prev
+            prev && normalizeCode(prev.studentCode) === targetCode
+              ? { ...prev, coverDataUrl: dataUrl }
+              : prev
           );
         }
 
-        setCoverToast('បានប្តូររូបភាព Cover ភ្លាមៗ និងរក្សាទុកចូល Database រួចរាល់!');
-        setTimeout(() => setCoverToast(''), 3000);
+        setCoverToast('បានប្តូររូបភាព Cover ដោយជោគជ័យ!');
+        setTimeout(() => setCoverToast(''), 2800);
 
         await saveCoverToCloudDb(targetCode, dataUrl);
 
         if (verifiedProfile) {
-          const code = normalizeCode(verifiedProfile.studentCode);
           try {
             const secData = loadCachedSecurityPayload();
-            if (secData.profiles[code]) {
+            if (secData.profiles[targetCode]) {
               const nextPayload: StudentSecurityPayload = {
                 ...secData,
                 profiles: {
                   ...secData.profiles,
-                  [code]: {
-                    ...secData.profiles[code],
+                  [targetCode]: {
+                    ...secData.profiles[targetCode],
                     coverDataUrl: dataUrl
                   }
                 },
@@ -3095,57 +3315,65 @@ export function StudentPersonalDashboard() {
 
   const handleAvatarUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !verifiedProfile) return;
+    if (!file) return;
 
-    const code = normalizeCode(verifiedProfile.studentCode);
+    if (!activePhotoOwnerKey) {
+      setShowLoginModal(true);
+      e.target.value = '';
+      return;
+    }
+
+    if (!canCurrentUserEditPhoto) {
+      setCoverToast('អ្នកគ្រប់គ្រងបានបិទសិទ្ធិប្តូររូបភាព!');
+      setTimeout(() => setCoverToast(''), 2800);
+      e.target.value = '';
+      return;
+    }
+
+    const code = activePhotoOwnerKey;
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = async () => {
-        const canvas = document.createElement('canvas');
-        const maxDim = 320;
-        let w = img.width;
-        let h = img.height;
-        if (w > h && w > maxDim) {
-          h = Math.round((h * maxDim) / w);
-          w = maxDim;
-        } else if (h > maxDim) {
-          w = Math.round((w * maxDim) / h);
-          h = maxDim;
-        }
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        const dataUrl = standardizeImageToDataUrl(img, 360, 360, 0.8);
 
         lastManualImageUploadRef.current = Date.now();
-        setCustomAvatarUrl(dataUrl);
-        setVerifiedProfile((prev) =>
-          prev ? { ...prev, avatarDataUrl: dataUrl } : prev
-        );
+        setAvatarsByCode((prev) => ({
+          ...prev,
+          [code]: dataUrl
+        }));
+        if (verifiedProfile) {
+          setVerifiedProfile((prev) =>
+            prev && normalizeCode(prev.studentCode) === code
+              ? { ...prev, avatarDataUrl: dataUrl }
+              : prev
+          );
+        }
 
-        setCoverToast('បានប្តូររូបភាព Profile ភ្លាមៗ និងរក្សាទុកចូល Database រួចរាល់!');
-        setTimeout(() => setCoverToast(''), 3000);
+        setCoverToast('បានប្តូររូបភាព Profile ដោយជោគជ័យ!');
+        setTimeout(() => setCoverToast(''), 2800);
 
         await saveAvatarToCloudDb(code, dataUrl);
 
-        try {
-          const secData = loadCachedSecurityPayload();
-          if (secData.profiles[code]) {
-            const nextPayload: StudentSecurityPayload = {
-              ...secData,
-              profiles: {
-                ...secData.profiles,
-                [code]: {
-                  ...secData.profiles[code],
-                  avatarDataUrl: dataUrl
-                }
-              },
-              updatedAt: Date.now()
-            };
-            await saveSecurityPayloadToDb(nextPayload);
-          }
-        } catch {}
+        if (verifiedProfile) {
+          try {
+            const secData = loadCachedSecurityPayload();
+            if (secData.profiles[code]) {
+              const nextPayload: StudentSecurityPayload = {
+                ...secData,
+                profiles: {
+                  ...secData.profiles,
+                  [code]: {
+                    ...secData.profiles[code],
+                    avatarDataUrl: dataUrl
+                  }
+                },
+                updatedAt: Date.now()
+              };
+              await saveSecurityPayloadToDb(nextPayload);
+            }
+          } catch {}
+        }
       };
       img.src = String(reader.result);
     };
@@ -3199,34 +3427,40 @@ export function StudentPersonalDashboard() {
 
   const renderTranslatedUserType = (typeKm?: StudentUserCategory) => {
     if (isKh) return typeKm || 'និស្សិត';
-    if (typeKm === 'និស្សិត') return 'Student';
+    if (typeKm === 'និស្សិត') return 'University Student';
     if (typeKm === 'ពិសេស') return 'Special';
     return 'Student';
   };
 
-  const currentAvatar =
-    customAvatarUrl ||
-    verifiedProfile?.avatarDataUrl ||
-    (verifiedProfile
-      ? localStorage.getItem(`bipa_avatar_${normalizeCode(verifiedProfile.studentCode)}`) || ''
-      : '');
+  const currentAvatar = activePhotoOwnerKey
+    ? avatarsByCode[activePhotoOwnerKey] ||
+      verifiedProfile?.avatarDataUrl ||
+      localStorage.getItem(`bipa_avatar_${activePhotoOwnerKey}`) ||
+      (user && profile?.avatar_url ? profile.avatar_url : '') ||
+      ''
+    : '';
 
-  const activeCoverBanner =
-    customCoverUrl ||
-    verifiedProfile?.coverDataUrl ||
-    (verifiedProfile
-      ? localStorage.getItem(`bipa_cover_${normalizeCode(verifiedProfile.studentCode)}`) || ''
-      : '') ||
-    localStorage.getItem('bipa_default_cover_banner') ||
-    currentAvatar;
+  const activeCoverBanner = activePhotoOwnerKey
+    ? coversByCode[activePhotoOwnerKey] ||
+      verifiedProfile?.coverDataUrl ||
+      localStorage.getItem(`bipa_cover_${activePhotoOwnerKey}`) ||
+      ''
+    : '';
 
-  const coverBaseHeight = verifiedProfile ? 265 : 235;
+  const coverBaseHeight = verifiedProfile ? 255 : 215;
   const dynamicCoverHeight = coverBaseHeight + pullStretch;
-  const dynamicImageScale = 1 + pullStretch / 210;
+  const dynamicImageScale = 1 + pullStretch / 220;
   const displayFullName = verifiedProfile
     ? `${verifiedProfile.lastNameKm || ''} ${verifiedProfile.firstNameKm || ''}`.trim() ||
       verifiedProfile.fullNameKm
-    : '';
+    : user
+    ? profile?.display_name || user.email?.split('@')[0] || 'User'
+    : isKh
+    ? 'ភ្ញៀវ'
+    : 'Guest';
+
+  const accountEmailLabel =
+    user?.email || (verifiedProfile ? verifiedProfile.studentCode : '');
 
   return (
     <div
@@ -3262,19 +3496,20 @@ export function StudentPersonalDashboard() {
           onVerified={(prof) => {
             const code = normalizeCode(prof.studentCode);
             const savedAv =
-              prof.avatarDataUrl || localStorage.getItem(`bipa_avatar_${code}`) || '';
+              avatarsByCode[code] ||
+              prof.avatarDataUrl ||
+              localStorage.getItem(`bipa_avatar_${code}`) ||
+              '';
             const savedCv =
+              coversByCode[code] ||
               prof.coverDataUrl ||
               localStorage.getItem(`bipa_cover_${code}`) ||
-              localStorage.getItem('bipa_default_cover_banner') ||
               '';
             setVerifiedProfile({
               ...prof,
               avatarDataUrl: savedAv,
               coverDataUrl: savedCv
             });
-            if (savedAv) setCustomAvatarUrl(savedAv);
-            if (savedCv) setCustomCoverUrl(savedCv);
             setShowLoginModal(false);
           }}
           onClose={() => setShowLoginModal(false)}
@@ -3305,28 +3540,34 @@ export function StudentPersonalDashboard() {
               <ChevronLeft className="h-5 w-5" />
             </button>
             <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-amber-400 bg-slate-800 shrink-0">
-              {verifiedProfile ? (
-                currentAvatar ? (
-                  <img src={currentAvatar} alt="" className="w-full h-full object-cover object-top" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-xs">
-                    {displayFullName.charAt(0)}
-                  </div>
-                )
+              {currentAvatar ? (
+                <img
+                  key={`compact-av-${activePhotoOwnerKey}`}
+                  src={currentAvatar}
+                  alt=""
+                  className="w-full h-full object-cover object-top"
+                />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-white/15 text-amber-300">
-                  <User className="h-4 w-4" />
+                <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-xs">
+                  {displayFullName.charAt(0)}
                 </div>
               )}
             </div>
             <div className="min-w-0">
-              <span className="font-moul-kh text-xs text-white truncate block">
-                {verifiedProfile ? displayFullName : isKh ? 'ភ្ញៀវ' : 'Guest'}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-moul-kh text-xs text-white truncate">
+                  {displayFullName}
+                </span>
+                {isAdmin && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-950 font-black text-[9px] shrink-0">
+                    ADMIN
+                  </span>
+                )}
+              </div>
               <p className="text-[10.5px] text-sky-200 truncate">
                 {verifiedProfile
-                  ? `${renderTranslatedUserType(verifiedProfile.userTypeKm)} - ${verifiedProfile.phoneNumber}`
-                  : 'XXX-XXX-XXX'}
+                  ? `${renderTranslatedUserType(verifiedProfile.userTypeKm)} • ${verifiedProfile.phoneNumber}`
+                  : user?.email || 'XXX-XXX-XXX'}
               </p>
             </div>
           </div>
@@ -3338,36 +3579,28 @@ export function StudentPersonalDashboard() {
         ref={heroBannerRef}
         onClick={() => {
           if (verifiedProfile) setShowProfileDetailModal(true);
-          else coverFileInputRef.current?.click();
         }}
         style={{
           height: `${dynamicCoverHeight}px`,
           transition: pullStretch > 0 ? 'none' : 'height 0.28s cubic-bezier(0.16, 1, 0.3, 1)'
         }}
-        className="relative w-full overflow-hidden rounded-b-[32px] shadow-[0_16px_40px_rgba(0,0,0,0.5)] border-b border-white/15 flex flex-col justify-between p-4 sm:p-5 text-white bg-[#061229] cursor-pointer"
+        className={cn(
+          'relative w-full overflow-hidden rounded-b-[32px] shadow-[0_16px_40px_rgba(0,0,0,0.5)] border-b border-white/15 flex flex-col justify-between p-4 sm:p-5 text-white bg-[#061229]',
+          verifiedProfile ? 'cursor-pointer' : ''
+        )}
       >
         {activeCoverBanner ? (
-          <>
-            <img
-              src={activeCoverBanner}
-              alt=""
-              style={{
-                transform: `scale(${dynamicImageScale + 0.08})`,
-                transition: pullStretch > 0 ? 'none' : 'transform 0.3s ease-out'
-              }}
-              className="absolute inset-0 w-full h-full object-cover blur-xl opacity-55 pointer-events-none"
-            />
-            <img
-              src={activeCoverBanner}
-              alt={displayFullName || 'Cover'}
-              style={{
-                objectPosition: 'center center',
-                transform: `scale(${dynamicImageScale})`,
-                transition: pullStretch > 0 ? 'none' : 'transform 0.3s ease-out'
-              }}
-              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-            />
-          </>
+          <img
+            key={`hero-cover-${activePhotoOwnerKey}`}
+            src={activeCoverBanner}
+            alt={displayFullName}
+            style={{
+              objectPosition: 'center center',
+              transform: `scale(${dynamicImageScale})`,
+              transition: pullStretch > 0 ? 'none' : 'transform 0.3s ease-out'
+            }}
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-[#0b2149] via-[#133675] to-[#061024]" />
         )}
@@ -3376,7 +3609,7 @@ export function StudentPersonalDashboard() {
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              'linear-gradient(180deg, rgba(4,12,28,0.42) 0%, rgba(4,12,28,0.06) 38%, rgba(4,12,28,0.68) 76%, rgba(4,12,28,0.94) 100%)'
+              'linear-gradient(180deg, rgba(4,12,28,0.42) 0%, rgba(4,12,28,0.08) 38%, rgba(4,12,28,0.68) 76%, rgba(4,12,28,0.94) 100%)'
           }}
         />
 
@@ -3395,116 +3628,151 @@ export function StudentPersonalDashboard() {
             <ChevronLeft className="h-5 w-5" />
           </button>
 
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              coverFileInputRef.current?.click();
-            }}
-            className="px-3.5 py-1.5 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md border border-white/20 text-[10.5px] text-amber-300 flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
-          >
-            <Camera className="h-3.5 w-3.5" />
-            <span>{isKh ? 'ដាក់រូប Cover' : 'Set Cover'}</span>
-          </button>
-        </div>
-
-        {!verifiedProfile ? (
-          <div className="relative z-10 flex items-center justify-between gap-3 pb-1">
-            <div className="flex items-center gap-3.5">
-              <div
+          <div className="flex items-center gap-1.5">
+            {isAdmin && (
+              <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowLoginModal(true);
+                  handleTogglePhotoPermDirectly();
                 }}
-                className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-white/15 border-2 border-amber-300/80 flex items-center justify-center cursor-pointer shrink-0 shadow-xl"
+                className={cn(
+                  'px-2.5 py-1 rounded-full backdrop-blur-md border text-[10px] font-bold flex items-center gap-1 shadow-md transition-all active:scale-95',
+                  allowStudentPhotoEdit
+                    ? 'bg-emerald-500/30 border-emerald-400/50 text-emerald-200'
+                    : 'bg-rose-500/30 border-rose-400/50 text-rose-200'
+                )}
               >
-                <User className="h-8 w-8 text-amber-300" />
-              </div>
-              <div className="space-y-0.5">
-                <h1 className="font-moul-kh text-base sm:text-lg text-white leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
-                  {isKh ? 'ភ្ញៀវ' : 'Guest'}
-                </h1>
-                <p className="text-xs text-sky-200">{isKh ? 'មិនទាន់ភ្ជាប់កាតសិស្ស' : 'Guest'}</p>
-                <p className="text-[11px] font-mono tracking-wider text-amber-300">
-                  XXX-XXX-XXX
-                </p>
-              </div>
-            </div>
+                {allowStudentPhotoEdit ? (
+                  <>
+                    <Unlock className="h-3 w-3" />
+                    <span>{isKh ? 'សិទ្ធិប្តូររូប៖ បើក' : 'Photo: ON'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="h-3 w-3" />
+                    <span>{isKh ? 'សិទ្ធិប្តូររូប៖ បិទ' : 'Photo: OFF'}</span>
+                  </>
+                )}
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowLoginModal(true);
-              }}
-              className="px-4 py-2 rounded-2xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs shadow-lg flex items-center gap-1.5 active:scale-95 transition-all"
-            >
-              <QrCode className="h-4 w-4" />
-              <span>{isKh ? 'ស្កេនកាត' : 'Scan QR'}</span>
-            </button>
+            {canCurrentUserEditPhoto && activePhotoOwnerKey && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  coverFileInputRef.current?.click();
+                }}
+                className="px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md border border-white/20 text-[10.5px] text-amber-300 flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
+              >
+                <Camera className="h-3.5 w-3.5" />
+                <span>{isKh ? 'ដាក់រូប Cover' : 'Set Cover'}</span>
+              </button>
+            )}
           </div>
-        ) : (
-          <div className="relative z-10 flex items-center gap-3.5 pb-1">
+        </div>
+
+        <div className="relative z-10 flex items-center justify-between gap-3 pb-1">
+          <div className="flex items-center gap-3.5 min-w-0">
             <div
               onClick={(e) => {
                 e.stopPropagation();
-                avatarFileInputRef.current?.click();
+                if (canCurrentUserEditPhoto && activePhotoOwnerKey) {
+                  avatarFileInputRef.current?.click();
+                } else if (verifiedProfile) {
+                  setShowProfileDetailModal(true);
+                }
               }}
               className="relative rounded-full overflow-hidden border-[2.5px] border-white shadow-[0_6px_20px_rgba(0,0,0,0.85)] bg-slate-900 shrink-0 group cursor-pointer"
-              style={{ width: '74px', height: '74px' }}
-              title={isKh ? 'ចុចប្តូររូបភាព Profile' : 'Change Profile Photo'}
+              style={{ width: '72px', height: '72px' }}
             >
               {currentAvatar ? (
                 <img
+                  key={`hero-av-${activePhotoOwnerKey}`}
                   src={currentAvatar}
                   alt={displayFullName}
                   className="w-full h-full object-cover object-top"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-xl">
-                  {displayFullName.charAt(0)}
+                <div className="w-full h-full flex items-center justify-center bg-white/15 text-amber-300">
+                  {isAdmin ? (
+                    <ShieldCheck className="h-8 w-8" />
+                  ) : (
+                    <User className="h-8 w-8" />
+                  )}
                 </div>
               )}
-              <span className="absolute bottom-0 inset-x-0 bg-black/55 py-0.5 flex items-center justify-center text-white">
-                <Camera className="h-3 w-3 text-amber-300" />
-              </span>
+              {canCurrentUserEditPhoto && activePhotoOwnerKey && (
+                <span className="absolute bottom-0 inset-x-0 bg-black/55 py-0.5 flex items-center justify-center text-white">
+                  <Camera className="h-3 w-3 text-amber-300" />
+                </span>
+              )}
             </div>
 
             <div className="space-y-0.5 drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)] min-w-0">
-              <h1 className="font-moul-kh text-base sm:text-lg text-white leading-tight truncate">
-                {displayFullName}
-              </h1>
-              <p className="text-xs text-sky-100">
-                {renderTranslatedUserType(verifiedProfile.userTypeKm)} •{' '}
-                {verifiedProfile.majorKm || 'ព័ត៌មានវិទ្យា'}
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-moul-kh text-base sm:text-lg text-white leading-tight truncate">
+                  {displayFullName}
+                </h1>
+                {isAdmin && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px]">
+                    ADMIN
+                  </span>
+                )}
+                {verifiedProfile && (
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500/85 border border-white/25 text-white font-bold text-[10px]">
+                    {renderTranslatedUserType(verifiedProfile.userTypeKm)}
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-sky-100 truncate">
+                {verifiedProfile
+                  ? `${verifiedProfile.studentCode} • ${verifiedProfile.majorKm || 'ព័ត៌មានវិទ្យា'}`
+                  : user?.email || (isKh ? 'មិនទាន់ភ្ជាប់កាតសិស្ស' : 'Student card not linked')}
               </p>
+
               <p className="text-xs text-amber-300 font-bold tracking-wide">
-                {verifiedProfile.phoneNumber}
+                {verifiedProfile ? verifiedProfile.phoneNumber : 'XXX-XXX-XXX'}
               </p>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       <div className="px-3.5 sm:px-5 pt-4 space-y-4">
         <div className="space-y-2">
-          <h2 className="text-xs text-sky-100/95 px-1 drop-shadow-2xs">
-            {isKh ? 'ប្រវត្តិរូប' : 'Profile'}
-          </h2>
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-xs text-sky-100/95 drop-shadow-2xs">
+              {isKh ? 'ព័ត៌មានប្រវត្តិរូប' : 'Profile'}
+            </h2>
+            {verifiedProfile && (
+              <button
+                type="button"
+                onClick={() => setShowLoginModal(true)}
+                className="text-[11px] text-amber-300 hover:underline flex items-center gap-1"
+              >
+                <QrCode className="h-3 w-3" />
+                <span>{isKh ? 'ប្តូរកាតសិស្ស' : 'Switch Card'}</span>
+              </button>
+            )}
+          </div>
 
           {!verifiedProfile ? (
-            <div className="bg-[#091e42]/55 backdrop-blur-xl rounded-3xl p-5 border border-white/25 shadow-lg text-center space-y-3">
+            <div className="bg-[#091e42]/60 backdrop-blur-xl rounded-3xl p-5 border border-white/25 shadow-lg text-center space-y-3">
               <p className="text-xs text-white/95">
                 {isKh
-                  ? 'អ្នកមិនទាន់បានចូលគណនីសិស្ស (ស្កេនកាត QR) នៅឡើយទេ'
-                  : 'You have not linked your student QR card yet'}
+                  ? 'សូមស្កេនកាត QR ឬបញ្ចូលអត្តលេខដើម្បីមើលព័ត៌មានប្រវត្តិរូបនិស្សិត'
+                  : 'Scan your QR card or enter your ID to view student profile'}
               </p>
               <button
                 type="button"
                 onClick={() => setShowLoginModal(true)}
-                className="px-5 py-2 rounded-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs shadow transition-all active:scale-95"
+                className="px-6 py-2.5 rounded-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs shadow-lg transition-all active:scale-95 inline-flex items-center gap-2"
               >
-                {isKh ? 'ទៅកាន់ផ្ទាំង ស្កេនកាត / ចូលគណនី' : 'Go to Student Login'}
+                <QrCode className="h-4 w-4" />
+                <span>{isKh ? 'ស្កេនកាត QR / ចូលប្រវត្តិរូប' : 'Scan QR / View Profile'}</span>
               </button>
             </div>
           ) : (
@@ -3775,7 +4043,23 @@ export function StudentPersonalDashboard() {
                   <Building2 className="h-4 w-4" />
                 </div>
                 <span className="text-xs text-white drop-shadow-2xs">
-                  {isKh ? 'ព័ត៌មានមណ្ឌល' : 'Residence Center'}
+                  {isKh ? 'ព័ត៌មានមណ្ឌលស្នាក់នៅ' : 'Residence Center Info'}
+                </span>
+              </div>
+              <ChevronRight className="h-4 w-4 text-sky-200/80" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/contact')}
+              className="w-full p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-cyan-400/20 border border-cyan-300/30 text-cyan-300 flex items-center justify-center">
+                  <Headphones className="h-4 w-4" />
+                </div>
+                <span className="text-xs text-white drop-shadow-2xs">
+                  {isKh ? 'ទាក់ទងមកយើង' : 'Contact Us'}
                 </span>
               </div>
               <ChevronRight className="h-4 w-4 text-sky-200/80" />
@@ -3801,9 +4085,7 @@ export function StudentPersonalDashboard() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    window.dispatchEvent(new Event('open-bipa-admin-security-modal'))
-                  }
+                  onClick={() => navigate('/admin?page=user-passwords')}
                   className="w-full p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors"
                 >
                   <div className="flex items-center gap-3">
@@ -3811,61 +4093,13 @@ export function StudentPersonalDashboard() {
                       <QrCode className="h-4 w-4" />
                     </div>
                     <span className="text-xs text-sky-200 font-bold drop-shadow-2xs">
-                      {isKh ? 'គ្រប់គ្រងកូដសិស្ស & កាត QR' : 'Manage Student QR'}
+                      {isKh ? 'គ្រប់គ្រង User និងកាត QR' : 'Manage Users & QR'}
                     </span>
                   </div>
                   <ChevronRight className="h-4 w-4 text-sky-200/80" />
                 </button>
               </>
             )}
-
-            <button
-              type="button"
-              onClick={() => navigate('/contact')}
-              className="w-full p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-cyan-400/20 border border-cyan-300/30 text-cyan-300 flex items-center justify-center">
-                  <Headphones className="h-4 w-4" />
-                </div>
-                <span className="text-xs text-white drop-shadow-2xs">
-                  {isKh ? 'ទាក់ទងមកយើង' : 'Contact Us'}
-                </span>
-              </div>
-              <ChevronRight className="h-4 w-4 text-sky-200/80" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate('/about')}
-              className="w-full p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-purple-400/20 border border-purple-300/30 text-purple-300 flex items-center justify-center">
-                  <ShieldCheck className="h-4 w-4" />
-                </div>
-                <span className="text-xs text-white drop-shadow-2xs">
-                  {isKh ? 'គោលការណ៍ឯកជនភាព' : 'Privacy Policy'}
-                </span>
-              </div>
-              <ChevronRight className="h-4 w-4 text-sky-200/80" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => navigate('/residence-info')}
-              className="w-full p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-emerald-400/20 border border-emerald-300/30 text-emerald-300 flex items-center justify-center">
-                  <FileText className="h-4 w-4" />
-                </div>
-                <span className="text-xs text-white drop-shadow-2xs">
-                  {isKh ? 'លក្ខខណ្ឌប្រើប្រាស់' : 'Terms of Use'}
-                </span>
-              </div>
-              <ChevronRight className="h-4 w-4 text-sky-200/80" />
-            </button>
 
             {!user && (
               <button
@@ -3878,7 +4112,7 @@ export function StudentPersonalDashboard() {
                     <LogIn className="h-4 w-4" />
                   </div>
                   <span className="text-xs text-white drop-shadow-2xs">
-                    {isKh ? 'ចូលគណនីអ្នកគ្រប់គ្រង (App Login)' : 'App Sign In'}
+                    {isKh ? 'ចូលគណនី (Sign In)' : 'Sign In'}
                   </span>
                 </div>
                 <ChevronRight className="h-4 w-4 text-sky-200/80" />
@@ -3888,7 +4122,7 @@ export function StudentPersonalDashboard() {
             <div className="p-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-amber-400/20 border border-amber-300/30 text-amber-300 flex items-center justify-center">
-                  <Info className="h-4 w-4" />
+                  <FileText className="h-4 w-4" />
                 </div>
                 <span className="text-xs text-white drop-shadow-2xs">
                   {isKh ? 'កំណែ' : 'Version'}
@@ -3902,27 +4136,25 @@ export function StudentPersonalDashboard() {
         <div className="pt-1">
           <button
             type="button"
-            onClick={async () => {
-              clearVerifiedStudentSession();
-              setVerifiedProfile(null);
-              setCustomAvatarUrl('');
-              if (user) {
-                await signOut();
-              }
-              setCoverToast(isKh ? 'បានចាកចេញពីគណនីរួចរាល់!' : 'Signed out successfully!');
-              setTimeout(() => setCoverToast(''), 2500);
-            }}
+            onClick={handleFullSystemLogout}
             className="w-full bg-rose-500/25 hover:bg-rose-500/35 backdrop-blur-xl rounded-3xl p-3.5 border border-rose-300/35 shadow-lg flex items-center justify-between transition-colors active:scale-98"
           >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-rose-500/30 text-rose-200 flex items-center justify-center">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-full bg-rose-500/30 text-rose-200 flex items-center justify-center shrink-0">
                 <LogOut className="h-4 w-4" />
               </div>
-              <span className="text-xs text-rose-100 font-bold">
-                {isKh ? 'ចាកចេញ' : 'Sign Out'}
-              </span>
+              <div className="text-left min-w-0">
+                <span className="text-xs text-rose-100 font-bold block">
+                  {isKh ? 'ចាកចេញ (Log Out)' : 'Log Out'}
+                </span>
+                {accountEmailLabel && (
+                  <span className="text-[10.5px] text-rose-200/85 truncate block">
+                    {accountEmailLabel}
+                  </span>
+                )}
+              </div>
             </div>
-            <ChevronRight className="h-4 w-4 text-rose-200" />
+            <ChevronRight className="h-4 w-4 text-rose-200 shrink-0" />
           </button>
         </div>
       </div>
@@ -3939,7 +4171,15 @@ export function StudentPersonalDashboard() {
             <div className="relative w-full h-64 bg-slate-950 flex items-center justify-center overflow-hidden">
               {activeCoverBanner ? (
                 <img
+                  key={`modal-cover-${activePhotoOwnerKey}`}
                   src={activeCoverBanner}
+                  alt={displayFullName}
+                  className="w-full h-full object-contain"
+                />
+              ) : currentAvatar ? (
+                <img
+                  key={`modal-av-fallback-${activePhotoOwnerKey}`}
+                  src={currentAvatar}
                   alt={displayFullName}
                   className="w-full h-full object-contain"
                 />
@@ -3961,11 +4201,21 @@ export function StudentPersonalDashboard() {
               <div className="flex items-center justify-between border-b border-white/15 pb-2.5">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div
-                    onClick={() => avatarFileInputRef.current?.click()}
-                    className="w-11 h-11 rounded-full overflow-hidden border border-amber-400 shrink-0 bg-slate-800 cursor-pointer"
+                    onClick={() => {
+                      if (canCurrentUserEditPhoto) avatarFileInputRef.current?.click();
+                    }}
+                    className={cn(
+                      'w-11 h-11 rounded-full overflow-hidden border border-amber-400 shrink-0 bg-slate-800',
+                      canCurrentUserEditPhoto ? 'cursor-pointer' : ''
+                    )}
                   >
                     {currentAvatar ? (
-                      <img src={currentAvatar} alt="" className="w-full h-full object-cover object-top" />
+                      <img
+                        key={`modal-thumb-${activePhotoOwnerKey}`}
+                        src={currentAvatar}
+                        alt=""
+                        className="w-full h-full object-cover object-top"
+                      />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-amber-500 text-white text-sm">
                         {displayFullName.charAt(0)}
@@ -4027,37 +4277,47 @@ export function StudentPersonalDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setShowProfileDetailModal(false);
-                    avatarFileInputRef.current?.click();
-                  }}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-9 rounded-xl px-2"
-                >
-                  <User className="h-3.5 w-3.5 mr-1" />
-                  {isKh ? 'ប្តូររូបខ្លួន' : 'Avatar'}
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setShowProfileDetailModal(false);
-                    coverFileInputRef.current?.click();
-                  }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-[11px] h-9 rounded-xl px-2"
-                >
-                  <Camera className="h-3.5 w-3.5 mr-1" />
-                  {isKh ? 'ប្តូរ Cover' : 'Cover'}
-                </Button>
+              {canCurrentUserEditPhoto ? (
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileDetailModal(false);
+                      avatarFileInputRef.current?.click();
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] h-9 rounded-xl px-2"
+                  >
+                    <User className="h-3.5 w-3.5 mr-1" />
+                    {isKh ? 'ប្តូររូបខ្លួន' : 'Avatar'}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileDetailModal(false);
+                      coverFileInputRef.current?.click();
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-[11px] h-9 rounded-xl px-2"
+                  >
+                    <Camera className="h-3.5 w-3.5 mr-1" />
+                    {isKh ? 'ប្តូរ Cover' : 'Cover'}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => setShowProfileDetailModal(false)}
+                    className="bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-[11px] h-9 rounded-xl px-2"
+                  >
+                    {isKh ? 'បិទផ្ទាំង' : 'Close'}
+                  </Button>
+                </div>
+              ) : (
                 <Button
                   type="button"
                   onClick={() => setShowProfileDetailModal(false)}
-                  className="bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-[11px] h-9 rounded-xl px-2"
+                  className="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold text-xs h-9 rounded-xl"
                 >
                   {isKh ? 'បិទផ្ទាំង' : 'Close'}
                 </Button>
-              </div>
+              )}
             </div>
           </div>
         </div>
