@@ -2048,7 +2048,7 @@ export function AdminUserPasswordDashboard() {
     getCachedPhotoEditPermission()
   );
   const [logoUrl, setLogoUrl] = useState(
-    'https://i.ibb.co/tphX7kd4/ce2e43f3-9d48-4d71-86a6-dd1ac3d77c49.png'
+    'https://i.ibb.co/KpKL2rSC/864a542d-a47f-48b2-8481-68f39c87138b.png'
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCardStudent, setSelectedCardStudent] =
@@ -2063,6 +2063,7 @@ export function AdminUserPasswordDashboard() {
   const [newStCode, setNewStCode] = useState('');
   const [newLastName, setNewLastName] = useState('');
   const [newFirstName, setNewFirstName] = useState('');
+  const [newMajorKm, setNewMajorKm] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newUserType, setNewUserType] = useState<StudentUserCategory>('និស្សិត');
 
@@ -2091,6 +2092,45 @@ export function AdminUserPasswordDashboard() {
 
       setAllowPhotoEdit(permAllowed);
 
+      const directoryMajorMap: Record<string, string> = {};
+      initialStudents.forEach((st) => {
+        const c = normalizeCode(st.student_code);
+        if (c && st.major_km) {
+          directoryMajorMap[c] = st.major_km.trim();
+        }
+      });
+
+      try {
+        const localDirRaw =
+          localStorage.getItem('bipa_students_directory_v2') ||
+          localStorage.getItem('bipa_students_directory');
+        if (localDirRaw) {
+          const parsedDir = JSON.parse(localDirRaw);
+          if (Array.isArray(parsedDir)) {
+            parsedDir.forEach((st: any) => {
+              const c = normalizeCode(st?.student_code || '');
+              if (c && st?.major_km) {
+                directoryMajorMap[c] = String(st.major_km).trim();
+              }
+            });
+          }
+        }
+      } catch {}
+
+      try {
+        const { data: dbStudents } = await supabase
+          .from('bipa_students')
+          .select('student_code, major_km');
+        if (Array.isArray(dbStudents)) {
+          dbStudents.forEach((st: any) => {
+            const c = normalizeCode(st?.student_code || '');
+            if (c && st?.major_km) {
+              directoryMajorMap[c] = String(st.major_km).trim();
+            }
+          });
+        }
+      } catch {}
+
       try {
         const { data: setRow } = await supabase
           .from('bipa_settings')
@@ -2113,8 +2153,16 @@ export function AdminUserPasswordDashboard() {
       Object.keys(secDb.profiles || {}).forEach((k) => {
         const code = normalizeCode(k);
         if (!deletedSet.has(code)) {
+          const savedMajor = (secDb.profiles[k].majorKm || '').trim();
+          const dirMajor = directoryMajorMap[code] || '';
+          const resolvedMajor =
+            dirMajor && (!savedMajor || savedMajor === 'ព័ត៌មានវិទ្យា')
+              ? dirMajor
+              : savedMajor || dirMajor || 'ព័ត៌មានវិទ្យា';
+
           merged[code] = {
             ...secDb.profiles[k],
+            majorKm: resolvedMajor,
             avatarDataUrl: avatarsMap[code] || secDb.profiles[k].avatarDataUrl || '',
             coverDataUrl: coversMap[code] || secDb.profiles[k].coverDataUrl || ''
           };
@@ -2141,6 +2189,22 @@ export function AdminUserPasswordDashboard() {
           .trim();
         const split = splitKhmerFullName(cleanFull);
 
+        const incomingMajor = (s.major_km || '').trim();
+        const dirMajor = directoryMajorMap[code] || '';
+        const existingMajor = (existing?.majorKm || '').trim();
+
+        let bestMajor = existingMajor;
+        if (!bestMajor || bestMajor === 'ព័ត៌មានវិទ្យា') {
+          if (dirMajor && dirMajor !== 'ព័ត៌មានវិទ្យា') {
+            bestMajor = dirMajor;
+          } else if (incomingMajor && incomingMajor !== 'ព័ត៌មានវិទ្យា') {
+            bestMajor = incomingMajor;
+          }
+        }
+        if (!bestMajor) {
+          bestMajor = dirMajor || incomingMajor || 'ព័ត៌មានវិទ្យា';
+        }
+
         merged[code] = {
           studentCode: code,
           lastNameKm:
@@ -2151,7 +2215,7 @@ export function AdminUserPasswordDashboard() {
           genderKm: existing?.genderKm || s.gender_km || 'ប្រុស',
           userTypeKm: existing?.userTypeKm || 'និស្សិត',
           phoneNumber: existing?.phoneNumber || generateDefaultPhone(code),
-          majorKm: existing?.majorKm || s.major_km || 'ព័ត៌មានវិទ្យា',
+          majorKm: bestMajor,
           generationKm: existing?.generationKm || s.generation_km || 'សិស្សមណ្ឌល',
           saltSeed: seed,
           secretCode: existing?.secretCode || generateEncryptedCodeFromId(code, seed),
@@ -2172,7 +2236,7 @@ export function AdminUserPasswordDashboard() {
       setSecurityPayload(nextPayload);
       await saveSecurityPayloadToDb(nextPayload);
       if (notify) {
-        showNotice('បានធ្វើបច្ចុប្បន្នភាពទិន្នន័យ (Sync) រួចរាល់!');
+        showNotice('បានធ្វើបច្ចុប្បន្នភាពទិន្នន័យ និងជំនាញនិស្សិត (Sync) រួចរាល់!');
       }
     } catch {}
   };
@@ -2202,6 +2266,7 @@ export function AdminUserPasswordDashboard() {
         p.fullNameKm.toLowerCase().includes(q) ||
         (p.lastNameKm || '').toLowerCase().includes(q) ||
         (p.firstNameKm || '').toLowerCase().includes(q) ||
+        (p.majorKm || '').toLowerCase().includes(q) ||
         (p.phoneNumber || '').toLowerCase().includes(q)
     );
   }, [profilesList, searchQuery]);
@@ -2275,9 +2340,15 @@ export function AdminUserPasswordDashboard() {
           if (prof) {
             const full =
               `${prof.lastNameKm || ''} ${prof.firstNameKm || ''}`.trim() || prof.fullNameKm;
-            if (full && s.full_name_km !== full) {
+            const maj = (prof.majorKm || '').trim() || s.major_km;
+            if ((full && s.full_name_km !== full) || (maj && s.major_km !== maj)) {
               payModified = true;
-              return { ...s, full_name_km: full, full_name_en: full };
+              return {
+                ...s,
+                full_name_km: full || s.full_name_km,
+                full_name_en: full || s.full_name_en,
+                major_km: maj
+              };
             }
           }
           return s;
@@ -2299,9 +2370,15 @@ export function AdminUserPasswordDashboard() {
           if (prof) {
             const full =
               `${prof.lastNameKm || ''} ${prof.firstNameKm || ''}`.trim() || prof.fullNameKm;
-            if (full && s.full_name_km !== full) {
+            const maj = (prof.majorKm || '').trim() || s.major_km;
+            if ((full && s.full_name_km !== full) || (maj && s.major_km !== maj)) {
               riceModified = true;
-              return { ...s, full_name_km: full, full_name_en: full };
+              return {
+                ...s,
+                full_name_km: full || s.full_name_km,
+                full_name_en: full || s.full_name_en,
+                major_km: maj
+              };
             }
           }
           return s;
@@ -2311,6 +2388,56 @@ export function AdminUserPasswordDashboard() {
             ...riceData,
             residentStudents: nextRiceStudents
           });
+        }
+      } catch {}
+
+      try {
+        const localDirKey = localStorage.getItem('bipa_students_directory_v2')
+          ? 'bipa_students_directory_v2'
+          : localStorage.getItem('bipa_students_directory')
+          ? 'bipa_students_directory'
+          : '';
+        if (localDirKey) {
+          const parsedDir = JSON.parse(localStorage.getItem(localDirKey) || '[]');
+          if (Array.isArray(parsedDir)) {
+            const updatedDir = parsedDir.map((st: any) => {
+              const c = normalizeCode(st?.student_code || '');
+              const prof = targetPayload.profiles[c];
+              if (prof) {
+                const full =
+                  `${prof.lastNameKm || ''} ${prof.firstNameKm || ''}`.trim() ||
+                  prof.fullNameKm;
+                return {
+                  ...st,
+                  full_name_km: full || st.full_name_km,
+                  major_km: (prof.majorKm || '').trim() || st.major_km,
+                  contact_number: prof.phoneNumber || st.contact_number
+                };
+              }
+              return st;
+            });
+            safeStorageSet(localDirKey, JSON.stringify(updatedDir));
+          }
+        }
+      } catch {}
+
+      try {
+        const editedCodes = Object.keys(dirtyRows);
+        for (const rawC of editedCodes) {
+          const c = normalizeCode(rawC);
+          const prof = targetPayload.profiles[c];
+          if (prof) {
+            const full =
+              `${prof.lastNameKm || ''} ${prof.firstNameKm || ''}`.trim() || prof.fullNameKm;
+            await supabase
+              .from('bipa_students')
+              .update({
+                full_name_km: full,
+                major_km: (prof.majorKm || '').trim() || 'ព័ត៌មានវិទ្យា',
+                contact_number: prof.phoneNumber
+              })
+              .eq('student_code', c);
+          }
         }
       } catch {}
 
@@ -2332,7 +2459,7 @@ export function AdminUserPasswordDashboard() {
     const fullName = `${st.lastNameKm || ''} ${st.firstNameKm || ''}`.trim() || st.fullNameKm;
     await persistAndPropagateNames(
       securityPayload,
-      `បានរក្សាទុក និងធ្វើបច្ចុប្បន្នភាពព័ត៌មានរបស់ «${fullName}» ដោយជោគជ័យ!`
+      `បានរក្សាទុកព័ត៌មាន និងជំនាញរបស់ «${fullName}» ដោយជោគជ័យ!`
     );
   };
 
@@ -2463,6 +2590,7 @@ export function AdminUserPasswordDashboard() {
     saveLocalDeletedCodes(updatedDeleted);
 
     const seed = Math.floor(1000 + Math.random() * 9000);
+    const enteredMajor = newMajorKm.trim() || 'ព័ត៌មានវិទ្យា';
     const newProfile: StudentSecurityProfile = {
       studentCode: cleanCode,
       lastNameKm: newLastName.trim(),
@@ -2471,7 +2599,7 @@ export function AdminUserPasswordDashboard() {
       genderKm: 'ប្រុស',
       userTypeKm: newUserType,
       phoneNumber: newPhone.trim() || generateDefaultPhone(cleanCode),
-      majorKm: 'ព័ត៌មានវិទ្យា',
+      majorKm: enteredMajor,
       generationKm: 'សិស្សមណ្ឌល',
       saltSeed: seed,
       secretCode: generateEncryptedCodeFromId(cleanCode, seed),
@@ -2543,6 +2671,7 @@ export function AdminUserPasswordDashboard() {
     setNewStCode('');
     setNewLastName('');
     setNewFirstName('');
+    setNewMajorKm('');
     setNewPhone('');
     setShowAddBox(false);
     showNotice(`បានបន្ថែមនិស្សិតថ្មី «${newProfile.fullNameKm} (${cleanCode})» ដោយជោគជ័យ!`);
@@ -2655,7 +2784,7 @@ export function AdminUserPasswordDashboard() {
             <span>គ្រប់គ្រងប្រវត្តិរូប និងកាត QR និស្សិត</span>
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            កំណត់រូបភាព Profile រូបភាព Cover ឈ្មោះ លេខទូរស័ព្ទ និងបោះពុម្ពកាត QR ខ្នាត A4
+            កំណត់រូបភាព Profile រូបភាព Cover ឈ្មោះ ជំនាញ លេខទូរស័ព្ទ និងបោះពុម្ពកាត QR ខ្នាត A4
           </p>
         </div>
 
@@ -2743,7 +2872,7 @@ export function AdminUserPasswordDashboard() {
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-6 gap-2.5">
             <Input
               value={newStCode}
               onChange={(e) => setNewStCode(e.target.value.toUpperCase())}
@@ -2760,6 +2889,12 @@ export function AdminUserPasswordDashboard() {
               value={newFirstName}
               onChange={(e) => setNewFirstName(e.target.value)}
               placeholder="ឧ. នាមខ្លួន"
+              className="h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a]"
+            />
+            <Input
+              value={newMajorKm}
+              onChange={(e) => setNewMajorKm(e.target.value)}
+              placeholder="ឧ. ជំនាញ (ព័ត៌មានវិទ្យា)"
               className="h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a]"
             />
             <Input
@@ -2797,7 +2932,7 @@ export function AdminUserPasswordDashboard() {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ស្វែងរកអត្តលេខ ឈ្មោះ ឬទូរស័ព្ទ..."
+              placeholder="ស្វែងរកអត្តលេខ ឈ្មោះ ជំនាញ ឬទូរស័ព្ទ..."
               className="pl-9 h-9 rounded-xl bg-slate-50 dark:bg-[#0f172a]"
             />
           </div>
@@ -2807,7 +2942,7 @@ export function AdminUserPasswordDashboard() {
         </div>
 
         <div className="w-full max-h-[540px] overflow-x-auto overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 scrollbar-thin">
-          <table className="w-full text-xs text-left border-collapse min-w-[1140px]">
+          <table className="w-full text-xs text-left border-collapse min-w-[1240px]">
             <thead className="sticky top-0 z-20">
               <tr className="bg-amber-400 text-slate-950">
                 <th className="py-3 px-2.5 border border-amber-500/40 text-center w-10">ល.រ</th>
@@ -2816,6 +2951,7 @@ export function AdminUserPasswordDashboard() {
                 <th className="py-3 px-3 border border-amber-500/40">អត្តលេខ</th>
                 <th className="py-3 px-3 border border-amber-500/40">នាមត្រកូល</th>
                 <th className="py-3 px-3 border border-amber-500/40">នាមខ្លួន</th>
+                <th className="py-3 px-3 border border-amber-500/40">ជំនាញ</th>
                 <th className="py-3 px-2.5 border border-amber-500/40 text-center">ប្រភេទ</th>
                 <th className="py-3 px-3 border border-amber-500/40">លេខទូរស័ព្ទ</th>
                 <th className="py-3 px-3 border border-amber-500/40 text-center">កូដសម្ងាត់</th>
@@ -2920,6 +3056,22 @@ export function AdminUserPasswordDashboard() {
                         onChange={(e) =>
                           handleLocalFieldEdit(st.studentCode, {
                             firstNameKm: e.target.value
+                          })
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveSingleStudentRow(st);
+                        }}
+                        className="w-28 h-8 px-2 rounded-lg bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 focus:border-amber-500 text-slate-900 dark:text-white outline-none"
+                      />
+                    </td>
+                    <td className="py-2 px-2 border border-slate-200/70 dark:border-slate-800">
+                      <input
+                        type="text"
+                        value={st.majorKm || ''}
+                        placeholder="ជំនាញ..."
+                        onChange={(e) =>
+                          handleLocalFieldEdit(st.studentCode, {
+                            majorKm: e.target.value
                           })
                         }
                         onKeyDown={(e) => {
