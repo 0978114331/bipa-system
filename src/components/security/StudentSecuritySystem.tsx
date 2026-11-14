@@ -96,6 +96,10 @@ export const COVERS_STORAGE_KEY = 'bipa_student_covers_map_v1';
 export const AVATARS_STORAGE_KEY = 'bipa_student_avatars_map_v1';
 export const PHOTO_PERM_STORAGE_KEY = 'bipa_allow_student_photo_edit_v1';
 
+let memoryCoversMap: Record<string, string> = {};
+let memoryAvatarsMap: Record<string, string> = {};
+let hasCleanedBloatedStorage = false;
+
 export function normalizeCode(raw: string): string {
   let cleaned = String(raw || '').trim().replace(/\s+/g, '').toUpperCase();
   if (cleaned.startsWith('PIBA-')) cleaned = 'BIPA-' + cleaned.slice(5);
@@ -104,11 +108,81 @@ export function normalizeCode(raw: string): string {
   return cleaned;
 }
 
+function freeUpLocalStorageSpace() {
+  try {
+    const keysToRemove: string[] = [
+      'bipa_default_cover_banner',
+      'bipa_student_security_system_v1',
+      'bipa_student_security_system_v2',
+      'bipa_student_security_v2'
+    ];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith('bipa_cover_') || k.startsWith('bipa_avatar_'))) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach((k) => {
+      try {
+        localStorage.removeItem(k);
+      } catch {}
+    });
+  } catch {}
+}
+
+function safeStorageSet(key: string, value: string): boolean {
+  if (!hasCleanedBloatedStorage) {
+    hasCleanedBloatedStorage = true;
+    freeUpLocalStorageSpace();
+  }
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch {
+    freeUpLocalStorageSpace();
+    try {
+      localStorage.removeItem(COVERS_STORAGE_KEY);
+      localStorage.removeItem(AVATARS_STORAGE_KEY);
+      localStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function safeStorageRemove(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {}
+}
+
+function stripImagesFromPayloadForLocalCache(
+  payload: StudentSecurityPayload
+): StudentSecurityPayload {
+  const lightProfiles: Record<string, StudentSecurityProfile> = {};
+  Object.keys(payload.profiles || {}).forEach((k) => {
+    const p = payload.profiles[k];
+    if (!p) return;
+    if (p.avatarDataUrl) memoryAvatarsMap[k] = p.avatarDataUrl;
+    if (p.coverDataUrl) memoryCoversMap[k] = p.coverDataUrl;
+    lightProfiles[k] = {
+      ...p,
+      avatarDataUrl: '',
+      coverDataUrl: ''
+    };
+  });
+  return {
+    ...payload,
+    profiles: lightProfiles
+  };
+}
+
 export function standardizeImageToDataUrl(
   img: HTMLImageElement,
   targetWidth: number,
   targetHeight: number,
-  quality = 0.8
+  quality = 0.72
 ): string {
   const canvas = document.createElement('canvas');
   canvas.width = targetWidth;
@@ -152,9 +226,13 @@ export function standardizeImageToDataUrl(
 }
 
 export function getCachedPhotoEditPermission(): boolean {
-  const raw = localStorage.getItem(PHOTO_PERM_STORAGE_KEY);
-  if (raw === null) return true;
-  return raw === 'true';
+  try {
+    const raw = localStorage.getItem(PHOTO_PERM_STORAGE_KEY);
+    if (raw === null) return true;
+    return raw === 'true';
+  } catch {
+    return true;
+  }
 }
 
 export async function fetchPhotoPermFromDb(): Promise<boolean> {
@@ -168,14 +246,14 @@ export async function fetchPhotoPermFromDb(): Promise<boolean> {
 
     if (!error && data && typeof data.name_en === 'string') {
       current = data.name_en.trim().toLowerCase() !== 'false';
-      localStorage.setItem(PHOTO_PERM_STORAGE_KEY, String(current));
+      safeStorageSet(PHOTO_PERM_STORAGE_KEY, String(current));
     }
   } catch {}
   return current;
 }
 
 export async function savePhotoPermToDb(allowed: boolean): Promise<void> {
-  localStorage.setItem(PHOTO_PERM_STORAGE_KEY, String(allowed));
+  safeStorageSet(PHOTO_PERM_STORAGE_KEY, String(allowed));
   try {
     await supabase.from('bipa_settings').upsert(
       {
@@ -193,29 +271,32 @@ export async function savePhotoPermToDb(allowed: boolean): Promise<void> {
 export function loadCachedCoversMap(): Record<string, string> {
   try {
     const raw = localStorage.getItem(COVERS_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        memoryCoversMap = { ...memoryCoversMap, ...parsed };
+      }
+    }
+  } catch {}
+  return { ...memoryCoversMap };
 }
 
 export function loadCachedAvatarsMap(): Record<string, string> {
   try {
     const raw = localStorage.getItem(AVATARS_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        memoryAvatarsMap = { ...memoryAvatarsMap, ...parsed };
+      }
+    }
+  } catch {}
+  return { ...memoryAvatarsMap };
 }
 
 export async function fetchCoversMapFromDb(): Promise<Record<string, string>> {
   let current = loadCachedCoversMap();
   try {
-    localStorage.removeItem('bipa_default_cover_banner');
     const { data, error } = await supabase
       .from('bipa_settings')
       .select('name_en')
@@ -228,13 +309,8 @@ export async function fetchCoversMapFromDb(): Promise<Record<string, string>> {
         delete parsed.DEFAULT;
         current = { ...current, ...parsed };
         delete current.DEFAULT;
-        localStorage.setItem(COVERS_STORAGE_KEY, JSON.stringify(current));
-        Object.keys(current).forEach((k) => {
-          const cleanKey = normalizeCode(k);
-          if (cleanKey && current[k]) {
-            localStorage.setItem(`bipa_cover_${cleanKey}`, current[k]);
-          }
-        });
+        memoryCoversMap = current;
+        safeStorageSet(COVERS_STORAGE_KEY, JSON.stringify(current));
       }
     }
   } catch {}
@@ -254,13 +330,8 @@ export async function fetchAvatarsMapFromDb(): Promise<Record<string, string>> {
       const parsed = JSON.parse(data.name_en);
       if (parsed && typeof parsed === 'object') {
         current = { ...current, ...parsed };
-        localStorage.setItem(AVATARS_STORAGE_KEY, JSON.stringify(current));
-        Object.keys(current).forEach((k) => {
-          const cleanKey = normalizeCode(k);
-          if (cleanKey && current[k]) {
-            localStorage.setItem(`bipa_avatar_${cleanKey}`, current[k]);
-          }
-        });
+        memoryAvatarsMap = current;
+        safeStorageSet(AVATARS_STORAGE_KEY, JSON.stringify(current));
       }
     }
   } catch {}
@@ -280,9 +351,8 @@ export async function saveCoverToCloudDb(
     ...cached,
     [key]: coverDataUrl
   };
-  localStorage.removeItem('bipa_default_cover_banner');
-  localStorage.setItem(COVERS_STORAGE_KEY, JSON.stringify(immediateNext));
-  localStorage.setItem(`bipa_cover_${key}`, coverDataUrl);
+  memoryCoversMap = immediateNext;
+  safeStorageSet(COVERS_STORAGE_KEY, JSON.stringify(immediateNext));
 
   try {
     const remote = await fetchCoversMapFromDb();
@@ -292,7 +362,8 @@ export async function saveCoverToCloudDb(
       ...immediateNext,
       [key]: coverDataUrl
     };
-    localStorage.setItem(COVERS_STORAGE_KEY, JSON.stringify(merged));
+    memoryCoversMap = merged;
+    safeStorageSet(COVERS_STORAGE_KEY, JSON.stringify(merged));
 
     await supabase.from('bipa_settings').upsert(
       {
@@ -328,8 +399,8 @@ export async function saveAvatarToCloudDb(
     ...cached,
     [key]: avatarDataUrl
   };
-  localStorage.setItem(AVATARS_STORAGE_KEY, JSON.stringify(immediateNext));
-  localStorage.setItem(`bipa_avatar_${key}`, avatarDataUrl);
+  memoryAvatarsMap = immediateNext;
+  safeStorageSet(AVATARS_STORAGE_KEY, JSON.stringify(immediateNext));
 
   try {
     const remote = await fetchAvatarsMapFromDb();
@@ -338,7 +409,8 @@ export async function saveAvatarToCloudDb(
       ...immediateNext,
       [key]: avatarDataUrl
     };
-    localStorage.setItem(AVATARS_STORAGE_KEY, JSON.stringify(merged));
+    memoryAvatarsMap = merged;
+    safeStorageSet(AVATARS_STORAGE_KEY, JSON.stringify(merged));
 
     await supabase.from('bipa_settings').upsert(
       {
@@ -375,7 +447,7 @@ export function getLocalDeletedCodes(): string[] {
 
 export function saveLocalDeletedCodes(codes: string[]) {
   const unique = Array.from(new Set(codes.map((c) => normalizeCode(c)).filter(Boolean)));
-  localStorage.setItem(DELETED_USERS_STORAGE_KEY, JSON.stringify(unique));
+  safeStorageSet(DELETED_USERS_STORAGE_KEY, JSON.stringify(unique));
 }
 
 export function splitKhmerFullName(fullName: string): { lastName: string; firstName: string } {
@@ -519,10 +591,8 @@ function getCombinedPaymentAndRiceStudentsMap(
         generationKm: genKm || 'សិស្សមណ្ឌល',
         saltSeed: 2026,
         secretCode: generateEncryptedCodeFromId(code, 2026),
-        avatarDataUrl:
-          avatarsMap[code] || localStorage.getItem(`bipa_avatar_${code}`) || '',
-        coverDataUrl:
-          coversMap[code] || localStorage.getItem(`bipa_cover_${code}`) || ''
+        avatarDataUrl: avatarsMap[code] || '',
+        coverDataUrl: coversMap[code] || ''
       };
     }
   };
@@ -574,11 +644,7 @@ export function loadCachedSecurityPayload(): StudentSecurityPayload {
   const cachedAllowEdit = getCachedPhotoEditPermission();
 
   try {
-    const raw =
-      localStorage.getItem(SECURITY_STORAGE_KEY) ||
-      localStorage.getItem('bipa_student_security_system_v2') ||
-      localStorage.getItem('bipa_student_security_system_v1');
-
+    const raw = localStorage.getItem(SECURITY_STORAGE_KEY);
     if (!raw) {
       return {
         profiles: getCombinedPaymentAndRiceStudentsMap(localDeleted),
@@ -636,16 +702,8 @@ export function loadCachedSecurityPayload(): StudentSecurityPayload {
           item.phoneNumber || baseMap[code]?.phoneNumber || generateDefaultPhone(code),
         saltSeed: seed,
         secretCode: item.secretCode || generateEncryptedCodeFromId(code, seed),
-        avatarDataUrl:
-          avatarsMap[code] ||
-          item.avatarDataUrl ||
-          localStorage.getItem(`bipa_avatar_${code}`) ||
-          '',
-        coverDataUrl:
-          coversMap[code] ||
-          item.coverDataUrl ||
-          localStorage.getItem(`bipa_cover_${code}`) ||
-          ''
+        avatarDataUrl: avatarsMap[code] || item.avatarDataUrl || '',
+        coverDataUrl: coversMap[code] || item.coverDataUrl || ''
       };
     });
 
@@ -711,23 +769,10 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
           const fName = item.firstNameKm !== undefined ? String(item.firstNameKm) : split.firstName;
           const fullName = `${lName} ${fName}`.trim() || fallbackFull;
 
-          const resolvedAvatar =
-            avatarsMap[code] ||
-            item.avatarDataUrl ||
-            localStorage.getItem(`bipa_avatar_${code}`) ||
-            '';
-          if (resolvedAvatar) {
-            localStorage.setItem(`bipa_avatar_${code}`, resolvedAvatar);
-          }
-
-          const resolvedCover =
-            coversMap[code] ||
-            item.coverDataUrl ||
-            localStorage.getItem(`bipa_cover_${code}`) ||
-            '';
-          if (resolvedCover) {
-            localStorage.setItem(`bipa_cover_${code}`, resolvedCover);
-          }
+          const resolvedAvatar = avatarsMap[code] || item.avatarDataUrl || '';
+          const resolvedCover = coversMap[code] || item.coverDataUrl || '';
+          if (resolvedAvatar) memoryAvatarsMap[code] = resolvedAvatar;
+          if (resolvedCover) memoryCoversMap[code] = resolvedCover;
 
           merged[code] = {
             ...(merged[code] || {}),
@@ -751,7 +796,10 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
           allowStudentPhotoEdit: permAllowed,
           updatedAt: Number(parsed.updatedAt || Date.now())
         };
-        localStorage.setItem(SECURITY_STORAGE_KEY, JSON.stringify(current));
+        safeStorageSet(
+          SECURITY_STORAGE_KEY,
+          JSON.stringify(stripImagesFromPayloadForLocalCache(current))
+        );
       }
     } else {
       current = {
@@ -777,51 +825,44 @@ export async function saveSecurityPayloadToDb(
     )
   );
   saveLocalDeletedCodes(deletedList);
-  const coversMap = loadCachedCoversMap();
-  const avatarsMap = loadCachedAvatarsMap();
   const allowEdit =
     typeof payload.allowStudentPhotoEdit === 'boolean'
       ? payload.allowStudentPhotoEdit
       : getCachedPhotoEditPermission();
-  localStorage.setItem(PHOTO_PERM_STORAGE_KEY, String(allowEdit));
+  safeStorageSet(PHOTO_PERM_STORAGE_KEY, String(allowEdit));
 
-  const cleanProfiles: Record<string, StudentSecurityProfile> = {};
+  const cleanProfilesForDb: Record<string, StudentSecurityProfile> = {};
   const delSet = new Set(deletedList);
   Object.keys(payload.profiles || {}).forEach((k) => {
     const code = normalizeCode(k);
     if (!delSet.has(code)) {
       const item = payload.profiles[k];
+      if (item.avatarDataUrl) memoryAvatarsMap[code] = item.avatarDataUrl;
+      if (item.coverDataUrl) memoryCoversMap[code] = item.coverDataUrl;
+
       const composedFull =
         `${item.lastNameKm || ''} ${item.firstNameKm || ''}`.trim() ||
         item.fullNameKm ||
         code;
-      cleanProfiles[code] = {
+      cleanProfilesForDb[code] = {
         ...item,
         studentCode: code,
         fullNameKm: composedFull,
-        avatarDataUrl:
-          avatarsMap[code] ||
-          item.avatarDataUrl ||
-          localStorage.getItem(`bipa_avatar_${code}`) ||
-          '',
-        coverDataUrl:
-          coversMap[code] ||
-          item.coverDataUrl ||
-          localStorage.getItem(`bipa_cover_${code}`) ||
-          ''
+        avatarDataUrl: '',
+        coverDataUrl: ''
       };
     }
   });
 
   const finalPayload: StudentSecurityPayload = {
-    profiles: cleanProfiles,
+    profiles: cleanProfilesForDb,
     deletedCodes: deletedList,
     allowStudentPhotoEdit: allowEdit,
     updatedAt: nowTs
   };
 
   const jsonStr = JSON.stringify(finalPayload);
-  localStorage.setItem(SECURITY_STORAGE_KEY, jsonStr);
+  safeStorageSet(SECURITY_STORAGE_KEY, jsonStr);
 
   try {
     await supabase.from('bipa_settings').upsert(
@@ -850,40 +891,46 @@ export function isStudentSessionVerified(
   payload: StudentSecurityPayload,
   rawCode?: string
 ): StudentSecurityProfile | null {
-  const linkedCode = normalizeCode(
-    rawCode || localStorage.getItem('bipa_linked_student_id') || ''
-  );
-  const verifiedToken =
-    localStorage.getItem(VERIFIED_TOKEN_KEY) ||
-    localStorage.getItem('bipa_verified_student_token_v1') ||
-    '';
-  if (!linkedCode || !verifiedToken) return null;
+  try {
+    const linkedCode = normalizeCode(
+      rawCode || localStorage.getItem('bipa_linked_student_id') || ''
+    );
+    const verifiedToken =
+      localStorage.getItem(VERIFIED_TOKEN_KEY) ||
+      localStorage.getItem('bipa_verified_student_token_v1') ||
+      '';
+    if (!linkedCode || !verifiedToken) return null;
 
-  const profile = payload.profiles[linkedCode];
-  if (!profile) return null;
+    const profile = payload.profiles[linkedCode];
+    if (!profile) return null;
 
-  if (verifiedToken.toUpperCase().startsWith(`${linkedCode}:`)) {
-    return profile;
-  }
+    if (verifiedToken.toUpperCase().startsWith(`${linkedCode}:`)) {
+      return profile;
+    }
+  } catch {}
   return null;
 }
 
 export function hasActiveStudentQrAccess(): boolean {
-  const linkedCode = normalizeCode(localStorage.getItem('bipa_linked_student_id') || '');
-  const verifiedToken =
-    localStorage.getItem(VERIFIED_TOKEN_KEY) ||
-    localStorage.getItem('bipa_verified_student_token_v1') ||
-    '';
-  if (!linkedCode || !verifiedToken) return false;
-  return verifiedToken.toUpperCase().startsWith(`${linkedCode}:`);
+  try {
+    const linkedCode = normalizeCode(localStorage.getItem('bipa_linked_student_id') || '');
+    const verifiedToken =
+      localStorage.getItem(VERIFIED_TOKEN_KEY) ||
+      localStorage.getItem('bipa_verified_student_token_v1') ||
+      '';
+    if (!linkedCode || !verifiedToken) return false;
+    return verifiedToken.toUpperCase().startsWith(`${linkedCode}:`);
+  } catch {
+    return false;
+  }
 }
 
 export function setVerifiedStudentSession(profile: StudentSecurityProfile) {
   const code = normalizeCode(profile.studentCode);
   const token = `${code}:${profile.secretCode}`;
-  localStorage.setItem('bipa_linked_student_id', code);
-  localStorage.setItem(VERIFIED_TOKEN_KEY, token);
-  localStorage.setItem('bipa_verified_student_token_v1', token);
+  safeStorageSet('bipa_linked_student_id', code);
+  safeStorageSet(VERIFIED_TOKEN_KEY, token);
+  safeStorageSet('bipa_verified_student_token_v1', token);
   window.dispatchEvent(new Event('student-id-linked'));
   window.dispatchEvent(new Event('student-security-updated'));
   window.dispatchEvent(new Event('payment-system-updated'));
@@ -892,11 +939,11 @@ export function setVerifiedStudentSession(profile: StudentSecurityProfile) {
 }
 
 export function clearVerifiedStudentSession() {
-  localStorage.removeItem('bipa_linked_student_id');
-  localStorage.removeItem(VERIFIED_TOKEN_KEY);
-  localStorage.removeItem('bipa_verified_student_token_v1');
-  localStorage.removeItem('bipa_student_code');
-  localStorage.removeItem('student_id');
+  safeStorageRemove('bipa_linked_student_id');
+  safeStorageRemove(VERIFIED_TOKEN_KEY);
+  safeStorageRemove('bipa_verified_student_token_v1');
+  safeStorageRemove('bipa_student_code');
+  safeStorageRemove('student_id');
   window.dispatchEvent(new Event('student-id-linked'));
   window.dispatchEvent(new Event('student-security-updated'));
   window.dispatchEvent(new Event('payment-system-updated'));
@@ -1738,7 +1785,8 @@ function StudentIdCardSingleItem({
   const cipherCode = generateObfuscatedCardCipher(st.studentCode, st.secretCode);
   const barcodeSerial = generateObfuscatedBarcodeSerial(st.studentCode, st.secretCode);
   const fullName = `${st.lastNameKm || ''} ${st.firstNameKm || ''}`.trim() || st.fullNameKm;
-  const avatarSrc = st.avatarDataUrl || localStorage.getItem(`bipa_avatar_${st.studentCode}`) || '';
+  const code = normalizeCode(st.studentCode);
+  const avatarSrc = st.avatarDataUrl || memoryAvatarsMap[code] || '';
 
   return (
     <div className="bipa-cut-card border-2 border-dashed border-slate-400 rounded-2xl p-3.5 bg-white text-slate-900 flex flex-col justify-between gap-2.5 break-inside-avoid">
@@ -2031,119 +2079,106 @@ export function AdminUserPasswordDashboard() {
   };
 
   const syncFromPaymentAndRiceTables = async (notify = false) => {
-    const [secDb, payDb, riceDb, coversMap, avatarsMap, permAllowed] = await Promise.all([
-      fetchSecurityPayloadFromDb(),
-      fetchPaymentPayloadFromDb(),
-      fetchRicePayloadFromDb(),
-      fetchCoversMapFromDb(),
-      fetchAvatarsMapFromDb(),
-      fetchPhotoPermFromDb()
-    ]);
-
-    setAllowPhotoEdit(permAllowed);
-
     try {
-      const { data: setRow } = await supabase
-        .from('bipa_settings')
-        .select('logo_url')
-        .eq('id', '1')
-        .maybeSingle();
-      if (setRow?.logo_url) setLogoUrl(setRow.logo_url);
-    } catch {}
+      const [secDb, payDb, riceDb, coversMap, avatarsMap, permAllowed] = await Promise.all([
+        fetchSecurityPayloadFromDb(),
+        fetchPaymentPayloadFromDb(),
+        fetchRicePayloadFromDb(),
+        fetchCoversMapFromDb(),
+        fetchAvatarsMapFromDb(),
+        fetchPhotoPermFromDb()
+      ]);
 
-    const combinedDeleted = Array.from(
-      new Set(
-        [...getLocalDeletedCodes(), ...(secDb.deletedCodes || [])].map((c) =>
-          normalizeCode(c)
+      setAllowPhotoEdit(permAllowed);
+
+      try {
+        const { data: setRow } = await supabase
+          .from('bipa_settings')
+          .select('logo_url')
+          .eq('id', '1')
+          .maybeSingle();
+        if (setRow?.logo_url) setLogoUrl(setRow.logo_url);
+      } catch {}
+
+      const combinedDeleted = Array.from(
+        new Set(
+          [...getLocalDeletedCodes(), ...(secDb.deletedCodes || [])].map((c) =>
+            normalizeCode(c)
+          )
         )
-      )
-    );
-    const deletedSet = new Set(combinedDeleted);
+      );
+      const deletedSet = new Set(combinedDeleted);
 
-    const merged: Record<string, StudentSecurityProfile> = {};
-    Object.keys(secDb.profiles || {}).forEach((k) => {
-      const code = normalizeCode(k);
-      if (!deletedSet.has(code)) {
+      const merged: Record<string, StudentSecurityProfile> = {};
+      Object.keys(secDb.profiles || {}).forEach((k) => {
+        const code = normalizeCode(k);
+        if (!deletedSet.has(code)) {
+          merged[code] = {
+            ...secDb.profiles[k],
+            avatarDataUrl: avatarsMap[code] || secDb.profiles[k].avatarDataUrl || '',
+            coverDataUrl: coversMap[code] || secDb.profiles[k].coverDataUrl || ''
+          };
+        }
+      });
+
+      const mergeResident = (s: {
+        student_code: string;
+        full_name_km: string;
+        gender_km: string;
+        major_km: string;
+        generation_km: string;
+      }) => {
+        const code = normalizeCode(s.student_code);
+        if (!code || deletedSet.has(code)) return;
+        const existing = merged[code];
+        const seed = existing?.saltSeed || 2026;
+        const existingFull = existing
+          ? `${existing.lastNameKm || ''} ${existing.firstNameKm || ''}`.trim() ||
+            existing.fullNameKm
+          : '';
+        const cleanFull = (existingFull || s.full_name_km || code)
+          .replace(/\(ប្រធាន\)/g, '')
+          .trim();
+        const split = splitKhmerFullName(cleanFull);
+
         merged[code] = {
-          ...secDb.profiles[k],
-          avatarDataUrl:
-            avatarsMap[code] ||
-            secDb.profiles[k].avatarDataUrl ||
-            localStorage.getItem(`bipa_avatar_${code}`) ||
-            '',
-          coverDataUrl:
-            coversMap[code] ||
-            secDb.profiles[k].coverDataUrl ||
-            localStorage.getItem(`bipa_cover_${code}`) ||
-            ''
+          studentCode: code,
+          lastNameKm:
+            existing?.lastNameKm !== undefined ? existing.lastNameKm : split.lastName,
+          firstNameKm:
+            existing?.firstNameKm !== undefined ? existing.firstNameKm : split.firstName,
+          fullNameKm: cleanFull,
+          genderKm: existing?.genderKm || s.gender_km || 'ប្រុស',
+          userTypeKm: existing?.userTypeKm || 'និស្សិត',
+          phoneNumber: existing?.phoneNumber || generateDefaultPhone(code),
+          majorKm: existing?.majorKm || s.major_km || 'ព័ត៌មានវិទ្យា',
+          generationKm: existing?.generationKm || s.generation_km || 'សិស្សមណ្ឌល',
+          saltSeed: seed,
+          secretCode: existing?.secretCode || generateEncryptedCodeFromId(code, seed),
+          avatarDataUrl: avatarsMap[code] || existing?.avatarDataUrl || '',
+          coverDataUrl: coversMap[code] || existing?.coverDataUrl || ''
         };
-      }
-    });
-
-    const mergeResident = (s: {
-      student_code: string;
-      full_name_km: string;
-      gender_km: string;
-      major_km: string;
-      generation_km: string;
-    }) => {
-      const code = normalizeCode(s.student_code);
-      if (!code || deletedSet.has(code)) return;
-      const existing = merged[code];
-      const seed = existing?.saltSeed || 2026;
-      const existingFull = existing
-        ? `${existing.lastNameKm || ''} ${existing.firstNameKm || ''}`.trim() ||
-          existing.fullNameKm
-        : '';
-      const cleanFull = (existingFull || s.full_name_km || code)
-        .replace(/\(ប្រធាន\)/g, '')
-        .trim();
-      const split = splitKhmerFullName(cleanFull);
-
-      merged[code] = {
-        studentCode: code,
-        lastNameKm:
-          existing?.lastNameKm !== undefined ? existing.lastNameKm : split.lastName,
-        firstNameKm:
-          existing?.firstNameKm !== undefined ? existing.firstNameKm : split.firstName,
-        fullNameKm: cleanFull,
-        genderKm: existing?.genderKm || s.gender_km || 'ប្រុស',
-        userTypeKm: existing?.userTypeKm || 'និស្សិត',
-        phoneNumber: existing?.phoneNumber || generateDefaultPhone(code),
-        majorKm: existing?.majorKm || s.major_km || 'ព័ត៌មានវិទ្យា',
-        generationKm: existing?.generationKm || s.generation_km || 'សិស្សមណ្ឌល',
-        saltSeed: seed,
-        secretCode: existing?.secretCode || generateEncryptedCodeFromId(code, seed),
-        avatarDataUrl:
-          avatarsMap[code] ||
-          existing?.avatarDataUrl ||
-          localStorage.getItem(`bipa_avatar_${code}`) ||
-          '',
-        coverDataUrl:
-          coversMap[code] ||
-          existing?.coverDataUrl ||
-          localStorage.getItem(`bipa_cover_${code}`) ||
-          ''
       };
-    };
 
-    (payDb.residentStudents || []).forEach(mergeResident);
-    (riceDb.residentStudents || []).forEach(mergeResident);
+      (payDb.residentStudents || []).forEach(mergeResident);
+      (riceDb.residentStudents || []).forEach(mergeResident);
 
-    const nextPayload: StudentSecurityPayload = {
-      profiles: merged,
-      deletedCodes: combinedDeleted,
-      allowStudentPhotoEdit: permAllowed,
-      updatedAt: Date.now()
-    };
-    setSecurityPayload(nextPayload);
-    await saveSecurityPayloadToDb(nextPayload);
-    if (notify) {
-      showNotice('បានធ្វើបច្ចុប្បន្នភាពទិន្នន័យ (Sync) រួចរាល់!');
-    }
+      const nextPayload: StudentSecurityPayload = {
+        profiles: merged,
+        deletedCodes: combinedDeleted,
+        allowStudentPhotoEdit: permAllowed,
+        updatedAt: Date.now()
+      };
+      setSecurityPayload(nextPayload);
+      await saveSecurityPayloadToDb(nextPayload);
+      if (notify) {
+        showNotice('បានធ្វើបច្ចុប្បន្នភាពទិន្នន័យ (Sync) រួចរាល់!');
+      }
+    } catch {}
   };
 
   useEffect(() => {
+    freeUpLocalStorageSpace();
     syncFromPaymentAndRiceTables(false);
   }, []);
 
@@ -2153,8 +2188,8 @@ export function AdminUserPasswordDashboard() {
         normalizeCode(c)
       )
     );
-    return Object.values(securityPayload.profiles)
-      .filter((p) => !deletedSet.has(normalizeCode(p.studentCode)))
+    return Object.values(securityPayload.profiles || {})
+      .filter((p) => p && !deletedSet.has(normalizeCode(p.studentCode)))
       .sort((a, b) => a.studentCode.localeCompare(b.studentCode, undefined, { numeric: true }));
   }, [securityPayload]);
 
@@ -2214,7 +2249,10 @@ export function AdminUserPasswordDashboard() {
         },
         updatedAt: Date.now()
       };
-      localStorage.setItem(SECURITY_STORAGE_KEY, JSON.stringify(next));
+      safeStorageSet(
+        SECURITY_STORAGE_KEY,
+        JSON.stringify(stripImagesFromPayloadForLocalCache(next))
+      );
       return next;
     });
     setDirtyRows((prev) => ({ ...prev, [code]: true }));
@@ -2225,66 +2263,69 @@ export function AdminUserPasswordDashboard() {
     successMessage: string
   ) => {
     setIsSavingAll(true);
-    await saveSecurityPayloadToDb(targetPayload);
-
     try {
-      const payData = await fetchPaymentPayloadFromDb();
-      let payModified = false;
-      const nextPayStudents = (payData.residentStudents || []).map((s) => {
-        const c = normalizeCode(s.student_code);
-        const prof = targetPayload.profiles[c];
-        if (prof) {
-          const full =
-            `${prof.lastNameKm || ''} ${prof.firstNameKm || ''}`.trim() || prof.fullNameKm;
-          if (full && s.full_name_km !== full) {
-            payModified = true;
-            return { ...s, full_name_km: full, full_name_en: full };
+      await saveSecurityPayloadToDb(targetPayload);
+
+      try {
+        const payData = await fetchPaymentPayloadFromDb();
+        let payModified = false;
+        const nextPayStudents = (payData.residentStudents || []).map((s) => {
+          const c = normalizeCode(s.student_code);
+          const prof = targetPayload.profiles[c];
+          if (prof) {
+            const full =
+              `${prof.lastNameKm || ''} ${prof.firstNameKm || ''}`.trim() || prof.fullNameKm;
+            if (full && s.full_name_km !== full) {
+              payModified = true;
+              return { ...s, full_name_km: full, full_name_en: full };
+            }
           }
-        }
-        return s;
-      });
-      if (payModified) {
-        await savePaymentPayloadToDb({
-          ...payData,
-          residentStudents: nextPayStudents
+          return s;
         });
-      }
-    } catch {}
+        if (payModified) {
+          await savePaymentPayloadToDb({
+            ...payData,
+            residentStudents: nextPayStudents
+          });
+        }
+      } catch {}
 
-    try {
-      const riceData = await fetchRicePayloadFromDb();
-      let riceModified = false;
-      const nextRiceStudents = (riceData.residentStudents || []).map((s) => {
-        const c = normalizeCode(s.student_code);
-        const prof = targetPayload.profiles[c];
-        if (prof) {
-          const full =
-            `${prof.lastNameKm || ''} ${prof.firstNameKm || ''}`.trim() || prof.fullNameKm;
-          if (full && s.full_name_km !== full) {
-            riceModified = true;
-            return { ...s, full_name_km: full, full_name_en: full };
+      try {
+        const riceData = await fetchRicePayloadFromDb();
+        let riceModified = false;
+        const nextRiceStudents = (riceData.residentStudents || []).map((s) => {
+          const c = normalizeCode(s.student_code);
+          const prof = targetPayload.profiles[c];
+          if (prof) {
+            const full =
+              `${prof.lastNameKm || ''} ${prof.firstNameKm || ''}`.trim() || prof.fullNameKm;
+            if (full && s.full_name_km !== full) {
+              riceModified = true;
+              return { ...s, full_name_km: full, full_name_en: full };
+            }
           }
-        }
-        return s;
-      });
-      if (riceModified) {
-        await saveRicePayloadToDb({
-          ...riceData,
-          residentStudents: nextRiceStudents
+          return s;
         });
-      }
-    } catch {}
+        if (riceModified) {
+          await saveRicePayloadToDb({
+            ...riceData,
+            residentStudents: nextRiceStudents
+          });
+        }
+      } catch {}
 
-    try {
-      const linkedCode = normalizeCode(localStorage.getItem('bipa_linked_student_id') || '');
-      if (linkedCode && targetPayload.profiles[linkedCode]) {
-        setVerifiedStudentSession(targetPayload.profiles[linkedCode]);
-      }
-    } catch {}
+      try {
+        const linkedCode = normalizeCode(localStorage.getItem('bipa_linked_student_id') || '');
+        if (linkedCode && targetPayload.profiles[linkedCode]) {
+          setVerifiedStudentSession(targetPayload.profiles[linkedCode]);
+        }
+      } catch {}
 
-    setIsSavingAll(false);
-    setDirtyRows({});
-    showNotice(successMessage);
+      setDirtyRows({});
+      showNotice(successMessage);
+    } finally {
+      setIsSavingAll(false);
+    }
   };
 
   const handleSaveSingleStudentRow = async (st: StudentSecurityProfile) => {
@@ -2311,7 +2352,7 @@ export function AdminUserPasswordDashboard() {
     reader.onload = () => {
       const img = new Image();
       img.onload = async () => {
-        const dataUrl = standardizeImageToDataUrl(img, 360, 360, 0.8);
+        const dataUrl = standardizeImageToDataUrl(img, 260, 260, 0.74);
 
         setSecurityPayload((prev) => {
           const existing = prev.profiles[targetCode];
@@ -2350,7 +2391,7 @@ export function AdminUserPasswordDashboard() {
     reader.onload = () => {
       const img = new Image();
       img.onload = async () => {
-        const dataUrl = standardizeImageToDataUrl(img, 920, 520, 0.78);
+        const dataUrl = standardizeImageToDataUrl(img, 760, 428, 0.7);
 
         setSecurityPayload((prev) => {
           const existing = prev.profiles[targetCode];
@@ -2509,64 +2550,69 @@ export function AdminUserPasswordDashboard() {
 
   const handleDeleteStudentProfile = async (studentCode: string, nameKm: string) => {
     const cleanCode = normalizeCode(studentCode);
-    if (!window.confirm(`លុប "${nameKm} (${cleanCode})" ចេញពីតារាងមែនទេ?`)) {
+    const displayName = nameKm || cleanCode;
+    if (!window.confirm(`លុប "${displayName} (${cleanCode})" ចេញពីតារាងមែនទេ?`)) {
       return;
     }
 
-    const updatedDeleted = Array.from(
-      new Set([
-        ...getLocalDeletedCodes(),
-        ...(securityPayload.deletedCodes || []),
-        cleanCode
-      ])
-    );
-    saveLocalDeletedCodes(updatedDeleted);
-
-    const copy = { ...securityPayload.profiles };
-    delete copy[cleanCode];
-
-    const nextPayload: StudentSecurityPayload = {
-      ...securityPayload,
-      profiles: copy,
-      deletedCodes: updatedDeleted,
-      updatedAt: Date.now()
-    };
-    setSecurityPayload(nextPayload);
-    await saveSecurityPayloadToDb(nextPayload);
-
     try {
-      const payData = await fetchPaymentPayloadFromDb();
-      if (
-        (payData.residentStudents || []).some(
-          (s) => normalizeCode(s.student_code) === cleanCode
-        )
-      ) {
-        await savePaymentPayloadToDb({
-          ...payData,
-          residentStudents: (payData.residentStudents || []).filter(
-            (s) => normalizeCode(s.student_code) !== cleanCode
-          )
-        });
-      }
-    } catch {}
+      const updatedDeleted = Array.from(
+        new Set([
+          ...getLocalDeletedCodes(),
+          ...(securityPayload.deletedCodes || []),
+          cleanCode
+        ])
+      );
+      saveLocalDeletedCodes(updatedDeleted);
 
-    try {
-      const riceData = await fetchRicePayloadFromDb();
-      if (
-        (riceData.residentStudents || []).some(
-          (s) => normalizeCode(s.student_code) === cleanCode
-        )
-      ) {
-        await saveRicePayloadToDb({
-          ...riceData,
-          residentStudents: (riceData.residentStudents || []).filter(
-            (s) => normalizeCode(s.student_code) !== cleanCode
-          )
-        });
-      }
-    } catch {}
+      const copy = { ...securityPayload.profiles };
+      delete copy[cleanCode];
+      delete memoryCoversMap[cleanCode];
+      delete memoryAvatarsMap[cleanCode];
 
-    showNotice(`បានលុប «${nameKm} (${cleanCode})» ចេញពីប្រព័ន្ធរួចរាល់!`);
+      const nextPayload: StudentSecurityPayload = {
+        ...securityPayload,
+        profiles: copy,
+        deletedCodes: updatedDeleted,
+        updatedAt: Date.now()
+      };
+      setSecurityPayload(nextPayload);
+      await saveSecurityPayloadToDb(nextPayload);
+
+      try {
+        const payData = await fetchPaymentPayloadFromDb();
+        if (
+          (payData.residentStudents || []).some(
+            (s) => normalizeCode(s.student_code) === cleanCode
+          )
+        ) {
+          await savePaymentPayloadToDb({
+            ...payData,
+            residentStudents: (payData.residentStudents || []).filter(
+              (s) => normalizeCode(s.student_code) !== cleanCode
+            )
+          });
+        }
+      } catch {}
+
+      try {
+        const riceData = await fetchRicePayloadFromDb();
+        if (
+          (riceData.residentStudents || []).some(
+            (s) => normalizeCode(s.student_code) === cleanCode
+          )
+        ) {
+          await saveRicePayloadToDb({
+            ...riceData,
+            residentStudents: (riceData.residentStudents || []).filter(
+              (s) => normalizeCode(s.student_code) !== cleanCode
+            )
+          });
+        }
+      } catch {}
+
+      showNotice(`បានលុប «${displayName} (${cleanCode})» ចេញពីប្រព័ន្ធរួចរាល់!`);
+    } catch {}
   };
 
   const hasDirtyChanges = Object.keys(dirtyRows).length > 0;
@@ -2779,13 +2825,12 @@ export function AdminUserPasswordDashboard() {
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {filteredList.map((st, idx) => {
+                const code = normalizeCode(st.studentCode);
                 const isRevealed = Boolean(revealedCodes[st.studentCode]);
                 const isRowDirty = Boolean(dirtyRows[st.studentCode]);
                 const barcodeToken = `${st.studentCode}:${st.secretCode}`;
-                const rowCoverUrl =
-                  st.coverDataUrl ||
-                  localStorage.getItem(`bipa_cover_${normalizeCode(st.studentCode)}`) ||
-                  '';
+                const rowAvatarUrl = st.avatarDataUrl || memoryAvatarsMap[code] || '';
+                const rowCoverUrl = st.coverDataUrl || memoryCoversMap[code] || '';
 
                 return (
                   <tr
@@ -2805,9 +2850,9 @@ export function AdminUserPasswordDashboard() {
                         title="ចុចប្តូររូបភាព Profile"
                         className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-[#0f172a] mx-auto flex items-center justify-center group"
                       >
-                        {st.avatarDataUrl ? (
+                        {rowAvatarUrl ? (
                           <img
-                            src={st.avatarDataUrl}
+                            src={rowAvatarUrl}
                             alt=""
                             className="w-full h-full object-cover"
                           />
@@ -3101,48 +3146,42 @@ export function StudentPersonalDashboard() {
       return;
     }
 
-    const [secData, payData, rData, coversMap, avatarsMap, permAllowed] = await Promise.all([
-      fetchSecurityPayloadFromDb(),
-      fetchPaymentPayloadFromDb(),
-      fetchRicePayloadFromDb(),
-      fetchCoversMapFromDb(),
-      fetchAvatarsMapFromDb(),
-      fetchPhotoPermFromDb()
-    ]);
+    try {
+      const [secData, payData, rData, coversMap, avatarsMap, permAllowed] = await Promise.all([
+        fetchSecurityPayloadFromDb(),
+        fetchPaymentPayloadFromDb(),
+        fetchRicePayloadFromDb(),
+        fetchCoversMapFromDb(),
+        fetchAvatarsMapFromDb(),
+        fetchPhotoPermFromDb()
+      ]);
 
-    setPaymentPayload(payData);
-    setRicePayload(rData);
-    setCoversByCode(coversMap);
-    setAvatarsByCode(avatarsMap);
-    setAllowStudentPhotoEdit(permAllowed);
+      setPaymentPayload(payData);
+      setRicePayload(rData);
+      setCoversByCode(coversMap);
+      setAvatarsByCode(avatarsMap);
+      setAllowStudentPhotoEdit(permAllowed);
 
-    const activeProf = isStudentSessionVerified(secData);
+      const activeProf = isStudentSessionVerified(secData);
 
-    if (activeProf) {
-      const code = normalizeCode(activeProf.studentCode);
-      const studentAvatar =
-        avatarsMap[code] ||
-        activeProf.avatarDataUrl ||
-        localStorage.getItem(`bipa_avatar_${code}`) ||
-        '';
-      const studentCover =
-        coversMap[code] ||
-        activeProf.coverDataUrl ||
-        localStorage.getItem(`bipa_cover_${code}`) ||
-        '';
+      if (activeProf) {
+        const code = normalizeCode(activeProf.studentCode);
+        const studentAvatar = avatarsMap[code] || activeProf.avatarDataUrl || '';
+        const studentCover = coversMap[code] || activeProf.coverDataUrl || '';
 
-      setVerifiedProfile({
-        ...activeProf,
-        avatarDataUrl: studentAvatar,
-        coverDataUrl: studentCover
-      });
-    } else {
-      setVerifiedProfile(null);
-    }
+        setVerifiedProfile({
+          ...activeProf,
+          avatarDataUrl: studentAvatar,
+          coverDataUrl: studentCover
+        });
+      } else {
+        setVerifiedProfile(null);
+      }
+    } catch {}
   };
 
   useEffect(() => {
-    localStorage.removeItem('bipa_default_cover_banner');
+    freeUpLocalStorageSpace();
     loadAllDashboardData();
     const openLoginHandler = () => setShowLoginModal(true);
     const syncTimer = setInterval(loadAllDashboardData, 6000);
@@ -3267,7 +3306,7 @@ export function StudentPersonalDashboard() {
     reader.onload = () => {
       const img = new Image();
       img.onload = async () => {
-        const dataUrl = standardizeImageToDataUrl(img, 920, 520, 0.78);
+        const dataUrl = standardizeImageToDataUrl(img, 760, 428, 0.7);
 
         lastManualImageUploadRef.current = Date.now();
         setCoversByCode((prev) => ({
@@ -3286,26 +3325,6 @@ export function StudentPersonalDashboard() {
         setTimeout(() => setCoverToast(''), 2800);
 
         await saveCoverToCloudDb(targetCode, dataUrl);
-
-        if (verifiedProfile) {
-          try {
-            const secData = loadCachedSecurityPayload();
-            if (secData.profiles[targetCode]) {
-              const nextPayload: StudentSecurityPayload = {
-                ...secData,
-                profiles: {
-                  ...secData.profiles,
-                  [targetCode]: {
-                    ...secData.profiles[targetCode],
-                    coverDataUrl: dataUrl
-                  }
-                },
-                updatedAt: Date.now()
-              };
-              await saveSecurityPayloadToDb(nextPayload);
-            }
-          } catch {}
-        }
       };
       img.src = String(reader.result);
     };
@@ -3335,7 +3354,7 @@ export function StudentPersonalDashboard() {
     reader.onload = () => {
       const img = new Image();
       img.onload = async () => {
-        const dataUrl = standardizeImageToDataUrl(img, 360, 360, 0.8);
+        const dataUrl = standardizeImageToDataUrl(img, 260, 260, 0.74);
 
         lastManualImageUploadRef.current = Date.now();
         setAvatarsByCode((prev) => ({
@@ -3354,26 +3373,6 @@ export function StudentPersonalDashboard() {
         setTimeout(() => setCoverToast(''), 2800);
 
         await saveAvatarToCloudDb(code, dataUrl);
-
-        if (verifiedProfile) {
-          try {
-            const secData = loadCachedSecurityPayload();
-            if (secData.profiles[code]) {
-              const nextPayload: StudentSecurityPayload = {
-                ...secData,
-                profiles: {
-                  ...secData.profiles,
-                  [code]: {
-                    ...secData.profiles[code],
-                    avatarDataUrl: dataUrl
-                  }
-                },
-                updatedAt: Date.now()
-              };
-              await saveSecurityPayloadToDb(nextPayload);
-            }
-          } catch {}
-        }
       };
       img.src = String(reader.result);
     };
@@ -3435,7 +3434,7 @@ export function StudentPersonalDashboard() {
   const currentAvatar = activePhotoOwnerKey
     ? avatarsByCode[activePhotoOwnerKey] ||
       verifiedProfile?.avatarDataUrl ||
-      localStorage.getItem(`bipa_avatar_${activePhotoOwnerKey}`) ||
+      memoryAvatarsMap[activePhotoOwnerKey] ||
       (user && profile?.avatar_url ? profile.avatar_url : '') ||
       ''
     : '';
@@ -3443,7 +3442,7 @@ export function StudentPersonalDashboard() {
   const activeCoverBanner = activePhotoOwnerKey
     ? coversByCode[activePhotoOwnerKey] ||
       verifiedProfile?.coverDataUrl ||
-      localStorage.getItem(`bipa_cover_${activePhotoOwnerKey}`) ||
+      memoryCoversMap[activePhotoOwnerKey] ||
       ''
     : '';
 
@@ -3496,15 +3495,9 @@ export function StudentPersonalDashboard() {
           onVerified={(prof) => {
             const code = normalizeCode(prof.studentCode);
             const savedAv =
-              avatarsByCode[code] ||
-              prof.avatarDataUrl ||
-              localStorage.getItem(`bipa_avatar_${code}`) ||
-              '';
+              avatarsByCode[code] || prof.avatarDataUrl || memoryAvatarsMap[code] || '';
             const savedCv =
-              coversByCode[code] ||
-              prof.coverDataUrl ||
-              localStorage.getItem(`bipa_cover_${code}`) ||
-              '';
+              coversByCode[code] || prof.coverDataUrl || memoryCoversMap[code] || '';
             setVerifiedProfile({
               ...prof,
               avatarDataUrl: savedAv,
