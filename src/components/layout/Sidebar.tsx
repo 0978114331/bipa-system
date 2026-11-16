@@ -34,7 +34,8 @@ import {
   KeyRound,
   Mail,
   CheckCircle2,
-  Link2
+  Link2,
+  Wallet
 } from 'lucide-react';
 import { UserRole } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -280,6 +281,10 @@ export function Sidebar() {
   const isUserPasswordsRoute =
     location.search.includes('page=user-passwords') ||
     location.pathname === '/admin/user-passwords';
+
+  const isExpensesRoute =
+    location.search.includes('page=expenses') ||
+    location.pathname.startsWith('/admin/expenses');
 
   const isResidenceManagerRoute = location.pathname.startsWith('/admin/residences');
   const isSettingsRoute = location.pathname.startsWith('/admin/settings');
@@ -710,6 +715,12 @@ export function Sidebar() {
       roles: ['super_admin', 'residence_admin', 'finance_admin']
     },
     {
+      label: isKhmer ? 'ការចំណាយមណ្ឌល' : 'Center Expenses',
+      path: '/admin?page=expenses',
+      icon: Wallet,
+      roles: ['super_admin', 'residence_admin', 'finance_admin', 'duty_manager']
+    },
+    {
       label: t('feature.duty'),
       path: '/admin/duties',
       icon: CalendarClock,
@@ -758,12 +769,14 @@ export function Sidebar() {
   const isActive = (path: string) => {
     if (path === '/admin?page=home-manager') return showHomeManager;
     if (path === '/admin?page=user-passwords') return isUserPasswordsRoute;
-    if (showHomeManager || isUserPasswordsRoute) return false;
+    if (path === '/admin?page=expenses') return isExpensesRoute;
+    if (showHomeManager || isUserPasswordsRoute || isExpensesRoute) return false;
     if (path === '/admin' || path === '/dashboard') {
       return (
         location.pathname === path &&
         !location.search.includes('page=home-manager') &&
-        !location.search.includes('page=user-passwords')
+        !location.search.includes('page=user-passwords') &&
+        !location.search.includes('page=expenses')
       );
     }
     return location.pathname.startsWith(path);
