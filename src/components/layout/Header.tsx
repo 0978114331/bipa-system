@@ -69,6 +69,7 @@ import {
   clearVerifiedStudentSession
 } from '@/components/security/StudentSecuritySystem';
 import { cn } from '@/lib/utils';
+import { CenterExpenseAdminDashboard } from '@/components/expense/CenterExpenseSystem';
 
 const ATT_STORAGE_KEY = 'bipa_attendance_sync_v4';
 
@@ -499,6 +500,11 @@ export function Header() {
 
   useEffect(() => {
     const cleanUpButtonsAndDuplicates = () => {
+      const isKhLang = lang === 'km';
+      const isExpPage =
+        location.pathname.startsWith('/admin/expenses') ||
+        location.search.includes('page=expenses');
+
       const buttons = Array.from(document.querySelectorAll('button, a'));
       buttons.forEach((btn) => {
         const txt = (btn.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
@@ -520,6 +526,48 @@ export function Header() {
         });
       }
 
+      const sidebarNav = document.querySelector('aside nav, aside > div') as HTMLElement | null;
+      if (sidebarNav && location.pathname.startsWith('/admin')) {
+        const sidebarLinks = Array.from(
+          sidebarNav.querySelectorAll('a, button')
+        ) as HTMLElement[];
+
+        const paymentSidebarItem = sidebarLinks.find((el) => {
+          const t = (el.textContent || '').trim();
+          return (
+            t.includes('ការបង់ប្រាក់ប្រចាំខែ') ||
+            t.includes('របាយការណ៍បង់អង្ករ') ||
+            t.toLowerCase().includes('monthly payment')
+          );
+        });
+
+        let sidebarExpBtn = document.getElementById(
+          'bipa-sidebar-expenses-link'
+        ) as HTMLButtonElement | null;
+
+        if (!sidebarExpBtn && paymentSidebarItem && paymentSidebarItem.parentElement) {
+          sidebarExpBtn = document.createElement('button');
+          sidebarExpBtn.type = 'button';
+          sidebarExpBtn.id = 'bipa-sidebar-expenses-link';
+          paymentSidebarItem.insertAdjacentElement('afterend', sidebarExpBtn);
+        }
+
+        if (sidebarExpBtn) {
+          sidebarExpBtn.className = isExpPage
+            ? 'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-amber-400 text-slate-950 font-bold text-xs shadow-sm transition-all cursor-pointer my-0.5'
+            : 'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white text-xs transition-all cursor-pointer my-0.5';
+
+          sidebarExpBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>
+            <span class="truncate">${isKhLang ? 'ការចំណាយមណ្ឌល' : 'Center Expenses'}</span>
+          `;
+          sidebarExpBtn.onclick = (e) => {
+            e.preventDefault();
+            navigate('/admin?page=expenses');
+          };
+        }
+      }
+
       if (location.pathname === '/admin' && !location.search.includes('page=')) {
         const oldExtraBar = document.getElementById('bipa-admin-mobile-extra-actions');
         if (oldExtraBar) {
@@ -533,7 +581,7 @@ export function Header() {
         allTextEls.forEach((el) => {
           const cleanTxt = (el.textContent || '').replace(/\s+/g, ' ').trim();
           if (el.children.length === 0 && cleanTxt === 'សម្ភារៈ') {
-            el.textContent = 'បង់អង្ករ';
+            el.textContent = isKhLang ? 'បង់អង្ករ' : 'Rice';
           }
 
           if (
@@ -591,31 +639,39 @@ export function Header() {
         ) as HTMLElement[];
         const quickIconGrid = gridCandidates.find(
           (g) =>
-            g.innerText.includes('បង្ហោះ Home') &&
-            g.innerText.includes('និស្សិត') &&
+            g.innerText.includes('Home') ||
+            g.innerText.includes('និស្សិត') ||
             g.innerText.includes('បង់ប្រាក់')
         );
 
-        if (quickIconGrid && !quickIconGrid.querySelector('.bipa-clean-grid-added')) {
+        if (quickIconGrid) {
           const sampleCard = quickIconGrid.firstElementChild as HTMLElement | null;
           const sampleCardClass =
             sampleCard?.className ||
-            'flex flex-col items-center justify-center gap-2 p-3 rounded-2xl bg-[#162033]/90 border border-slate-800 text-white shadow-md transition-all active:scale-95';
+            'flex flex-col items-center justify-center gap-2 p-3 rounded-2xl bg-white dark:bg-[#162033]/90 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white shadow-md transition-all active:scale-95';
 
           const extraGridItems = [
             {
-              id: 'bipa-grid-user-qr',
-              label: 'គ្រប់គ្រង User',
+              id: 'bipa-grid-expenses',
+              label: isKhLang ? 'ការចំណាយមណ្ឌល' : 'Center Expenses',
               iconBoxClass:
-                'w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400',
+                'w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-500 dark:text-emerald-400',
+              svg: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>`,
+              onClick: () => navigate('/admin?page=expenses')
+            },
+            {
+              id: 'bipa-grid-user-qr',
+              label: isKhLang ? 'គ្រប់គ្រង User' : 'Manage Users',
+              iconBoxClass:
+                'w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 dark:text-amber-400',
               svg: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>`,
               onClick: () => navigate('/admin?page=user-passwords')
             },
             {
               id: 'bipa-grid-announce',
-              label: 'សេចក្តីប្រកាស',
+              label: isKhLang ? 'សេចក្តីប្រកាស' : 'Announcements',
               iconBoxClass:
-                'w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400',
+                'w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-500 dark:text-sky-400',
               svg: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>`,
               onClick: () => {
                 if (announcementBtnRef) {
@@ -627,142 +683,42 @@ export function Header() {
             },
             {
               id: 'bipa-grid-settings',
-              label: 'ការកំណត់',
+              label: isKhLang ? 'ការកំណត់' : 'Settings',
               iconBoxClass:
-                'w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400',
+                'w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-500 dark:text-indigo-400',
               svg: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
               onClick: () => navigate('/admin/settings')
             },
             {
               id: 'bipa-grid-logout',
-              label: 'ចាកចេញ',
+              label: isKhLang ? 'ចាកចេញ' : 'Sign Out',
               iconBoxClass:
-                'w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400',
+                'w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-500 dark:text-rose-400',
               svg: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>`,
               onClick: () => handleSignOut()
             }
           ];
 
           extraGridItems.forEach((item) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.id = item.id;
+            let btn = document.getElementById(item.id) as HTMLButtonElement | null;
+            if (!btn) {
+              btn = document.createElement('button');
+              btn.type = 'button';
+              btn.id = item.id;
+              quickIconGrid.appendChild(btn);
+            }
             btn.className = `${sampleCardClass} bipa-clean-grid-added cursor-pointer`;
             btn.innerHTML = `
               <div class="${item.iconBoxClass}">
                 ${item.svg}
               </div>
-              <span class="text-[11px] font-bold text-slate-200 truncate max-w-full">${item.label}</span>
+              <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate max-w-full">${item.label}</span>
             `;
             btn.onclick = (e) => {
               e.preventDefault();
               item.onClick();
             };
-            quickIconGrid.appendChild(btn);
           });
-        }
-      }
-
-      if (location.pathname === '/attendance') {
-        const mainBtns = Array.from(document.querySelectorAll('main button')) as HTMLElement[];
-
-        for (const btn of mainBtns) {
-          if (btn.id === 'bipa-attendance-qr-cam-trigger') continue;
-          const cleanTxt = (btn.textContent || '')
-            .replace(/[\u200B-\u200D\uFEFF]/g, '')
-            .trim();
-
-          if (
-            cleanTxt === 'ផ្លាស់ប្តូរ ID' ||
-            cleanTxt === 'ភ្ជាប់ ID' ||
-            cleanTxt === 'Save ID'
-          ) {
-            const innerBox = btn.parentElement as HTMLElement | null;
-            const outerCard = innerBox?.parentElement as HTMLElement | null;
-            const targetContainer =
-              outerCard &&
-              !outerCard.querySelector('table') &&
-              !outerCard.querySelector('iframe') &&
-              !(outerCard.textContent || '').includes('BIPA Admin')
-                ? outerCard
-                : innerBox;
-
-            if (targetContainer) {
-              Array.from(targetContainer.children).forEach((child) => {
-                const el = child as HTMLElement;
-                if (!el.classList.contains('bipa-custom-qr-cam-box')) {
-                  el.style.display = 'none';
-                }
-              });
-
-              let camBox = targetContainer.querySelector(
-                '.bipa-custom-qr-cam-box'
-              ) as HTMLElement | null;
-
-              if (!camBox) {
-                camBox = document.createElement('div');
-                camBox.className =
-                  'bipa-custom-qr-cam-box flex items-center justify-between gap-3 w-full py-1';
-                camBox.innerHTML = `
-                  <div class="flex items-center gap-3 min-w-0">
-                    <div class="w-10 h-10 rounded-xl bg-[#3b82f6]/15 border border-[#3b82f6]/30 flex items-center justify-center text-[#3b82f6] shrink-0">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect width="5" height="5" x="3" y="3" rx="1"/>
-                        <rect width="5" height="5" x="16" y="3" rx="1"/>
-                        <rect width="5" height="5" x="3" y="16" rx="1"/>
-                        <path d="M21 16h-3a2 2 0 0 0-2 2v3"/>
-                        <path d="M21 21v.01"/>
-                        <path d="M12 7v3a2 2 0 0 1-2 2H7"/>
-                        <path d="M3 12h.01"/>
-                        <path d="M12 3h.01"/>
-                        <path d="M12 16v.01"/>
-                        <path d="M16 12h1"/>
-                        <path d="M21 12v.01"/>
-                        <path d="M12 21v-1"/>
-                      </svg>
-                    </div>
-                    <div class="min-w-0">
-                      <div class="text-xs sm:text-sm text-slate-900 dark:text-white truncate">ស្កេនកូដ QR កត់ត្រាវត្តមាន</div>
-                      <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">ចុចប៊ូតុង QR ដើម្បីបើកកាមេរ៉ាស្កេនចេញ-ចូល</div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    id="bipa-attendance-qr-cam-trigger"
-                    class="bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.45)] w-11 h-11 border-0 flex items-center justify-center shrink-0 transition-transform active:scale-95 cursor-pointer"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect width="5" height="5" x="3" y="3" rx="1"/>
-                      <rect width="5" height="5" x="16" y="3" rx="1"/>
-                      <rect width="5" height="5" x="3" y="16" rx="1"/>
-                      <path d="M21 16h-3a2 2 0 0 0-2 2v3"/>
-                      <path d="M21 21v.01"/>
-                      <path d="M12 7v3a2 2 0 0 1-2 2H7"/>
-                      <path d="M3 12h.01"/>
-                      <path d="M12 3h.01"/>
-                      <path d="M12 16v.01"/>
-                      <path d="M16 12h1"/>
-                      <path d="M21 12v.01"/>
-                      <path d="M12 21v-1"/>
-                    </svg>
-                  </button>
-                `;
-                targetContainer.appendChild(camBox);
-              }
-
-              const triggerBtn = camBox.querySelector(
-                '#bipa-attendance-qr-cam-trigger'
-              ) as HTMLElement | null;
-              if (triggerBtn) {
-                triggerBtn.onclick = (ev) => {
-                  ev.preventDefault();
-                  ev.stopPropagation();
-                  setShowScanner(true);
-                };
-              }
-            }
-            break;
-          }
         }
       }
     };
@@ -770,7 +726,7 @@ export function Header() {
     cleanUpButtonsAndDuplicates();
     const timer = setInterval(cleanUpButtonsAndDuplicates, 300);
     return () => clearInterval(timer);
-  }, [location.pathname, location.search]);
+  }, [location.pathname, location.search, lang]);
 
   const isAdmin = hasRole('super_admin', 'residence_admin', 'finance_admin', 'duty_manager');
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -784,13 +740,20 @@ export function Header() {
     location.pathname.startsWith('/admin/residences') ||
     location.pathname.startsWith('/admin/settings');
 
+  const isExpensesOverlay =
+    isAdmin &&
+    (location.pathname.startsWith('/admin/expenses') ||
+      location.search.includes('page=expenses'));
+
   const isDashboardOverlay =
     !isSidebarSpecialOverlayActive &&
+    !isExpensesOverlay &&
     (location.pathname === '/dashboard' || location.pathname === '/profile') &&
     !location.search.includes('view=');
 
   const isDutiesOverlay =
     !isSidebarSpecialOverlayActive &&
+    !isExpensesOverlay &&
     (location.pathname.startsWith('/admin/duties') ||
       location.pathname.startsWith('/dashboard/duties') ||
       location.pathname === '/duties' ||
@@ -798,6 +761,7 @@ export function Header() {
 
   const isPaymentsOverlay =
     !isSidebarSpecialOverlayActive &&
+    !isExpensesOverlay &&
     (location.pathname.startsWith('/admin/payments') ||
       location.pathname.startsWith('/dashboard/payments') ||
       location.pathname === '/payments' ||
@@ -805,6 +769,7 @@ export function Header() {
 
   const isRiceOverlay =
     !isSidebarSpecialOverlayActive &&
+    !isExpensesOverlay &&
     (location.pathname.startsWith('/admin/assets') ||
       location.pathname.startsWith('/dashboard/assets') ||
       location.pathname === '/assets' ||
@@ -813,6 +778,7 @@ export function Header() {
 
   const isLeaveOverlay =
     !isSidebarSpecialOverlayActive &&
+    !isExpensesOverlay &&
     (location.pathname === '/leave' ||
       location.pathname.startsWith('/dashboard/leave') ||
       location.pathname.startsWith('/admin/leave-requests') ||
@@ -824,6 +790,7 @@ export function Header() {
     isPaymentsOverlay ||
     isRiceOverlay ||
     isLeaveOverlay ||
+    isExpensesOverlay ||
     isSidebarSpecialOverlayActive;
 
   useEffect(() => {
@@ -1665,6 +1632,19 @@ export function Header() {
               }
             />
           )}
+        </div>
+      )}
+
+      {isExpensesOverlay && (
+        <div
+          id="bipa-active-single-view"
+          style={{ zIndex: 88, WebkitOverflowScrolling: 'touch' }}
+          className={cn(
+            'bipa-single-overlay-box fixed top-14 sm:top-16 bottom-[60px] md:bottom-0 left-0 right-0 z-40 overflow-y-auto p-3 sm:p-6 scrollbar-thin',
+            isAdmin && location.pathname.startsWith('/admin') ? 'lg:left-64' : ''
+          )}
+        >
+          <CenterExpenseAdminDashboard />
         </div>
       )}
 
