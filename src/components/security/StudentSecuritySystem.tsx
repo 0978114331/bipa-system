@@ -98,7 +98,8 @@ export const PHOTO_PERM_STORAGE_KEY = 'bipa_allow_student_photo_edit_v1';
 
 let memoryCoversMap: Record<string, string> = {};
 let memoryAvatarsMap: Record<string, string> = {};
-let hasCleanedBloatedStorage = false;
+let hasCleanedDuplicateCoverKeys = false;
+let lastCloudFetchTimestamp = 0;
 
 export function normalizeCode(raw: string): string {
   let cleaned = String(raw || '').trim().replace(/\s+/g, '').toUpperCase();
@@ -108,7 +109,9 @@ export function normalizeCode(raw: string): string {
   return cleaned;
 }
 
-function freeUpLocalStorageSpace() {
+export function freeUpLocalStorageSpace() {
+  if (hasCleanedDuplicateCoverKeys) return;
+  hasCleanedDuplicateCoverKeys = true;
   try {
     const keysToRemove: string[] = [
       'bipa_default_cover_banner',
@@ -118,7 +121,7 @@ function freeUpLocalStorageSpace() {
     ];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && (k.startsWith('bipa_cover_') || k.startsWith('bipa_avatar_'))) {
+      if (k && k.startsWith('bipa_cover_')) {
         keysToRemove.push(k);
       }
     }
@@ -131,18 +134,15 @@ function freeUpLocalStorageSpace() {
 }
 
 function safeStorageSet(key: string, value: string): boolean {
-  if (!hasCleanedBloatedStorage) {
-    hasCleanedBloatedStorage = true;
-    freeUpLocalStorageSpace();
-  }
+  freeUpLocalStorageSpace();
   try {
     localStorage.setItem(key, value);
     return true;
   } catch {
-    freeUpLocalStorageSpace();
     try {
-      localStorage.removeItem(COVERS_STORAGE_KEY);
-      localStorage.removeItem(AVATARS_STORAGE_KEY);
+      if (key !== COVERS_STORAGE_KEY) {
+        localStorage.removeItem(COVERS_STORAGE_KEY);
+      }
       localStorage.setItem(key, value);
       return true;
     } catch {
@@ -157,18 +157,30 @@ function safeStorageRemove(key: string) {
   } catch {}
 }
 
-function stripImagesFromPayloadForLocalCache(
+export function stripImagesFromPayloadForLocalCache(
   payload: StudentSecurityPayload
 ): StudentSecurityPayload {
   const lightProfiles: Record<string, StudentSecurityProfile> = {};
   Object.keys(payload.profiles || {}).forEach((k) => {
     const p = payload.profiles[k];
     if (!p) return;
-    if (p.avatarDataUrl) memoryAvatarsMap[k] = p.avatarDataUrl;
-    if (p.coverDataUrl) memoryCoversMap[k] = p.coverDataUrl;
-    lightProfiles[k] = {
+    const code = normalizeCode(k);
+    const av =
+      p.avatarDataUrl ||
+      memoryAvatarsMap[code] ||
+      localStorage.getItem(`bipa_avatar_${code}`) ||
+      '';
+    if (av) {
+      memoryAvatarsMap[code] = av;
+      safeStorageSet(`bipa_avatar_${code}`, av);
+    }
+    if (p.coverDataUrl) {
+      memoryCoversMap[code] = p.coverDataUrl;
+    }
+    lightProfiles[code] = {
       ...p,
-      avatarDataUrl: '',
+      studentCode: code,
+      avatarDataUrl: av,
       coverDataUrl: ''
     };
   });
@@ -182,7 +194,7 @@ export function standardizeImageToDataUrl(
   img: HTMLImageElement,
   targetWidth: number,
   targetHeight: number,
-  quality = 0.72
+  quality = 0.82
 ): string {
   const canvas = document.createElement('canvas');
   canvas.width = targetWidth;
@@ -269,12 +281,13 @@ export async function savePhotoPermToDb(allowed: boolean): Promise<void> {
 }
 
 export function loadCachedCoversMap(): Record<string, string> {
+  freeUpLocalStorageSpace();
   try {
     const raw = localStorage.getItem(COVERS_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
-        memoryCoversMap = { ...memoryCoversMap, ...parsed };
+        memoryCoversMap = { ...parsed, ...memoryCoversMap };
       }
     }
   } catch {}
@@ -282,20 +295,27 @@ export function loadCachedCoversMap(): Record<string, string> {
 }
 
 export function loadCachedAvatarsMap(): Record<string, string> {
+  freeUpLocalStorageSpace();
   try {
     const raw = localStorage.getItem(AVATARS_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
-        memoryAvatarsMap = { ...memoryAvatarsMap, ...parsed };
+        memoryAvatarsMap = { ...parsed, ...memoryAvatarsMap };
       }
     }
   } catch {}
   return { ...memoryAvatarsMap };
 }
 
-export async function fetchCoversMapFromDb(): Promise<Record<string, string>> {
+let lastLocalCoverSaveTime = 0;
+let lastLocalAvatarSaveTime = 0;
+
+export async function fetchCoversMapFromDb(force = false): Promise<Record<string, string>> {
   let current = loadCachedCoversMap();
+  if (!force && Object.keys(current).length > 0 && Date.now() - lastLocalCoverSaveTime < 60000) {
+    return current;
+  }
   try {
     const { data, error } = await supabase
       .from('bipa_settings')
@@ -307,18 +327,21 @@ export async function fetchCoversMapFromDb(): Promise<Record<string, string>> {
       const parsed = JSON.parse(data.name_en);
       if (parsed && typeof parsed === 'object') {
         delete parsed.DEFAULT;
-        current = { ...current, ...parsed };
-        delete current.DEFAULT;
-        memoryCoversMap = current;
-        safeStorageSet(COVERS_STORAGE_KEY, JSON.stringify(current));
+        memoryCoversMap = { ...parsed };
+        lastLocalCoverSaveTime = Date.now();
+        safeStorageSet(COVERS_STORAGE_KEY, JSON.stringify(memoryCoversMap));
+        return { ...memoryCoversMap };
       }
     }
   } catch {}
   return current;
 }
 
-export async function fetchAvatarsMapFromDb(): Promise<Record<string, string>> {
+export async function fetchAvatarsMapFromDb(force = false): Promise<Record<string, string>> {
   let current = loadCachedAvatarsMap();
+  if (!force && Object.keys(current).length > 0 && Date.now() - lastLocalAvatarSaveTime < 60000) {
+    return current;
+  }
   try {
     const { data, error } = await supabase
       .from('bipa_settings')
@@ -329,9 +352,16 @@ export async function fetchAvatarsMapFromDb(): Promise<Record<string, string>> {
     if (!error && data?.name_en) {
       const parsed = JSON.parse(data.name_en);
       if (parsed && typeof parsed === 'object') {
-        current = { ...current, ...parsed };
-        memoryAvatarsMap = current;
-        safeStorageSet(AVATARS_STORAGE_KEY, JSON.stringify(current));
+        memoryAvatarsMap = { ...parsed };
+        lastLocalAvatarSaveTime = Date.now();
+        safeStorageSet(AVATARS_STORAGE_KEY, JSON.stringify(memoryAvatarsMap));
+        Object.keys(memoryAvatarsMap).forEach((k) => {
+          const cleanKey = normalizeCode(k);
+          if (cleanKey && memoryAvatarsMap[k]) {
+            safeStorageSet(`bipa_avatar_${cleanKey}`, memoryAvatarsMap[k]);
+          }
+        });
+        return { ...memoryAvatarsMap };
       }
     }
   } catch {}
@@ -345,6 +375,7 @@ export async function saveCoverToCloudDb(
   const key = normalizeCode(studentCodeOrKey);
   if (!key || key === 'DEFAULT') return;
 
+  lastLocalCoverSaveTime = Date.now();
   const cached = loadCachedCoversMap();
   delete cached.DEFAULT;
   const immediateNext: Record<string, string> = {
@@ -355,22 +386,12 @@ export async function saveCoverToCloudDb(
   safeStorageSet(COVERS_STORAGE_KEY, JSON.stringify(immediateNext));
 
   try {
-    const remote = await fetchCoversMapFromDb();
-    delete remote.DEFAULT;
-    const merged: Record<string, string> = {
-      ...remote,
-      ...immediateNext,
-      [key]: coverDataUrl
-    };
-    memoryCoversMap = merged;
-    safeStorageSet(COVERS_STORAGE_KEY, JSON.stringify(merged));
-
     await supabase.from('bipa_settings').upsert(
       {
         id: 'student_covers_v1',
         logo_url: 'STUDENT_COVERS',
         name_km: 'រូបភាព Cover និស្សិត',
-        name_en: JSON.stringify(merged)
+        name_en: JSON.stringify(immediateNext)
       },
       { onConflict: 'id' }
     );
@@ -394,6 +415,7 @@ export async function saveAvatarToCloudDb(
   const key = normalizeCode(studentCodeOrKey);
   if (!key) return;
 
+  lastLocalAvatarSaveTime = Date.now();
   const cached = loadCachedAvatarsMap();
   const immediateNext: Record<string, string> = {
     ...cached,
@@ -401,23 +423,15 @@ export async function saveAvatarToCloudDb(
   };
   memoryAvatarsMap = immediateNext;
   safeStorageSet(AVATARS_STORAGE_KEY, JSON.stringify(immediateNext));
+  safeStorageSet(`bipa_avatar_${key}`, avatarDataUrl);
 
   try {
-    const remote = await fetchAvatarsMapFromDb();
-    const merged: Record<string, string> = {
-      ...remote,
-      ...immediateNext,
-      [key]: avatarDataUrl
-    };
-    memoryAvatarsMap = merged;
-    safeStorageSet(AVATARS_STORAGE_KEY, JSON.stringify(merged));
-
     await supabase.from('bipa_settings').upsert(
       {
         id: 'student_avatars_v1',
         logo_url: 'STUDENT_AVATARS',
         name_km: 'រូបភាពប្រវត្តិរូបនិស្សិត',
-        name_en: JSON.stringify(merged)
+        name_en: JSON.stringify(immediateNext)
       },
       { onConflict: 'id' }
     );
@@ -579,6 +593,7 @@ function getCombinedPaymentAndRiceStudentsMap(
     if (!map[code]) {
       const cleanName = (nameKm || code).replace(/\(ប្រធាន\)/g, '').trim();
       const { lastName, firstName } = splitKhmerFullName(cleanName);
+      const av = avatarsMap[code] || localStorage.getItem(`bipa_avatar_${code}`) || '';
       map[code] = {
         studentCode: code,
         lastNameKm: lastName,
@@ -591,7 +606,7 @@ function getCombinedPaymentAndRiceStudentsMap(
         generationKm: genKm || 'សិស្សមណ្ឌល',
         saltSeed: 2026,
         secretCode: generateEncryptedCodeFromId(code, 2026),
-        avatarDataUrl: avatarsMap[code] || '',
+        avatarDataUrl: av,
         coverDataUrl: coversMap[code] || ''
       };
     }
@@ -638,6 +653,7 @@ function getCombinedPaymentAndRiceStudentsMap(
 }
 
 export function loadCachedSecurityPayload(): StudentSecurityPayload {
+  freeUpLocalStorageSpace();
   const localDeleted = getLocalDeletedCodes();
   const coversMap = loadCachedCoversMap();
   const avatarsMap = loadCachedAvatarsMap();
@@ -672,40 +688,48 @@ export function loadCachedSecurityPayload(): StudentSecurityPayload {
     saveLocalDeletedCodes(combinedDeleted);
 
     const deletedSet = new Set(combinedDeleted);
-    const baseMap = getCombinedPaymentAndRiceStudentsMap(combinedDeleted);
     const savedProfiles = parsed?.profiles || {};
-    const merged: Record<string, StudentSecurityProfile> = { ...baseMap };
+    const merged: Record<string, StudentSecurityProfile> = {};
 
     Object.keys(savedProfiles).forEach((k) => {
       const code = normalizeCode(k);
-      if (!code || deletedSet.has(code)) {
-        delete merged[code];
-        return;
-      }
+      if (!code || deletedSet.has(code)) return;
       const item = savedProfiles[k];
       const seed = Number(item.saltSeed || 2026);
-      const fallbackFull = item.fullNameKm || baseMap[code]?.fullNameKm || code;
+      const fallbackFull = item.fullNameKm || code;
       const split = splitKhmerFullName(fallbackFull);
       const lName = item.lastNameKm !== undefined ? String(item.lastNameKm) : split.lastName;
       const fName = item.firstNameKm !== undefined ? String(item.firstNameKm) : split.firstName;
       const fullName = `${lName} ${fName}`.trim() || fallbackFull;
+      const resolvedAvatar =
+        avatarsMap[code] ||
+        item.avatarDataUrl ||
+        localStorage.getItem(`bipa_avatar_${code}`) ||
+        '';
 
       merged[code] = {
-        ...(merged[code] || {}),
         ...item,
         studentCode: code,
         lastNameKm: lName,
         firstNameKm: fName,
         fullNameKm: fullName,
         userTypeKm: item.userTypeKm || 'និស្សិត',
-        phoneNumber:
-          item.phoneNumber || baseMap[code]?.phoneNumber || generateDefaultPhone(code),
+        majorKm: item.majorKm || 'ព័ត៌មានវិទ្យា',
+        phoneNumber: item.phoneNumber || generateDefaultPhone(code),
         saltSeed: seed,
         secretCode: item.secretCode || generateEncryptedCodeFromId(code, seed),
-        avatarDataUrl: avatarsMap[code] || item.avatarDataUrl || '',
+        avatarDataUrl: resolvedAvatar,
         coverDataUrl: coversMap[code] || item.coverDataUrl || ''
       };
     });
+
+    if (Object.keys(merged).length === 0) {
+      return {
+        profiles: getCombinedPaymentAndRiceStudentsMap(combinedDeleted),
+        deletedCodes: combinedDeleted,
+        allowStudentPhotoEdit: allowEdit
+      };
+    }
 
     return {
       profiles: merged,
@@ -724,11 +748,19 @@ export function loadCachedSecurityPayload(): StudentSecurityPayload {
 
 let lastLocalSecuritySaveTime = 0;
 
-export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPayload> {
+export async function fetchSecurityPayloadFromDb(force = false): Promise<StudentSecurityPayload> {
   let current = loadCachedSecurityPayload();
-  if (Date.now() - lastLocalSecuritySaveTime < 1500) {
+  const now = Date.now();
+  if (
+    (!force && now - lastLocalSecuritySaveTime < 3000) ||
+    (!force &&
+      Object.keys(current.profiles).length > 0 &&
+      now - lastCloudFetchTimestamp < 45000)
+  ) {
     return current;
   }
+
+  lastCloudFetchTimestamp = now;
 
   try {
     const [secRes, coversMap, avatarsMap, permAllowed] = await Promise.all([
@@ -737,8 +769,8 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
         .select('name_en')
         .eq('id', 'student_security_v2')
         .maybeSingle(),
-      fetchCoversMapFromDb(),
-      fetchAvatarsMapFromDb(),
+      fetchCoversMapFromDb(force),
+      fetchAvatarsMapFromDb(force),
       fetchPhotoPermFromDb()
     ]);
 
@@ -752,36 +784,42 @@ export async function fetchSecurityPayloadFromDb(): Promise<StudentSecurityPaylo
         saveLocalDeletedCodes(cloudDeleted);
         const deletedSet = new Set(cloudDeleted);
 
-        const baseMap = getCombinedPaymentAndRiceStudentsMap(cloudDeleted);
-        const merged: Record<string, StudentSecurityProfile> = { ...baseMap };
+        const merged: Record<string, StudentSecurityProfile> = {};
 
         Object.keys(parsed.profiles).forEach((k) => {
           const code = normalizeCode(k);
-          if (!code || deletedSet.has(code)) {
-            delete merged[code];
-            return;
-          }
+          if (!code || deletedSet.has(code)) return;
           const item = parsed.profiles[k];
           const seed = Number(item.saltSeed || 2026);
-          const fallbackFull = item.fullNameKm || baseMap[code]?.fullNameKm || code;
+          const fallbackFull = item.fullNameKm || code;
           const split = splitKhmerFullName(fallbackFull);
           const lName = item.lastNameKm !== undefined ? String(item.lastNameKm) : split.lastName;
           const fName = item.firstNameKm !== undefined ? String(item.firstNameKm) : split.firstName;
           const fullName = `${lName} ${fName}`.trim() || fallbackFull;
 
-          const resolvedAvatar = avatarsMap[code] || item.avatarDataUrl || '';
+          const resolvedAvatar =
+            avatarsMap[code] ||
+            item.avatarDataUrl ||
+            localStorage.getItem(`bipa_avatar_${code}`) ||
+            '';
           const resolvedCover = coversMap[code] || item.coverDataUrl || '';
-          if (resolvedAvatar) memoryAvatarsMap[code] = resolvedAvatar;
-          if (resolvedCover) memoryCoversMap[code] = resolvedCover;
+
+          if (resolvedAvatar) {
+            memoryAvatarsMap[code] = resolvedAvatar;
+            safeStorageSet(`bipa_avatar_${code}`, resolvedAvatar);
+          }
+          if (resolvedCover) {
+            memoryCoversMap[code] = resolvedCover;
+          }
 
           merged[code] = {
-            ...(merged[code] || {}),
             ...item,
             studentCode: code,
             lastNameKm: lName,
             firstNameKm: fName,
             fullNameKm: fullName,
             userTypeKm: item.userTypeKm || 'និស្សិត',
+            majorKm: item.majorKm || 'ព័ត៌មានវិទ្យា',
             phoneNumber: item.phoneNumber || generateDefaultPhone(code),
             saltSeed: seed,
             secretCode: item.secretCode || generateEncryptedCodeFromId(code, seed),
@@ -816,6 +854,7 @@ export async function saveSecurityPayloadToDb(
 ): Promise<void> {
   const nowTs = Date.now();
   lastLocalSecuritySaveTime = nowTs;
+  lastCloudFetchTimestamp = nowTs;
 
   const deletedList = Array.from(
     new Set(
@@ -831,37 +870,14 @@ export async function saveSecurityPayloadToDb(
       : getCachedPhotoEditPermission();
   safeStorageSet(PHOTO_PERM_STORAGE_KEY, String(allowEdit));
 
-  const cleanProfilesForDb: Record<string, StudentSecurityProfile> = {};
-  const delSet = new Set(deletedList);
-  Object.keys(payload.profiles || {}).forEach((k) => {
-    const code = normalizeCode(k);
-    if (!delSet.has(code)) {
-      const item = payload.profiles[k];
-      if (item.avatarDataUrl) memoryAvatarsMap[code] = item.avatarDataUrl;
-      if (item.coverDataUrl) memoryCoversMap[code] = item.coverDataUrl;
-
-      const composedFull =
-        `${item.lastNameKm || ''} ${item.firstNameKm || ''}`.trim() ||
-        item.fullNameKm ||
-        code;
-      cleanProfilesForDb[code] = {
-        ...item,
-        studentCode: code,
-        fullNameKm: composedFull,
-        avatarDataUrl: '',
-        coverDataUrl: ''
-      };
-    }
-  });
-
-  const finalPayload: StudentSecurityPayload = {
-    profiles: cleanProfilesForDb,
+  const strippedPayload = stripImagesFromPayloadForLocalCache({
+    ...payload,
     deletedCodes: deletedList,
     allowStudentPhotoEdit: allowEdit,
     updatedAt: nowTs
-  };
+  });
 
-  const jsonStr = JSON.stringify(finalPayload);
+  const jsonStr = JSON.stringify(strippedPayload);
   safeStorageSet(SECURITY_STORAGE_KEY, jsonStr);
 
   try {
@@ -3336,7 +3352,7 @@ export function StudentPersonalDashboard() {
     freeUpLocalStorageSpace();
     loadAllDashboardData();
     const openLoginHandler = () => setShowLoginModal(true);
-    const syncTimer = setInterval(loadAllDashboardData, 6000);
+    const syncTimer = setInterval(() => { if (!document.hidden) { loadAllDashboardData();}}, 120000);
 
     let bc: BroadcastChannel | null = null;
     try {
