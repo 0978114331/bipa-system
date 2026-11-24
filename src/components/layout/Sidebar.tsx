@@ -898,51 +898,53 @@ export function Sidebar() {
         `}</style>
       )}
 
-      <aside className="hidden lg:flex w-64 shrink-0 border-r bg-card flex-col z-40 sticky top-20 h-[calc(100vh-5rem)] overflow-hidden">
-        <div className="p-4 border-b shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-navy-gradient">
-              <GraduationCap className="h-5 w-5 text-gold" />
-            </div>
-            <span className="text-sm font-semibold">
-              {isAdminRole ? t('dashboard.adminDashboard') : t('dashboard.studentDashboard')}
-            </span>
-          </div>
-        </div>
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto scrollbar-thin">
-          {visibleItems.map((item) => (
-            <button
-              key={item.path}
-              onClick={() => {
-                if (item.path === '/admin?page=home-manager') {
-                  openEditNewsForm(undefined);
-                  setShowHomeManager(true);
-                  navigate('/admin?page=home-manager');
-                } else {
-                  setShowHomeManager(false);
-                  navigate(item.path);
-                }
-              }}
-              className={cn(
-                'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors text-left',
-                isActive(item.path)
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <item.icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
+      {isAdminRole && location.pathname.startsWith('/admin') && (
+        <aside className="hidden lg:flex w-64 shrink-0 border-r bg-card flex-col z-40 sticky top-20 h-[calc(100vh-5rem)] overflow-hidden">
+          <div className="p-4 border-b shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-navy-gradient">
+                <GraduationCap className="h-5 w-5 text-gold" />
               </div>
-              {item.path === '/admin/settings' && unreadInboxCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black shrink-0">
-                  {unreadInboxCount}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-      </aside>
+              <span className="text-sm font-semibold">
+                {t('dashboard.adminDashboard')}
+              </span>
+            </div>
+          </div>
+          <nav className="flex-1 p-3 space-y-1 overflow-y-auto scrollbar-thin">
+            {visibleItems.map((item) => (
+              <button
+                key={item.path}
+                onClick={() => {
+                  if (item.path === '/admin?page=home-manager') {
+                    openEditNewsForm(undefined);
+                    setShowHomeManager(true);
+                    navigate('/admin?page=home-manager');
+                  } else {
+                    setShowHomeManager(false);
+                    navigate(item.path);
+                  }
+                }}
+                className={cn(
+                  'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors text-left',
+                  isActive(item.path)
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                )}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </div>
+                {item.path === '/admin/settings' && unreadInboxCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black shrink-0">
+                    {unreadInboxCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </aside>
+      )}
 
       {isSettingsRoute && isAdminRole && !showHomeManager && !isUserPasswordsRoute && (
         <div

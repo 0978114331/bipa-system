@@ -235,11 +235,11 @@ export function HomePage() {
   const coreFeatures: { key: TranslationKey; route: string; icon: any; color: string }[] = [
     { key: 'feature.studentInfo', route: '/admin/students', icon: <Users className="h-6 w-6" />, color: 'from-amber-400 to-amber-600' },
     { key: 'feature.qrAttendance', route: '/attendance', icon: <QrCode className="h-6 w-6" />, color: 'from-emerald-500 to-teal-700' },
-    { key: 'feature.payments', route: '/admin/payments', icon: <DollarSign className="h-6 w-6" />, color: 'from-blue-500 to-indigo-700' },
-    { key: 'feature.rice', route: '/admin/rice', icon: <Package className="h-6 w-6" />, color: 'from-orange-400 to-red-600' },
-    { key: 'feature.leave', route: '/leave', icon: <FileText className="h-6 w-6" />, color: 'from-purple-500 to-violet-700' },
-    { key: 'feature.duty', route: '/admin/duties', icon: <CalendarClock className="h-6 w-6" />, color: 'from-cyan-500 to-sky-700' },
-    { key: 'feature.facilities', route: '/admin/assets', icon: <Building2 className="h-6 w-6" />, color: 'from-slate-500 to-slate-800' },
+    { key: 'feature.payments', route: isAdmin ? '/admin/payments' : '/?view=payments', icon: <DollarSign className="h-6 w-6" />, color: 'from-blue-500 to-indigo-700' },
+    { key: 'feature.rice', route: isAdmin ? '/admin/assets' : '/?view=rice', icon: <Package className="h-6 w-6" />, color: 'from-orange-400 to-red-600' },
+    { key: 'feature.leave', route: isAdmin ? '/admin/leave-requests' : '/leave', icon: <FileText className="h-6 w-6" />, color: 'from-purple-500 to-violet-700' },
+    { key: 'feature.duty', route: isAdmin ? '/admin/duties' : '/?view=duties', icon: <CalendarClock className="h-6 w-6" />, color: 'from-cyan-500 to-sky-700' },
+    { key: 'feature.facilities', route: isAdmin ? '/admin/residences' : '/residence-info', icon: <Building2 className="h-6 w-6" />, color: 'from-slate-500 to-slate-800' },
     { key: 'feature.announcements', route: '/announcements', icon: <Megaphone className="h-6 w-6" />, color: 'from-rose-500 to-pink-700' },
   ];
 
@@ -254,12 +254,10 @@ export function HomePage() {
     if (existingBtn) existingBtn.remove();
 
     loadContent();
-    const syncInterval = setInterval(loadContent, 3000);
     window.addEventListener('home-content-updated', loadContent);
     window.addEventListener('storage', loadContent);
 
     return () => {
-      clearInterval(syncInterval);
       window.removeEventListener('home-content-updated', loadContent);
       window.removeEventListener('storage', loadContent);
     };
